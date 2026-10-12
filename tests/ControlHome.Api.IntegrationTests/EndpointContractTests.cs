@@ -8,8 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace ControlHome.Api.IntegrationTests;
 
 /// <summary>
-/// The 0.2 route table: every route of Tasks 0.2-C/0.2-D exists with the agreed authorization and rate limiting, and the
-/// committed OpenAPI document describes each of them.
+/// The route table: every route of Tasks 0.2-C/0.2-D and 1.1-A exists with the agreed authorization and rate limiting,
+/// and the committed OpenAPI document describes each of them.
 /// </summary>
 public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClassFixture<NoDatabaseApiFactory>
 {
@@ -36,6 +36,15 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         { "GET", "/api/home", "getHome", AuthorizationPolicies.Viewer, null },
         { "PUT", "/api/home", "updateHome", AuthorizationPolicies.Admin, null },
         { "GET", "/api/audit", "listAudit", AuthorizationPolicies.Admin, null },
+        { "GET", "/api/floors", "listFloors", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/floors/{id:int}", "getFloor", AuthorizationPolicies.Viewer, null },
+        { "POST", "/api/floors", "createFloor", AuthorizationPolicies.Admin, null },
+        { "PUT", "/api/floors/{id:int}", "updateFloor", AuthorizationPolicies.Admin, null },
+        { "DELETE", "/api/floors/{id:int}", "deleteFloor", AuthorizationPolicies.Admin, null },
+        { "PUT", "/api/floors/{id:int}/layout", "saveFloorLayout", AuthorizationPolicies.Admin, null },
+        { "GET", "/api/rooms", "listRooms", AuthorizationPolicies.Viewer, null },
+        { "POST", "/api/files", "uploadFile", AuthorizationPolicies.Admin, null },
+        { "GET", "/api/files/{id:guid}", "getFile", AuthorizationPolicies.Viewer, null },
     };
 
     [Theory]
@@ -82,7 +91,7 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
     {
         _ = (authorization, rateLimitPolicy);
         using var document = await OpenApiDocument.LoadAsync(TestContext.Current.CancellationToken);
-        var path = route.Replace(":guid", string.Empty, StringComparison.Ordinal);
+        var path = route.Replace(":guid", string.Empty, StringComparison.Ordinal).Replace(":int", string.Empty, StringComparison.Ordinal);
 
         document.RootElement.GetProperty("paths").TryGetProperty(path, out var item).ShouldBeTrue($"{path} missing from openapi.json");
         item.TryGetProperty(method.ToLowerInvariant(), out var operation).ShouldBeTrue($"{method} {path} missing from openapi.json");

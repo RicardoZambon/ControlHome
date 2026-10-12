@@ -52,6 +52,16 @@ export type CompleteSetupRequest = {
     home: HomeInput;
 };
 
+/**
+ * Creates an empty floor (Admin). Size defaults to 2000 × 1500 cm, grid 50 cm.
+ */
+export type CreateFloorRequest = {
+    name: string;
+    level: number;
+    widthCm: null | number;
+    heightCm: null | number;
+};
+
 export type CreateUserRequest = {
     userName: string;
     displayName: string;
@@ -84,6 +94,64 @@ export type DatabaseSetupRequest = {
     userName: string;
     password: string;
     trustServerCertificate: boolean;
+};
+
+/**
+ * The image under a floor plan: its top-left corner sits at (OffsetXCm, OffsetYCm)
+ * and one image pixel measures CmPerPx centimetres.
+ */
+export type FloorBackgroundDto = {
+    /**
+     * A file uploaded with purpose `floor-background` (`POST /api/files`).
+     */
+    fileId: string;
+    /**
+     * 0 (invisible) to 1 (opaque).
+     */
+    opacity: number;
+    offsetXCm: number;
+    offsetYCm: number;
+    cmPerPx: number;
+};
+
+/**
+ * A floor with its rooms. Send RowVersion back with every change to it.
+ */
+export type FloorDto = {
+    id: number;
+    name: string;
+    /**
+     * Storey: 0 ground, negative below ground.
+     */
+    level: number;
+    /**
+     * Plan width (the SVG viewBox is `0 0 WidthCm HeightCm`).
+     */
+    widthCm: number;
+    heightCm: number;
+    /**
+     * Editor grid spacing.
+     */
+    gridCm: number;
+    background: null | FloorBackgroundDto;
+    /**
+     * In display order.
+     */
+    rooms: Array<RoomDto>;
+    /**
+     * Opaque concurrency token; a change sent with an older one gets 409 `floors.concurrency`.
+     */
+    rowVersion: string;
+};
+
+/**
+ * A floor in the floor list.
+ */
+export type FloorSummaryDto = {
+    id: number;
+    name: string;
+    level: number;
+    roomCount: number;
 };
 
 /**
@@ -158,6 +226,8 @@ export type HttpValidationProblemDetails = {
     traceId?: string;
 };
 
+export type IFormFile = Blob | File;
+
 export type LoginRequest = {
     userName: string;
     password: string;
@@ -193,6 +263,14 @@ export type PagedResultOfAuditEntryDto = {
     nextCursor: null | number;
 };
 
+/**
+ * A point on a floor plan in centimetres (origin: the floor's top-left corner; y grows downwards).
+ */
+export type PointCmDto = {
+    x: number;
+    y: number;
+};
+
 export type ProblemDetails = {
     type?: null | string;
     title?: null | string;
@@ -226,6 +304,71 @@ export type ResetPasswordWithTokenRequest = {
 };
 
 /**
+ * A room of a floor.
+ */
+export type RoomDto = {
+    id: number;
+    name: string;
+    /**
+     * Icon key (e.g. `sofa`).
+     */
+    icon: string;
+    /**
+     * `room-1` … `room-8`.
+     */
+    colorToken: string;
+    /**
+     * The outline (implicitly closed), in the floor's centimetre coordinates.
+     */
+    polygon: Array<PointCmDto>;
+    /**
+     * Enclosed area in m², rounded to two decimals.
+     */
+    areaM2: number;
+    sortOrder: number;
+};
+
+/**
+ * A room in a layout save.
+ */
+export type RoomInput = {
+    /**
+     * An existing room of this floor, or `null` for a new room.
+     */
+    id: null | number;
+    name: string;
+    icon: string;
+    colorToken: string;
+    /**
+     * At least 3 points, simple (no self-intersection), inside the floor and enclosing an area; violations are field errors
+     * under `rooms[i].polygon` with codes `geometry.*`.
+     */
+    polygon: Array<PointCmDto>;
+};
+
+/**
+ * A room in the list of all rooms (for pickers).
+ */
+export type RoomListItemDto = {
+    id: number;
+    name: string;
+    floorId: number;
+    floorName: string;
+};
+
+/**
+ * Replaces the floor's rooms atomically (Admin): listed rooms with an `id` are updated, rooms without one are
+ * created, rooms not listed are deleted; the list order becomes the display order.
+ */
+export type SaveFloorLayoutRequest = {
+    rooms: Array<RoomInput>;
+    /**
+     * From the FloorDto being edited.
+     */
+    rowVersion: string;
+};
+
+/**
  * First-run state. Answered even while the database is not ready (then SetupCompleted is false).
  */
 export type SetupStatusDto = {
@@ -251,6 +394,42 @@ export type SetupStatusDto = {
      * The application's informational version.
      */
     version: string;
+};
+
+/**
+ * A stored file. Its bytes are at `GET /api/files/{id}` (immutable: a new upload gets a new id).
+ */
+export type StoredFileDto = {
+    id: string;
+    /**
+     * Always `image/webp` for images (they are re-encoded on upload).
+     */
+    contentType: string;
+    /**
+     * Size of the stored bytes.
+     */
+    length: number;
+    widthPx: number;
+    heightPx: number;
+};
+
+export type Stream = Blob | File;
+
+/**
+ * Changes a floor's properties (Admin); rooms are kept. The size cannot shrink below a room (400 with
+ * `errors.widthCm`/`errors.heightCm` = `geometry.out_of_bounds`).
+ */
+export type UpdateFloorRequest = {
+    name: string;
+    level: number;
+    widthCm: number;
+    heightCm: number;
+    gridCm: number;
+    background: null | FloorBackgroundDto;
+    /**
+     * From the FloorDto being edited.
+     */
+    rowVersion: string;
 };
 
 /**
@@ -836,3 +1015,326 @@ export type ListAuditResponses = {
 };
 
 export type ListAuditResponse = ListAuditResponses[keyof ListAuditResponses];
+
+export type ListFloorsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/floors';
+};
+
+export type ListFloorsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type ListFloorsError = ListFloorsErrors[keyof ListFloorsErrors];
+
+export type ListFloorsResponses = {
+    /**
+     * OK
+     */
+    200: Array<FloorSummaryDto>;
+};
+
+export type ListFloorsResponse = ListFloorsResponses[keyof ListFloorsResponses];
+
+export type CreateFloorData = {
+    body: CreateFloorRequest;
+    path?: never;
+    query?: never;
+    url: '/api/floors';
+};
+
+export type CreateFloorErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type CreateFloorError = CreateFloorErrors[keyof CreateFloorErrors];
+
+export type CreateFloorResponses = {
+    /**
+     * Created
+     */
+    201: FloorDto;
+};
+
+export type CreateFloorResponse = CreateFloorResponses[keyof CreateFloorResponses];
+
+export type DeleteFloorData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/floors/{id}';
+};
+
+export type DeleteFloorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type DeleteFloorError = DeleteFloorErrors[keyof DeleteFloorErrors];
+
+export type DeleteFloorResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type DeleteFloorResponse = DeleteFloorResponses[keyof DeleteFloorResponses];
+
+export type GetFloorData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/floors/{id}';
+};
+
+export type GetFloorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type GetFloorError = GetFloorErrors[keyof GetFloorErrors];
+
+export type GetFloorResponses = {
+    /**
+     * OK
+     */
+    200: FloorDto;
+};
+
+export type GetFloorResponse = GetFloorResponses[keyof GetFloorResponses];
+
+export type UpdateFloorData = {
+    body: UpdateFloorRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/floors/{id}';
+};
+
+export type UpdateFloorErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+};
+
+export type UpdateFloorError = UpdateFloorErrors[keyof UpdateFloorErrors];
+
+export type UpdateFloorResponses = {
+    /**
+     * OK
+     */
+    200: FloorDto;
+};
+
+export type UpdateFloorResponse = UpdateFloorResponses[keyof UpdateFloorResponses];
+
+export type SaveFloorLayoutData = {
+    body: SaveFloorLayoutRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/floors/{id}/layout';
+};
+
+export type SaveFloorLayoutErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+};
+
+export type SaveFloorLayoutError = SaveFloorLayoutErrors[keyof SaveFloorLayoutErrors];
+
+export type SaveFloorLayoutResponses = {
+    /**
+     * OK
+     */
+    200: FloorDto;
+};
+
+export type SaveFloorLayoutResponse = SaveFloorLayoutResponses[keyof SaveFloorLayoutResponses];
+
+export type ListRoomsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/rooms';
+};
+
+export type ListRoomsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type ListRoomsError = ListRoomsErrors[keyof ListRoomsErrors];
+
+export type ListRoomsResponses = {
+    /**
+     * OK
+     */
+    200: Array<RoomListItemDto>;
+};
+
+export type ListRoomsResponse = ListRoomsResponses[keyof ListRoomsResponses];
+
+export type UploadFileData = {
+    body: {
+        file: IFormFile;
+    } & {
+        purpose: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/files';
+};
+
+export type UploadFileErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Payload Too Large
+     */
+    413: ProblemDetails;
+};
+
+export type UploadFileError = UploadFileErrors[keyof UploadFileErrors];
+
+export type UploadFileResponses = {
+    /**
+     * Created
+     */
+    201: StoredFileDto;
+};
+
+export type UploadFileResponse = UploadFileResponses[keyof UploadFileResponses];
+
+export type GetFileData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/files/{id}';
+};
+
+export type GetFileErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type GetFileError = GetFileErrors[keyof GetFileErrors];
+
+export type GetFileResponses = {
+    /**
+     * OK
+     */
+    200: Stream;
+};
+
+export type GetFileResponse = GetFileResponses[keyof GetFileResponses];

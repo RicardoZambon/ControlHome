@@ -125,9 +125,19 @@ An architecture test project (`tests/ControlHome.Architecture.Tests`, NetArchTes
 - **`Home`** is a single row (Id = 1): name, IANA time zone (default `America/Sao_Paulo`), latitude/longitude,
   locale (`pt-BR` | `en`), currency (BRL), tariff and `SetupCompletedAt`. The tariff starts as `flat` with a price per
   kWh (0.2); Tarifa Branca and bandeira surcharges arrive with the energy dashboard (5.1).
-- **`Floor`** has a level, a viewBox in cm, an optional background `StoredFile`, and a calibration (two points plus
-  their real distance).
-- **`Room`** has a polygon (JSON), color and icon.
+- **`Floor`** (1.1) has a level, a size in cm (the SVG viewBox, origin top-left, default 2000 × 1500), an editor grid,
+  and an optional background (JSON: a `StoredFile` id, opacity, offset in cm and `CmPerPx`, which the editor's
+  two-point calibration computes). A `rowversion` is the optimistic-concurrency token of the floor *and* its layout:
+  every change sends the version it edited, and a stale one gets 409 `floors.concurrency` (a layout save always
+  touches the floor row, so two admins saving at once cannot both win).
+- **`Room`** (1.1) has a polygon (EF complex collection of `PointCm`, one `json` column), a color token
+  (`room-1`…`room-8`), an icon key and a sort order. `PUT /api/floors/{id}/layout` replaces a floor's rooms in one
+  save. Server-side geometry (`Domain/Geometry/PolygonMath`, mirrored by the editor's `geometry.ts`): at least 3
+  distinct points, simple (no crossing or touching edges), inside the floor, at least 1 cm² — violations are field
+  errors `rooms[i].polygon` with codes `geometry.*`.
+- **`StoredFile`** (1.1) keeps uploads in the database (`varbinary(max)`, SHA-256, size in px): images are only ever
+  stored re-encoded (see the floor-plan editor in §11) and served immutable (`Cache-Control: private, max-age=31536000,
+  immutable`, `nosniff`).
 
 ### Device hierarchy
 
@@ -500,8 +510,9 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   - Pan/zoom; snapping to the grid, own vertices, and other rooms' vertices and edges.
   - Polygon validation and undo/redo on a draft, which is saved or cancelled explicitly.
   - Two-point calibration.
-  - Uploads: PNG/JPEG/WebP only, checked by magic bytes, max 10 MB, re-encoded server-side with SkiaSharp
-    (≤ 4096 px, EXIF stripped). **No SVG.**
+  - Uploads: PNG/JPEG/WebP only, checked by magic bytes, max 10 MB and 40 megapixels (checked before decoding),
+    re-encoded server-side with SkiaSharp 3 (`SkiaSharp.NativeAssets.Linux.NoDependencies` in the chiseled image) to
+    WebP quality 85, ≤ 4096 px, EXIF orientation applied and all metadata dropped. **No SVG.**
   - View mode shows live state and a tap-to-control popover.
 
 ---

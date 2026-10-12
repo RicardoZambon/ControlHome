@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Json;
 using ControlHome.Api.Features.Testing;
+using ControlHome.Api.Hosting;
 using ControlHome.TestSupport;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ControlHome.Api.IntegrationTests;
 
@@ -19,6 +22,20 @@ public sealed class ProblemDetailsTests(ControlHomeApiFactory factory) : IClassF
         problem.GetProperty("status").GetInt32().ShouldBe(404);
         problem.GetProperty("code").GetString().ShouldBe("request.not_found");
         problem.GetProperty("traceId").GetString().ShouldNotBeNullOrEmpty();
+    }
+
+    [Theory]
+    [InlineData(StatusCodes.Status401Unauthorized, "auth.required")]
+    [InlineData(StatusCodes.Status403Forbidden, "auth.forbidden")]
+    [InlineData(StatusCodes.Status404NotFound, "request.not_found")]
+    [InlineData(StatusCodes.Status405MethodNotAllowed, "request.method_not_allowed")]
+    [InlineData(StatusCodes.Status413PayloadTooLarge, "request.too_large")]
+    [InlineData(StatusCodes.Status415UnsupportedMediaType, "request.invalid")]
+    [InlineData(StatusCodes.Status429TooManyRequests, "request.rate_limited")]
+    [InlineData(StatusCodes.Status503ServiceUnavailable, "internal.error")]
+    public void Problem_without_a_code_gets_one_from_its_status(int status, string code)
+    {
+        ProblemDetailsSetup.DefaultCode(status, new ProblemDetails { Status = status }).ShouldBe(code);
     }
 
     [Fact]

@@ -7,6 +7,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ControlHome.Architecture.Tests/ControlHome.Architecture.Tests.csproj" />
+    <Project Path="tests/ControlHome.Domain.Tests/ControlHome.Domain.Tests.csproj" />
     <Project Path="tests/ControlHome.Infrastructure.Tests/ControlHome.Infrastructure.Tests.csproj" />
     <Project Path="tests/ControlHome.Api.IntegrationTests/ControlHome.Api.IntegrationTests.csproj" />
     <Project Path="tests/ControlHome.TestSupport/ControlHome.TestSupport.csproj" />

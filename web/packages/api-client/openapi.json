@@ -937,6 +937,608 @@
           }
         }
       }
+    },
+    "/api/floors": {
+      "get": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "All floors, by level.",
+        "operationId": "listFloors",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FloorSummaryDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "Creates an empty floor (default size 2000 × 1500 cm, grid 50 cm).",
+        "operationId": "createFloor",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFloorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloorDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/floors/{id}": {
+      "get": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "A floor with its rooms.",
+        "operationId": "getFloor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "Changes name, level, size, grid and background.",
+        "description": "409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed, also when the new size would cut a room (errors.widthCm / errors.heightCm = geometry.out_of_bounds) or the background file does not exist (errors['background.fileId'] = files.not_found).",
+        "operationId": "updateFloor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFloorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloorDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "Deletes the floor and its rooms.",
+        "operationId": "deleteFloor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/floors/{id}/layout": {
+      "put": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "Replaces the floor's rooms atomically (rooms not listed are deleted).",
+        "description": "409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed with field errors; geometry problems are codes under rooms[i].polygon: geometry.too_few_points, geometry.too_many_points, geometry.out_of_bounds, geometry.zero_area, geometry.self_intersecting; rooms[i].id = rooms.not_found for a room that is not on this floor.",
+        "operationId": "saveFloorLayout",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveFloorLayoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloorDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rooms": {
+      "get": {
+        "tags": [
+          "Rooms"
+        ],
+        "summary": "All rooms of all floors, by floor level and room order.",
+        "operationId": "listRooms",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RoomListItemDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files": {
+      "post": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "Uploads an image (multipart: file, purpose=floor-background); it is stored re-encoded as WebP.",
+        "description": "PNG, JPEG or WebP (recognized by content, not name), at most 10 MB and 40 megapixels; the stored image is WebP, at most 4096 px on its longest side, without metadata. 400: files.unsupported_type, files.too_large, files.invalid_image, or validation.failed (unknown purpose); 413 request.too_large for requests over 16 MB.",
+        "operationId": "uploadFile",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file",
+                  "purpose"
+                ],
+                "type": "object",
+                "allOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "file": {
+                        "$ref": "#/components/schemas/IFormFile"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "purpose": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredFileDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/{id}": {
+      "get": {
+        "tags": [
+          "Files"
+        ],
+        "summary": "The file's bytes (cacheable for a year: files never change).",
+        "operationId": "getFile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1067,6 +1669,39 @@
         },
         "description": "Completes the first-run setup: creates the first Admin and the home, then signs the admin in."
       },
+      "CreateFloorRequest": {
+        "required": [
+          "name",
+          "level",
+          "widthCm",
+          "heightCm"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "widthCm": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "heightCm": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "Creates an empty floor (Admin). Size defaults to 2000 × 1500 cm, grid 50 cm."
+      },
       "CreateUserRequest": {
         "required": [
           "userName",
@@ -1130,6 +1765,132 @@
           }
         },
         "description": "Pre-database setup: the SQL Server connection to test and save. Accepted only while no connection is configured.\nThe connection always uses TLS (`Encrypt=True`); TrustServerCertificate accepts the server's\nown (usually self-signed) certificate."
+      },
+      "FloorBackgroundDto": {
+        "required": [
+          "fileId",
+          "opacity",
+          "offsetXCm",
+          "offsetYCm",
+          "cmPerPx"
+        ],
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "description": "A file uploaded with purpose `floor-background` (`POST /api/files`).",
+            "format": "uuid"
+          },
+          "opacity": {
+            "type": "number",
+            "description": "0 (invisible) to 1 (opaque).",
+            "format": "double"
+          },
+          "offsetXCm": {
+            "type": "number",
+            "format": "double"
+          },
+          "offsetYCm": {
+            "type": "number",
+            "format": "double"
+          },
+          "cmPerPx": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "The image under a floor plan: its top-left corner sits at (OffsetXCm, OffsetYCm)\nand one image pixel measures CmPerPx centimetres."
+      },
+      "FloorDto": {
+        "required": [
+          "id",
+          "name",
+          "level",
+          "widthCm",
+          "heightCm",
+          "gridCm",
+          "background",
+          "rooms",
+          "rowVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "description": "Storey: 0 ground, negative below ground.",
+            "format": "int32"
+          },
+          "widthCm": {
+            "type": "integer",
+            "description": "Plan width (the SVG viewBox is `0 0 WidthCm HeightCm`).",
+            "format": "int32"
+          },
+          "heightCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "gridCm": {
+            "type": "integer",
+            "description": "Editor grid spacing.",
+            "format": "int32"
+          },
+          "background": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FloorBackgroundDto"
+              }
+            ]
+          },
+          "rooms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomDto"
+            },
+            "description": "In display order."
+          },
+          "rowVersion": {
+            "type": "string",
+            "description": "Opaque concurrency token; a change sent with an older one gets 409 `floors.concurrency`."
+          }
+        },
+        "description": "A floor with its rooms. Send RowVersion back with every change to it."
+      },
+      "FloorSummaryDto": {
+        "required": [
+          "id",
+          "name",
+          "level",
+          "roomCount"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "roomCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A floor in the floor list."
       },
       "HomeDto": {
         "required": [
@@ -1309,6 +2070,10 @@
           }
         }
       },
+      "IFormFile": {
+        "type": "string",
+        "format": "binary"
+      },
       "LoginRequest": {
         "required": [
           "userName",
@@ -1390,6 +2155,24 @@
         },
         "description": "A page of items; pass NextCursor back as `cursor` to get the next page (null = last page)."
       },
+      "PointCmDto": {
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "format": "double"
+          },
+          "y": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "description": "A point on a floor plan in centimetres (origin: the floor's top-left corner; y grows downwards)."
+      },
       "ProblemDetails": {
         "required": [
           "code"
@@ -1469,6 +2252,135 @@
         },
         "description": "Consumes a one-time reset token printed by the `reset-admin` command."
       },
+      "RoomDto": {
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "colorToken",
+          "polygon",
+          "areaM2",
+          "sortOrder"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon key (e.g. `sofa`)."
+          },
+          "colorToken": {
+            "type": "string",
+            "description": "`room-1` … `room-8`."
+          },
+          "polygon": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PointCmDto"
+            },
+            "description": "The outline (implicitly closed), in the floor's centimetre coordinates."
+          },
+          "areaM2": {
+            "type": "number",
+            "description": "Enclosed area in m², rounded to two decimals.",
+            "format": "double"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A room of a floor."
+      },
+      "RoomInput": {
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "colorToken",
+          "polygon"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "An existing room of this floor, or `null` for a new room.",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "colorToken": {
+            "type": "string"
+          },
+          "polygon": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PointCmDto"
+            },
+            "description": "At least 3 points, simple (no self-intersection), inside the floor and enclosing an area; violations are field errors\nunder `rooms[i].polygon` with codes `geometry.*`."
+          }
+        },
+        "description": "A room in a layout save."
+      },
+      "RoomListItemDto": {
+        "required": [
+          "id",
+          "name",
+          "floorId",
+          "floorName"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "floorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "floorName": {
+            "type": "string"
+          }
+        },
+        "description": "A room in the list of all rooms (for pickers)."
+      },
+      "SaveFloorLayoutRequest": {
+        "required": [
+          "rooms",
+          "rowVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "rooms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoomInput"
+            }
+          },
+          "rowVersion": {
+            "type": "string",
+            "description": "From the FloorDto being edited."
+          }
+        },
+        "description": "Replaces the floor's rooms atomically (Admin): listed rooms with an `id` are updated, rooms without one are\ncreated, rooms not listed are deleted; the list order becomes the display order."
+      },
       "SetupStatusDto": {
         "required": [
           "setupCompleted",
@@ -1508,6 +2420,93 @@
           }
         },
         "description": "First-run state. Answered even while the database is not ready (then SetupCompleted is false)."
+      },
+      "StoredFileDto": {
+        "required": [
+          "id",
+          "contentType",
+          "length",
+          "widthPx",
+          "heightPx"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contentType": {
+            "type": "string",
+            "description": "Always `image/webp` for images (they are re-encoded on upload)."
+          },
+          "length": {
+            "type": "integer",
+            "description": "Size of the stored bytes.",
+            "format": "int64"
+          },
+          "widthPx": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "heightPx": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A stored file. Its bytes are at `GET /api/files/{id}` (immutable: a new upload gets a new id)."
+      },
+      "Stream": {
+        "type": "string",
+        "format": "binary"
+      },
+      "UpdateFloorRequest": {
+        "required": [
+          "name",
+          "level",
+          "widthCm",
+          "heightCm",
+          "gridCm",
+          "background",
+          "rowVersion"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "widthCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "heightCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "gridCm": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "background": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The background image, or `null` to remove it.",
+                "$ref": "#/components/schemas/FloorBackgroundDto"
+              }
+            ]
+          },
+          "rowVersion": {
+            "type": "string",
+            "description": "From the FloorDto being edited."
+          }
+        },
+        "description": "Changes a floor's properties (Admin); rooms are kept. The size cannot shrink below a room (400 with\n`errors.widthCm`/`errors.heightCm` = `geometry.out_of_bounds`)."
       },
       "UpdateHomeRequest": {
         "required": [
@@ -1656,6 +2655,15 @@
     },
     {
       "name": "Audit"
+    },
+    {
+      "name": "Floors"
+    },
+    {
+      "name": "Rooms"
+    },
+    {
+      "name": "Files"
     }
   ]
 }

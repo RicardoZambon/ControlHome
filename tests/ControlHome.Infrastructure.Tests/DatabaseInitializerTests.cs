@@ -44,10 +44,15 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
                 [
                     "auth.RoleClaims", "auth.Roles", "auth.UserClaims", "auth.UserLogins", "auth.UserRoles", "auth.UserTokens",
                     "auth.Users", "ch.AuditLog", "ch.DataProtectionKeys", "ch.Homes", "ch.__EFMigrationsHistory",
+                    "ch.Floors", "ch.Rooms", "ch.StoredFiles",
                 ],
                 ignoreOrder: true);
             (await ColumnTypeAsync(name, "ch.Homes", "Tariff", ct)).ShouldBe("json");
             (await ColumnTypeAsync(name, "ch.AuditLog", "DetailsJson", ct)).ShouldBe("json");
+            (await ColumnTypeAsync(name, "ch.Floors", "Background", ct)).ShouldBe("json");
+            (await ColumnTypeAsync(name, "ch.Floors", "RowVersion", ct)).ShouldBe("timestamp");
+            (await ColumnTypeAsync(name, "ch.Rooms", "Polygon", ct)).ShouldBe("json");
+            (await ColumnTypeAsync(name, "ch.StoredFiles", "Data", ct)).ShouldBe("varbinary");
         }
         finally
         {

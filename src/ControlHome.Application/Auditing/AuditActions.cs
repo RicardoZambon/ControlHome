@@ -19,5 +19,12 @@ public static class AuditActions
 
     public const string HomeUpdated = "home.updated";
 
+    public const string FloorCreated = "floors.created";
+    public const string FloorUpdated = "floors.updated";
+    public const string FloorDeleted = "floors.deleted";
+    public const string FloorLayoutSaved = "floors.layout_saved";
+
+    public const string FileUploaded = "files.uploaded";
+
     public const string NetworkDenied = "security.network_denied";
 }

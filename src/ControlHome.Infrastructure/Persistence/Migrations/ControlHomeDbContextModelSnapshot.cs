@@ -173,6 +173,114 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                     b.ToTable("AuditLog", "ch");
                 });
 
+            modelBuilder.Entity("ControlHome.Domain.Files.StoredFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<int>("HeightPx")
+                        .HasColumnType("int");
+
+                    b.Property<long>("Length")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<int>("WidthPx")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Purpose");
+
+                    b.ToTable("StoredFiles", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Homes.Floor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("GridCm")
+                        .HasColumnType("int");
+
+                    b.Property<int>("HeightCm")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("WidthCm")
+                        .HasColumnType("int");
+
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Background", "ControlHome.Domain.Homes.Floor.Background#FloorBackground", b1 =>
+                        {
+                            b1.Property<double>("CmPerPx");
+
+                            b1.Property<Guid>("FileId");
+
+                            b1.Property<double>("OffsetXCm");
+
+                            b1.Property<double>("OffsetYCm");
+
+                            b1.Property<double>("Opacity");
+
+                            b1
+                                .ToJson("Background")
+                                .HasColumnType("json");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Level");
+
+                    b.ToTable("Floors", "ch");
+                });
+
             modelBuilder.Entity("ControlHome.Domain.Homes.Home", b =>
                 {
                     b.Property<int>("Id")
@@ -232,6 +340,57 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_Homes_Singleton", "[Id] = 1");
                         });
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Homes.Room", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ColorToken")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<int>("FloorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.ComplexCollection(typeof(List<Dictionary<string, object>>), "Polygon", "ControlHome.Domain.Homes.Room.Polygon#PointCm", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<double>("X");
+
+                            b1.Property<double>("Y");
+
+                            b1
+                                .ToJson("Polygon")
+                                .HasColumnType("json");
+                        });
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FloorId", "SortOrder");
+
+                    b.ToTable("Rooms", "ch");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
@@ -384,6 +543,15 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                     b.ToTable("UserTokens", "auth");
                 });
 
+            modelBuilder.Entity("ControlHome.Domain.Homes.Room", b =>
+                {
+                    b.HasOne("ControlHome.Domain.Homes.Floor", null)
+                        .WithMany("Rooms")
+                        .HasForeignKey("FloorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", null)
@@ -433,6 +601,11 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Homes.Floor", b =>
+                {
+                    b.Navigation("Rooms");
                 });
 #pragma warning restore 612, 618
         }

@@ -37,13 +37,15 @@ public static class ProblemDetailsSetup
         return services;
     }
 
-    private static string DefaultCode(int status, ProblemDetails problem) => status switch
+    /// <summary>The <c>code</c> of a problem that has none, by status (e.g. 413 from a request body size limit).</summary>
+    internal static string DefaultCode(int status, ProblemDetails problem) => status switch
     {
         StatusCodes.Status400BadRequest when problem is HttpValidationProblemDetails => ErrorCodes.ValidationFailed,
         StatusCodes.Status401Unauthorized => ErrorCodes.AuthRequired,
         StatusCodes.Status403Forbidden => ErrorCodes.AuthForbidden,
         StatusCodes.Status404NotFound => ErrorCodes.RequestNotFound,
         StatusCodes.Status405MethodNotAllowed => ErrorCodes.RequestMethodNotAllowed,
+        StatusCodes.Status413PayloadTooLarge => ErrorCodes.RequestTooLarge,
         StatusCodes.Status429TooManyRequests => ErrorCodes.RequestRateLimited,
         >= 500 => ErrorCodes.InternalError,
         _ => ErrorCodes.RequestInvalid,
