@@ -1,0 +1,67 @@
+{
+  "title": "Users",
+  "nav": "Users",
+  "eyebrow": "Household",
+  "description": "Everyone who can open this home, and what each person is allowed to do.",
+  "add": "Add user",
+  "listLabel": "Users",
+  "you": "You",
+  "never": "Never signed in",
+  "lastLogin": "Last sign-in",
+  "created": "Added",
+  "role": "Role",
+  "status": "Status",
+  "user": "User",
+  "active": "Active",
+  "disabled": "Disabled",
+  "activeToggle": "Account of {name} active",
+  "loadFailed": "Couldn't load the users.",
+  "actions": {
+    "menu": "Actions for {name}",
+    "edit": "Edit",
+    "resetPassword": "Reset password",
+    "disable": "Disable account",
+    "enable": "Enable account",
+    "delete": "Delete"
+  },
+  "form": {
+    "createTitle": "Add a user",
+    "createDescription": "They sign in with this user name and password. Give them the password in person.",
+    "editTitle": "Edit {name}",
+    "editDescription": "Change how they appear and what they can do.",
+    "displayName": "Name",
+    "userName": "User name",
+    "userNameHelp": "Used to sign in. It can't be changed later.",
+    "role": "Role",
+    "password": "Password",
+    "passwordHelp": "At least 10 characters.",
+    "disabled": "Disable this account",
+    "disabledHelp": "A disabled account can't sign in, and its open sessions end within a minute.",
+    "create": "Add user",
+    "creating": "Adding…",
+    "save": "Save changes",
+    "saving": "Saving…"
+  },
+  "reset": {
+    "title": "New password for {name}",
+    "description": "Set a new password and give it to them in person.",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "submit": "Set password",
+    "submitting": "Saving…"
+  },
+  "delete": {
+    "title": "Delete {name}?",
+    "description": "Their account is removed and they can no longer sign in. This can't be undone.",
+    "confirm": "Delete user",
+    "deleting": "Deleting…"
+  },
+  "toast": {
+    "created": "{name} was added.",
+    "updated": "Changes to {name} saved.",
+    "passwordReset": "New password set for {name}.",
+    "deleted": "{name} was deleted.",
+    "disabled": "{name} can no longer sign in.",
+    "enabled": "{name} can sign in again."
+  }
+}

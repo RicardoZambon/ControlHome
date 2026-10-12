@@ -1,0 +1,111 @@
+{
+  "title": "Set up ControlHome",
+  "eyebrow": "First-run setup",
+  "heading": "Welcome home",
+  "intro": "A few details and your home is ready. It takes about two minutes.",
+  "progress": "Setup steps",
+  "stepOf": "Step {current} of {total}",
+  "completed": "completed",
+  "current": "current step",
+  "steps": {
+    "code": {
+      "label": "Setup code",
+      "title": "Confirm it's your server",
+      "description": "Enter the one-time code ControlHome printed when it started. Only someone with access to the server can see it."
+    },
+    "admin": {
+      "label": "Your account",
+      "title": "Create the administrator",
+      "description": "This account manages the home. You can add the rest of the household afterwards."
+    },
+    "home": {
+      "label": "Your home",
+      "title": "Tell ControlHome about your home",
+      "description": "Used for schedules, sunrise and sunset, and energy costs."
+    },
+    "review": {
+      "label": "Review",
+      "title": "Everything look right?",
+      "description": "Check the details below. You can change most of them later."
+    }
+  },
+  "code": {
+    "label": "Setup code",
+    "placeholder": "XXXX-XXXX-XXXX",
+    "help": "It's in the server log (look for “First-run setup code”) and in setup-code.txt in the data folder. Dashes and spaces don't matter."
+  },
+  "admin": {
+    "displayName": "Your name",
+    "displayNameHelp": "How ControlHome greets you.",
+    "userName": "User name",
+    "userNameHelp": "Used to sign in, for example ana or ana.souza.",
+    "password": "Password",
+    "passwordHelp": "At least 10 characters. A short sentence is easy to remember and hard to guess.",
+    "confirmPassword": "Confirm password"
+  },
+  "home": {
+    "name": "Home name",
+    "namePlaceholder": "Our home",
+    "timeZone": "Time zone",
+    "timeZoneSearch": "Search time zones",
+    "timeZoneEmpty": "No time zone matches.",
+    "useBrowserTimeZone": "Use this device's time zone ({zone})",
+    "location": "Location",
+    "locationHelp": "Optional. Used for sunrise and sunset; it never leaves your server.",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "useMyLocation": "Use my location",
+    "locating": "Locating…",
+    "locationInsecure": "Browsers share location only over HTTPS or on this computer. Type the coordinates instead.",
+    "locationUnavailable": "This browser can't share its location. Type the coordinates instead.",
+    "locationDenied": "Location access was denied. Type the coordinates instead.",
+    "locationFailed": "Couldn't get your location. Type the coordinates instead.",
+    "locationFound": "Location filled in.",
+    "language": "Language",
+    "languageHelp": "For your account and the home's messages.",
+    "currency": "Currency",
+    "currencySearch": "Search currencies",
+    "currencyEmpty": "No currency matches.",
+    "price": "Electricity price per kWh",
+    "priceHelp": "Optional. Lets ControlHome estimate what your devices cost."
+  },
+  "review": {
+    "code": "Setup code",
+    "account": "Administrator",
+    "home": "Home",
+    "name": "Name",
+    "userName": "User name",
+    "password": "Password",
+    "passwordSet": "Set",
+    "timeZone": "Time zone",
+    "location": "Location",
+    "language": "Language",
+    "currency": "Currency",
+    "price": "Price per kWh",
+    "edit": "Edit",
+    "editSection": "Edit {section}",
+    "finish": "Finish setup",
+    "finishing": "Setting up your home…"
+  },
+  "database": {
+    "title": "Connect a database",
+    "description": "ControlHome keeps your home in SQL Server 2025, and no database connection is configured yet.",
+    "how": "Set the environment variable CONTROLHOME_DB_CONNECTION to the connection string and restart the container:",
+    "example": "CONTROLHOME_DB_CONNECTION=\"Server=<host>,1433;Database=ControlHome;User ID=<login>;Password=<password>;TrustServerCertificate=True\"",
+    "createHint": "ControlHome creates the database on first start when the login is allowed to.",
+    "later": "Connecting a database from this page arrives in a later version.",
+    "checkAgain": "Check again",
+    "checking": "Checking…",
+    "copy": "Copy",
+    "copied": "Copied to the clipboard.",
+    "stillMissing": "Still no database. Restart ControlHome after setting the variable."
+  },
+  "waiting": {
+    "title": "Getting the database ready",
+    "description": "ControlHome is connecting to the database and preparing it. This page continues on its own.",
+    "state": "Database: {state}",
+    "failedTitle": "The database couldn't be prepared",
+    "failedDescription": "Check the connection string and the server log, then try again."
+  },
+  "done": "Welcome home, {name}!"
+}

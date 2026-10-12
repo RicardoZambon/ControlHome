@@ -1,0 +1,29 @@
+{
+  "title": "Profile",
+  "nav": "Profile",
+  "eyebrow": "Your account",
+  "description": "How you appear, how ControlHome looks for you, and your password.",
+  "account": {
+    "userName": "User name",
+    "roles": "Role"
+  },
+  "preferences": {
+    "title": "Profile and preferences",
+    "description": "Saved to your account, so they follow you to every device.",
+    "displayName": "Name",
+    "language": "Language",
+    "theme": "Theme",
+    "themeHelp": "System follows your device's light or dark setting.",
+    "saved": "Profile saved."
+  },
+  "password": {
+    "title": "Password",
+    "description": "Use at least 10 characters. Changing it signs you out on your other devices.",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "submit": "Change password",
+    "submitting": "Changing…",
+    "changed": "Password changed."
+  }
+}

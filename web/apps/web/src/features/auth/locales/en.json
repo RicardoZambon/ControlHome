@@ -1,0 +1,29 @@
+{
+  "login": {
+    "title": "Sign in",
+    "heading": "Welcome back",
+    "subtitle": "Sign in to your home.",
+    "userName": "User name",
+    "password": "Password",
+    "rememberMe": "Keep me signed in on this device",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "forgot": "Forgot your password?",
+    "forgotHelp": "Ask an administrator of your home to set a new one. If you are the administrator, run reset-admin on the server: it prints a one-time link for a new password."
+  },
+  "reset": {
+    "title": "Reset password",
+    "heading": "Choose a new password",
+    "subtitle": "For the account {user}.",
+    "newPassword": "New password",
+    "newPasswordHelp": "At least 10 characters.",
+    "confirmPassword": "Confirm new password",
+    "submit": "Save new password",
+    "submitting": "Saving…",
+    "incompleteTitle": "This link is incomplete",
+    "incompleteDescription": "Open the full link printed by reset-admin, including everything after the question mark.",
+    "doneTitle": "Password changed",
+    "doneDescription": "You can sign in with your new password now.",
+    "toLogin": "Go to sign in"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "login": {
+    "title": "Entrar",
+    "heading": "Que bom ver você",
+    "subtitle": "Entre na sua casa.",
+    "userName": "Nome de usuário",
+    "password": "Senha",
+    "rememberMe": "Manter conectado neste dispositivo",
+    "submit": "Entrar",
+    "submitting": "Entrando…",
+    "forgot": "Esqueceu a senha?",
+    "forgotHelp": "Peça a um administrador da sua casa para definir uma nova. Se você é o administrador, rode reset-admin no servidor: ele mostra um link de uso único para uma nova senha."
+  },
+  "reset": {
+    "title": "Redefinir senha",
+    "heading": "Escolha uma nova senha",
+    "subtitle": "Para a conta {user}.",
+    "newPassword": "Nova senha",
+    "newPasswordHelp": "Pelo menos 10 caracteres.",
+    "confirmPassword": "Confirme a nova senha",
+    "submit": "Salvar nova senha",
+    "submitting": "Salvando…",
+    "incompleteTitle": "Este link está incompleto",
+    "incompleteDescription": "Abra o link completo mostrado pelo reset-admin, incluindo tudo depois do ponto de interrogação.",
+    "doneTitle": "Senha alterada",
+    "doneDescription": "Você já pode entrar com a nova senha.",
+    "toLogin": "Ir para a entrada"
+  }
+}

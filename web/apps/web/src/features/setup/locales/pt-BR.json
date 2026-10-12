@@ -1,0 +1,111 @@
+{
+  "title": "Configurar o ControlHome",
+  "eyebrow": "Configuração inicial",
+  "heading": "Bem-vindo à sua casa",
+  "intro": "Alguns detalhes e sua casa fica pronta. Leva uns dois minutos.",
+  "progress": "Etapas da configuração",
+  "stepOf": "Etapa {current} de {total}",
+  "completed": "concluída",
+  "current": "etapa atual",
+  "steps": {
+    "code": {
+      "label": "Código",
+      "title": "Confirme que o servidor é seu",
+      "description": "Digite o código de uso único que o ControlHome mostrou ao iniciar. Só quem tem acesso ao servidor consegue vê-lo."
+    },
+    "admin": {
+      "label": "Sua conta",
+      "title": "Crie o administrador",
+      "description": "Esta conta gerencia a casa. Depois você pode adicionar o resto da família."
+    },
+    "home": {
+      "label": "Sua casa",
+      "title": "Conte ao ControlHome sobre a sua casa",
+      "description": "Usado em horários, nascer e pôr do sol e custos de energia."
+    },
+    "review": {
+      "label": "Revisão",
+      "title": "Está tudo certo?",
+      "description": "Confira os dados abaixo. Quase tudo pode ser alterado depois."
+    }
+  },
+  "code": {
+    "label": "Código de configuração",
+    "placeholder": "XXXX-XXXX-XXXX",
+    "help": "Ele está no log do servidor (procure por “First-run setup code”) e no setup-code.txt da pasta de dados. Hífens e espaços não importam."
+  },
+  "admin": {
+    "displayName": "Seu nome",
+    "displayNameHelp": "Como o ControlHome vai cumprimentar você.",
+    "userName": "Nome de usuário",
+    "userNameHelp": "Usado para entrar, por exemplo ana ou ana.souza.",
+    "password": "Senha",
+    "passwordHelp": "Pelo menos 10 caracteres. Uma frase curta é fácil de lembrar e difícil de adivinhar.",
+    "confirmPassword": "Confirme a senha"
+  },
+  "home": {
+    "name": "Nome da casa",
+    "namePlaceholder": "Nossa casa",
+    "timeZone": "Fuso horário",
+    "timeZoneSearch": "Buscar fusos horários",
+    "timeZoneEmpty": "Nenhum fuso horário encontrado.",
+    "useBrowserTimeZone": "Usar o fuso deste dispositivo ({zone})",
+    "location": "Localização",
+    "locationHelp": "Opcional. Usada para o nascer e o pôr do sol; nunca sai do seu servidor.",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "useMyLocation": "Usar minha localização",
+    "locating": "Localizando…",
+    "locationInsecure": "Os navegadores só compartilham a localização via HTTPS ou neste computador. Digite as coordenadas.",
+    "locationUnavailable": "Este navegador não compartilha a localização. Digite as coordenadas.",
+    "locationDenied": "O acesso à localização foi negado. Digite as coordenadas.",
+    "locationFailed": "Não foi possível obter sua localização. Digite as coordenadas.",
+    "locationFound": "Localização preenchida.",
+    "language": "Idioma",
+    "languageHelp": "Da sua conta e das mensagens da casa.",
+    "currency": "Moeda",
+    "currencySearch": "Buscar moedas",
+    "currencyEmpty": "Nenhuma moeda encontrada.",
+    "price": "Preço da energia por kWh",
+    "priceHelp": "Opcional. Permite estimar quanto seus dispositivos custam."
+  },
+  "review": {
+    "code": "Código de configuração",
+    "account": "Administrador",
+    "home": "Casa",
+    "name": "Nome",
+    "userName": "Nome de usuário",
+    "password": "Senha",
+    "passwordSet": "Definida",
+    "timeZone": "Fuso horário",
+    "location": "Localização",
+    "language": "Idioma",
+    "currency": "Moeda",
+    "price": "Preço por kWh",
+    "edit": "Editar",
+    "editSection": "Editar {section}",
+    "finish": "Concluir configuração",
+    "finishing": "Preparando sua casa…"
+  },
+  "database": {
+    "title": "Conecte um banco de dados",
+    "description": "O ControlHome guarda sua casa no SQL Server 2025, e ainda não há uma conexão de banco configurada.",
+    "how": "Defina a variável de ambiente CONTROLHOME_DB_CONNECTION com a string de conexão e reinicie o contêiner:",
+    "example": "CONTROLHOME_DB_CONNECTION=\"Server=<servidor>,1433;Database=ControlHome;User ID=<login>;Password=<senha>;TrustServerCertificate=True\"",
+    "createHint": "O ControlHome cria o banco na primeira inicialização quando o login tem permissão.",
+    "later": "Conectar um banco de dados por esta página chega numa versão futura.",
+    "checkAgain": "Verificar de novo",
+    "checking": "Verificando…",
+    "copy": "Copiar",
+    "copied": "Copiado para a área de transferência.",
+    "stillMissing": "Ainda sem banco de dados. Reinicie o ControlHome depois de definir a variável."
+  },
+  "waiting": {
+    "title": "Preparando o banco de dados",
+    "description": "O ControlHome está conectando ao banco de dados e preparando-o. Esta página continua sozinha.",
+    "state": "Banco de dados: {state}",
+    "failedTitle": "Não foi possível preparar o banco de dados",
+    "failedDescription": "Confira a string de conexão e o log do servidor e tente de novo."
+  },
+  "done": "Bem-vindo à sua casa, {name}!"
+}

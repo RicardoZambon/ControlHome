@@ -1,0 +1,185 @@
+{
+  "notFound": {
+    "title": "Page not found",
+    "code": "404",
+    "heading": "There's no room here",
+    "description": "The page you're looking for doesn't exist. It may have moved, or the address may be mistyped.",
+    "back": "Back to home"
+  },
+  "forbidden": {
+    "title": "No access",
+    "code": "403",
+    "heading": "This door is closed to you",
+    "description": "Your role doesn't include this page. Ask an administrator of your home if you need it.",
+    "back": "Back to home"
+  },
+  "uiKit": {
+    "title": "UI kit",
+    "eyebrow": "Developer",
+    "description": "Every design token and primitive, as the app renders them. Switch the theme and language in the top bar to review both.",
+    "contents": "On this page",
+    "foregroundPair": "With its foreground",
+    "translucent": "Translucent, shown over the background and the foreground",
+    "sections": {
+      "colors": "Colors",
+      "effects": "Shadows and shape",
+      "typography": "Typography",
+      "buttons": "Buttons",
+      "badges": "Badges and avatars",
+      "inputs": "Text fields",
+      "choices": "Choices",
+      "feedback": "Feedback",
+      "overlays": "Overlays and menus",
+      "navigation": "Navigation",
+      "data": "Data display"
+    },
+    "groups": {
+      "surfaces": "Surfaces",
+      "brand": "Brand and emphasis",
+      "lines": "Lines and focus",
+      "sidebar": "Sidebar",
+      "states": "Device states",
+      "rooms": "Rooms",
+      "effects": "Effects",
+      "base": "Base"
+    },
+    "states": {
+      "default": "Default",
+      "disabled": "Disabled",
+      "invalid": "Invalid",
+      "loading": "Loading",
+      "checked": "Checked",
+      "unchecked": "Unchecked",
+      "readOnly": "Read only",
+      "withIcon": "With icon",
+      "iconOnly": "Icon only",
+      "sizes": "Sizes",
+      "variants": "Variants"
+    },
+    "variants": {
+      "default": "Default",
+      "secondary": "Secondary",
+      "outline": "Outline",
+      "ghost": "Ghost",
+      "link": "Link",
+      "destructive": "Destructive"
+    },
+    "sizes": {
+      "xs": "Extra small",
+      "sm": "Small",
+      "default": "Default",
+      "lg": "Large"
+    },
+    "type": {
+      "display": "Calm control for every room",
+      "heading": "Living room, 21.5 °C",
+      "body": "Interface text uses Onest: clear figures and an open shape that stays legible at small sizes on any screen.",
+      "small": "Small print and captions use the muted foreground.",
+      "mono": "Setup code ABCD-EFGH-JKMN"
+    },
+    "sample": {
+      "label": "Room name",
+      "placeholder": "Living room",
+      "value": "Kitchen",
+      "help": "Shown on the floor plan.",
+      "invalid": "This value isn't valid.",
+      "textarea": "Notes about this room",
+      "select": "Choose a room",
+      "rooms": {
+        "living": "Living room",
+        "kitchen": "Kitchen",
+        "bedroom": "Bedroom"
+      },
+      "checkbox": "Notify me",
+      "switch": "Lights on",
+      "radio": "Scene",
+      "radioOptions": {
+        "relax": "Relax",
+        "focus": "Focus",
+        "away": "Away"
+      },
+      "slider": "Brightness",
+      "toggle": "Bold",
+      "toggleGroup": "Text alignment",
+      "align": {
+        "left": "Align left",
+        "center": "Align center",
+        "right": "Align right"
+      },
+      "searchable": "Searchable select",
+      "password": "Password",
+      "formTitle": "Validation",
+      "formSubmit": "Validate",
+      "alertTitle": "Heads up",
+      "alertDescription": "Alerts explain something about the current page.",
+      "destructiveTitle": "Something failed",
+      "destructiveDescription": "Destructive alerts describe an error and how to fix it.",
+      "progress": "Progress",
+      "toast": "Show a toast",
+      "toasts": {
+        "default": "A neutral notification",
+        "success": "Saved successfully",
+        "info": "Something to know",
+        "warning": "Check this before going on",
+        "error": "That didn't work",
+        "description": "Toasts can carry a short description."
+      },
+      "openDialog": "Open dialog",
+      "dialogTitle": "Rename room",
+      "dialogDescription": "Dialogs hold a focused task.",
+      "openAlertDialog": "Open confirmation",
+      "alertDialogTitle": "Delete this room?",
+      "alertDialogDescription": "Confirmations ask before something irreversible.",
+      "openSheet": "Open sheet",
+      "sheetTitle": "Room details",
+      "sheetDescription": "Sheets slide in for side tasks.",
+      "openPopover": "Open popover",
+      "popover": "Popovers show light, anchored content.",
+      "tooltipTrigger": "Hover or focus me",
+      "tooltip": "A short hint",
+      "openMenu": "Open menu",
+      "menuLabel": "Room",
+      "menuEdit": "Edit",
+      "menuDuplicate": "Duplicate",
+      "menuFavorite": "Favorite",
+      "menuView": "View",
+      "menuPlan": "Floor plan",
+      "menuList": "List",
+      "menuMore": "More",
+      "menuExport": "Export",
+      "menuDelete": "Delete",
+      "tabs": {
+        "overview": "Overview",
+        "energy": "Energy",
+        "history": "History",
+        "overviewText": "Tabs switch between related views.",
+        "energyText": "Each panel keeps its own content.",
+        "historyText": "Only the active panel is shown."
+      },
+      "breadcrumbHome": "Home",
+      "breadcrumbFloor": "Ground floor",
+      "breadcrumbRoom": "Kitchen",
+      "table": {
+        "caption": "Sample rows (not real devices)",
+        "name": "Name",
+        "room": "Room",
+        "state": "State",
+        "on": "On",
+        "off": "Off",
+        "offline": "Offline"
+      },
+      "card": {
+        "title": "Card title",
+        "description": "Cards group related content.",
+        "body": "Card content sits inside generous padding.",
+        "action": "Action"
+      },
+      "scroll": "Scrollable area",
+      "item": "Item {number}",
+      "energy": "kWh",
+      "menuShortcut": "E",
+      "percent": "{value}%"
+    },
+    "specimen": "Aa"
+  }
+}

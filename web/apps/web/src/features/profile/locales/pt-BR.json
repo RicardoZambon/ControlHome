@@ -1,0 +1,29 @@
+{
+  "title": "Perfil",
+  "nav": "Perfil",
+  "eyebrow": "Sua conta",
+  "description": "Como você aparece, como o ControlHome fica para você e a sua senha.",
+  "account": {
+    "userName": "Nome de usuário",
+    "roles": "Papel"
+  },
+  "preferences": {
+    "title": "Perfil e preferências",
+    "description": "Salvos na sua conta, então acompanham você em todos os dispositivos.",
+    "displayName": "Nome",
+    "language": "Idioma",
+    "theme": "Tema",
+    "themeHelp": "Sistema segue a configuração clara ou escura do seu dispositivo.",
+    "saved": "Perfil salvo."
+  },
+  "password": {
+    "title": "Senha",
+    "description": "Use pelo menos 10 caracteres. Ao alterar, você sai da conta nos outros dispositivos.",
+    "current": "Senha atual",
+    "new": "Nova senha",
+    "confirm": "Confirme a nova senha",
+    "submit": "Alterar senha",
+    "submitting": "Alterando…",
+    "changed": "Senha alterada."
+  }
+}

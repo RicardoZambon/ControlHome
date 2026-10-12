@@ -1,0 +1,43 @@
+{
+  "title": "Home",
+  "nav": "Home",
+  "greeting": {
+    "morning": "Good morning, {name}",
+    "afternoon": "Good afternoon, {name}",
+    "evening": "Good evening, {name}",
+    "night": "Good night, {name}"
+  },
+  "welcome": "{home} is set up and ready for what comes next.",
+  "localTime": "Local time at home",
+  "planTeaser": "Your floor plan will live here",
+  "planTeaserDetail": "Draw floors and rooms in the next update, then place your devices on them.",
+  "start": {
+    "heading": "Make it yours",
+    "profileTitle": "Your profile",
+    "profileDescription": "Your name, language, theme and password.",
+    "usersTitle": "Household",
+    "usersDescription": "Add the people who live here and choose what each one can do.",
+    "open": "Open"
+  },
+  "details": {
+    "heading": "Home details",
+    "timeZone": "Time zone",
+    "location": "Location",
+    "language": "Language",
+    "currency": "Currency",
+    "price": "Electricity price",
+    "perKwh": "{price} per kWh",
+    "loadFailed": "Couldn't load the home details."
+  },
+  "next": {
+    "heading": "Coming next",
+    "badge": "Next",
+    "planned": "Planned",
+    "floorsTitle": "Floors and rooms",
+    "floorsDescription": "Draw each floor, trace the rooms and give every space its color.",
+    "devicesTitle": "Devices and integrations",
+    "devicesDescription": "Connect your lights, plugs and sensors and control them live from any screen.",
+    "energyTitle": "Energy and history",
+    "energyDescription": "See what each device uses and what it costs at your electricity price."
+  }
+}
