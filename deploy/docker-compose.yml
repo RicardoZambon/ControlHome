@@ -1,0 +1,73 @@
+# ControlHome — production compose (a LAN Docker host, e.g. Umbrel).
+#
+#   cd deploy
+#   cp .env.example .env              # then edit .env (never commit it)
+#   mkdir -p data && sudo chown 1000:1000 data   # owned by CONTROLHOME_UID:CONTROLHOME_GID
+#   docker compose up -d
+#
+# Optional bundled SQL Server 2025 Express (x64 hosts only; listens on 127.0.0.1:1433):
+#   docker compose --profile bundled-db up -d
+#
+# Without a connection string the app starts in pre-DB setup mode and asks for the database in the setup wizard.
+# Development: docker-compose.dev.yml (local build, bridge network, published port 8080).
+
+name: controlhome
+
+services:
+  controlhome:
+    image: ghcr.io/ricardozambon/controlhome:${CONTROLHOME_VERSION:-edge}
+    # Host networking: device discovery, Wake-on-LAN and device push events need the LAN (Umbrel's Home Assistant app
+    # does the same). The app listens on CONTROLHOME_PORT on every host interface.
+    network_mode: host
+    user: "${CONTROLHOME_UID:-1000}:${CONTROLHOME_GID:-1000}"
+    environment:
+      ASPNETCORE_HTTP_PORTS: ${CONTROLHOME_PORT:-8711}
+      ConnectionStrings__ControlHome: ${CONTROLHOME_DB_CONNECTION:-}
+      Setup__Code: ${CONTROLHOME_SETUP_CODE:-}
+      TZ: ${TZ:-Etc/UTC}
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "dotnet", "/app/ControlHome.Api.dll", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 5s
+      retries: 3
+
+  mssql:
+    profiles: [bundled-db]
+    image: mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set in .env}
+    # Loopback only: reachable by the app (host network) and the host, never by the LAN.
+    ports:
+      - "127.0.0.1:1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    mem_limit: 2g
+    restart: unless-stopped
+    healthcheck:
+      # The password comes from the container's environment ($$ escapes compose interpolation) via SQLCMDPASSWORD, so it
+      # appears neither in this file's rendered config nor in the process list.
+      test:
+        - CMD-SHELL
+        - SQLCMDPASSWORD="$$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -Q "SELECT 1" -b -o /dev/null
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 5s
+      retries: 10
+
+volumes:
+  mssql-data:
