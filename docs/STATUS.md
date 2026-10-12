@@ -6,9 +6,12 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-11 — Research (vendor APIs, stack) + approved phased plan (see `docs/architecture.md`, `docs/roadmap.md`).
 - 2026-10-11 — Preflight: Node 24.21.0 active via nvm-windows; Docker Desktop running (29.7.2, linux/x86_64);
   `ControlHome_Dev` created on umbrel SQL Server 2025 (compat 170, SIMPLE recovery); workflow-file push verified.
+- 2026-10-12 — Milestone 0.1 merged (PR #1): .NET skeleton, web workspace + @controlhome/ui tokens, CI, docs.
 
 ## In progress
-- Milestone 0.1 — Skeleton and loop (`docs/plans/phase-0-foundation.md`).
+- Milestone 0.2 — Data and auth API (draft PR #2): foundation committed (persistence, readiness, Data Protection,
+  ProblemDetails, OpenAPI + api-client, contracts). In parallel: request edge, setup/auth/users/home/audit,
+  0.3-A ui primitives, 0.4 packaging (isolated worktrees).
 
 ## Decisions taken (defaults chosen without the user)
 - Package pins: Microsoft.* 10.0.12 (local runtime is 10.0.10; servicing-compatible). TypeScript pinned `~6.0.3` (npm latest is 7.x, unsupported by vue-tsc).

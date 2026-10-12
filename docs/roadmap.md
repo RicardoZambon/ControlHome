@@ -16,7 +16,7 @@ account (`docs/connectors/LIVE-VALIDATION.md`); that never blocks the roadmap.
 
 Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
 
-- [ ] **0.1 Skeleton and loop** *(in progress)*
+- [x] **0.1 Skeleton and loop** — [#1](https://github.com/RicardoZambon/ControlHome/pull/1)
   - Repo basics: `CLAUDE.md`, extended `.gitignore`, `global.json` / `.nvmrc` / `.npmrc`, the props files, tool
     manifest, check-secrets pre-commit hook, `.gitleaks.toml`.
   - Projects: `ControlHome.slnx` with Domain / Application / Infrastructure / Api and tests; `/health` and the SPA
@@ -24,7 +24,7 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
   - Web: npm workspace with design tokens plus 3 primitives (button, card, input) in `@controlhome/ui`.
   - Tooling: `ci.yml` (build / lint / test / secret scan), `.claude/launch.json` (api on 5080, web on 5173 with proxy),
     the dev scripts, README quickstart, `development.md`, `architecture.md`, ADR 0001.
-- [ ] **0.2 Data and auth API**
+- [ ] **0.2 Data and auth API** *(in progress)*
   - DbContext, Identity, initial migration, SQL Server 2025 check, database readiness (503 `db.unavailable` until ready).
   - Setup lifecycle and setup code; login / logout / me; request-edge protections; rate limits; roles; users API.
   - ProblemDetails with `code`, Serilog (redaction lands with the first secret-bearing connector in 1.2), Data
