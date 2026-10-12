@@ -13,5 +13,16 @@ namespace ControlHome.Application.Abstractions;
 /// </remarks>
 public interface IExclusiveTransaction
 {
-    Task<Result<T>> RunAsync<T>(string lockName, Func<CancellationToken, Task<Result<T>>> work, CancellationToken cancellationToken);
+    /// <param name="verifySucceeded">
+    /// Asked only when the commit of a successful attempt failed with a transient error: the server may have committed even
+    /// though the client saw an error. It must query the database (not the change tracker) for a trace only that attempt
+    /// leaves, e.g. a row with an id generated before the call or the concurrency stamp the attempt wrote. True: the
+    /// attempt's result is returned as is; false: the unit runs again. Without it, a unit that re-checks state would answer
+    /// a committed success with a failure (e.g. "already completed").
+    /// </param>
+    Task<Result<T>> RunAsync<T>(
+        string lockName,
+        Func<CancellationToken, Task<Result<T>>> work,
+        Func<CancellationToken, Task<bool>> verifySucceeded,
+        CancellationToken cancellationToken);
 }

@@ -21,6 +21,42 @@ public sealed class ProblemDetailsTests(ControlHomeApiFactory factory) : IClassF
         problem.GetProperty("traceId").GetString().ShouldNotBeNullOrEmpty();
     }
 
+    [Theory]
+    [InlineData("GET", "/api/auth/login", "POST")]
+    [InlineData("DELETE", "/api/home", "GET, PUT")]
+    [InlineData("PATCH", "/api/home", "GET, PUT")]
+    [InlineData("GET", "/api/users/0199a3b2-0000-7000-8000-000000000001", "DELETE, PUT")]
+    [InlineData("GET", "/api/users/0199a3b2-0000-7000-8000-000000000001/password", "POST")]
+    public async Task Wrong_method_on_a_known_path_is_405_with_allow(string method, string path, string allow)
+    {
+        using var client = factory.CreateApiClient(); // same-origin headers, so mutations pass the request edge
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.MethodNotAllowed);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json"); // never index.html
+        response.Content.Headers.Allow.ShouldBe(allow.Split(", "));
+        (await response.ReadProblemCodeAsync(TestContext.Current.CancellationToken)).ShouldBe("request.method_not_allowed");
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/nope")]
+    [InlineData("GET", "/api/users/not-a-guid")] // the route constraint is respected: no such path
+    [InlineData("DELETE", "/api/users/not-a-guid")]
+    [InlineData("GET", "/api/auth/login/extra")]
+    public async Task Unknown_path_is_still_404_whatever_the_method(string method, string path)
+    {
+        using var client = factory.CreateApiClient();
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.Allow.ShouldBeEmpty();
+        (await response.ReadProblemCodeAsync(TestContext.Current.CancellationToken)).ShouldBe("request.not_found");
+    }
+
     [Fact]
     public async Task Unhandled_exception_is_a_bare_500_internal_error_outside_development()
     {

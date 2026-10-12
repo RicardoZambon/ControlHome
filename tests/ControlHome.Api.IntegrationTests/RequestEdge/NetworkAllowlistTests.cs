@@ -155,10 +155,10 @@ public sealed class NetworkAllowlistTests(RequestEdgeApiFactory factory) : IClas
     public async Task Origin_is_compared_with_the_forwarded_scheme_and_host()
     {
         using var client = factory.CreateClient();
-        (string, string)[] forwarded = [("X-Forwarded-Proto", "https"), ("X-Forwarded-Host", "home.example.test"), ("X-ControlHome", "1")];
+        (string, string)[] forwarded = [("X-Forwarded-Proto", "https"), ("X-Forwarded-Host", "controlhome.home.arpa"), ("X-ControlHome", "1")];
 
         using var proxied = RequestEdgeRequests.Create(
-            HttpMethod.Post, "/api/_test/reset", "127.0.0.1", [.. forwarded, ("Origin", "https://home.example.test")]);
+            HttpMethod.Post, "/api/_test/reset", "127.0.0.1", [.. forwarded, ("Origin", "https://controlhome.home.arpa")]);
         using var direct = RequestEdgeRequests.Create(
             HttpMethod.Post, "/api/_test/reset", "127.0.0.1", [.. forwarded, ("Origin", "http://localhost")]);
 
@@ -226,6 +226,8 @@ public sealed class InvalidNetworkConfigurationTests(NoDatabaseApiFactory factor
     [Theory]
     [InlineData("Network:AllowedClientNetworks", "192.168/16")]
     [InlineData("Network:TrustedProxyNetworks", "proxy.local")]
+    [InlineData("Network:AllowedHostNames", "https://home.example.com")]
+    [InlineData("Network:AllowedHostNames", "home.example.com:8711")]
     public void Startup_fails_with_a_message_naming_the_setting(string key, string value)
     {
         using var invalid = factory.WithWebHostBuilder(b => b.UseSetting(key, value));
@@ -236,6 +238,20 @@ public sealed class InvalidNetworkConfigurationTests(NoDatabaseApiFactory factor
         validation.ShouldNotBeNull(thrown.ToString());
         validation.Message.ShouldContain(key);
         validation.Message.ShouldContain($"'{value}'");
+    }
+
+    [Fact]
+    public void A_short_configured_setup_code_stops_startup_without_revealing_it()
+    {
+        // A configured code is never rotated, so it must be at least as strong as a generated one (12 characters).
+        using var invalid = factory.WithWebHostBuilder(b => b.UseSetting("Setup:Code", "pin-1234"));
+
+        var thrown = Should.Throw<Exception>(() => invalid.CreateClient());
+
+        var validation = Flatten(thrown).OfType<OptionsValidationException>().FirstOrDefault();
+        validation.ShouldNotBeNull(thrown.ToString());
+        validation.Message.ShouldContain("Setup:Code");
+        thrown.ToString().ShouldNotContain("pin-1234");
     }
 
     private static IEnumerable<Exception> Flatten(Exception exception)

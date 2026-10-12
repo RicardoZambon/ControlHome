@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Homes;
@@ -86,6 +87,56 @@ public sealed class HomeTests(AuthApiFactory factory) : ResetAppTestBase<AuthApi
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await response.ReadJsonAsync(Ct)).GetProperty("errors").EnumerateObject().Select(p => p.Name)
             .ShouldBe(["timeZoneId", "latitude"], ignoreOrder: true);
+    }
+
+    [Theory]
+    [InlineData("""{"name":"Casa","timeZoneId":null,"locale":"en","currency":"BRL"}""")]
+    [InlineData("""{"name":"Casa","locale":"en","currency":"BRL"}""")]
+    [InlineData("""{"name":"Casa","timeZoneId":"","locale":"en","currency":"BRL"}""")]
+    public async Task Missing_time_zone_is_400_validation_failed_not_a_server_error(string body)
+    {
+        using var admin = await Factory.CompleteSetupAsync(cancellationToken: Ct);
+
+        using var response = await admin.PutAsync("/api/home", new StringContent(body, Encoding.UTF8, "application/json"), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.ReadJsonAsync(Ct);
+        problem.GetProperty("code").GetString().ShouldBe("validation.failed");
+        problem.GetProperty("errors").EnumerateObject().Select(p => p.Name).ShouldBe(["timeZoneId"]);
+        problem.GetProperty("errors").GetProperty("timeZoneId").GetArrayLength().ShouldBe(1); // one message, not two
+    }
+
+    [Theory]
+    [InlineData("E. South America Standard Time")] // a Windows id
+    [InlineData("Pacific Standard Time")]
+    [InlineData("right/America/Sao_Paulo")] // tzdata file names that are no IANA zone
+    [InlineData("Factory")]
+    [InlineData("america/sao_paulo")] // not the canonical spelling
+    [InlineData("localtime")]
+    public async Task Time_zone_must_be_a_canonical_iana_id(string timeZoneId)
+    {
+        using var admin = await Factory.CompleteSetupAsync(cancellationToken: Ct);
+
+        using var response = await admin.PutAsJsonAsync("/api/home", new UpdateHomeRequest("Casa", timeZoneId, null, null, "en", "BRL", null), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.ReadJsonAsync(Ct)).GetProperty("errors").EnumerateObject().Select(p => p.Name).ShouldBe(["timeZoneId"]);
+        (await admin.GetFromJsonAsync<HomeDto>("/api/home", Ct))!.TimeZoneId.ShouldBe("America/Sao_Paulo");
+    }
+
+    [Theory]
+    [InlineData("America/Sao_Paulo")]
+    [InlineData("America/Recife")]
+    [InlineData("Europe/Lisbon")]
+    [InlineData("UTC")]
+    public async Task Canonical_iana_time_zones_are_accepted(string timeZoneId)
+    {
+        using var admin = await Factory.CompleteSetupAsync(cancellationToken: Ct);
+
+        using var response = await admin.PutAsJsonAsync("/api/home", new UpdateHomeRequest("Casa", timeZoneId, null, null, "en", "BRL", null), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await admin.GetFromJsonAsync<HomeDto>("/api/home", Ct))!.TimeZoneId.ShouldBe(timeZoneId);
     }
 }
 

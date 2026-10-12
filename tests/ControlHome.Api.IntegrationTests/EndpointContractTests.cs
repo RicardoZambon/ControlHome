@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ControlHome.Api.Hosting;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +28,7 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         { "POST", "/api/auth/reset-password", "resetPasswordWithToken", Anonymous, RateLimitPolicies.Login },
         { "GET", "/api/auth/me", "getMe", Authenticated, null },
         { "PUT", "/api/auth/me/profile", "updateProfile", Authenticated, null },
-        { "POST", "/api/auth/me/password", "changePassword", Authenticated, null },
+        { "POST", "/api/auth/me/password", "changePassword", Authenticated, RateLimitPolicies.Login },
         { "GET", "/api/users", "listUsers", AuthorizationPolicies.Admin, null },
         { "POST", "/api/users", "createUser", AuthorizationPolicies.Admin, null },
         { "PUT", "/api/users/{id:guid}", "updateUser", AuthorizationPolicies.Admin, null },
@@ -49,7 +50,7 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
     {
         var endpoint = FindEndpoint(method, route);
 
-        endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName.ShouldBe(operationId);
+        endpoint.Metadata.GetMetadata<IEndpointNameMetadata>().ShouldNotBeNull().EndpointName.ShouldBe(operationId);
         var allowAnonymous = endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null;
         var policies = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(a => a.Policy).ToArray();
         switch (authorization)
@@ -68,7 +69,16 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
                 break;
         }
 
-        endpoint.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName.ShouldBe(rateLimitPolicy);
+        // Both directions: a missing policy fails as well as an unexpected one.
+        var rateLimit = endpoint.Metadata.GetMetadata<EnableRateLimitingAttribute>();
+        if (rateLimitPolicy is null)
+        {
+            rateLimit.ShouldBeNull();
+        }
+        else
+        {
+            rateLimit.ShouldNotBeNull().PolicyName.ShouldBe(rateLimitPolicy);
+        }
     }
 
     [Theory]
@@ -87,6 +97,16 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         document.RootElement.GetProperty("paths").TryGetProperty(path, out var item).ShouldBeTrue($"{path} missing from openapi.json");
         item.TryGetProperty(method.ToLowerInvariant(), out var operation).ShouldBeTrue($"{method} {path} missing from openapi.json");
         operation.GetProperty("operationId").GetString().ShouldBe(operationId);
+    }
+
+    [Fact]
+    public async Task Admin_policy_requires_the_role_and_the_database_check()
+    {
+        var policy = await factory.Services.GetRequiredService<IAuthorizationPolicyProvider>().GetPolicyAsync(AuthorizationPolicies.Admin);
+
+        policy.ShouldNotBeNull();
+        policy.Requirements.OfType<RolesAuthorizationRequirement>().ShouldHaveSingleItem().AllowedRoles.ShouldBe(["Admin"]);
+        policy.Requirements.OfType<ActiveAdminRequirement>().ShouldHaveSingleItem();
     }
 
     [Fact]

@@ -10,18 +10,27 @@ public sealed class SetupOptions
 {
     public const string SectionName = "Setup";
 
+    /// <summary>A configured code needs at least as many characters (dashes and spaces not counted) as a generated one.</summary>
+    public const int MinCodeLength = SetupCode.Length;
+
     /// <summary>
     /// Fixed setup code instead of a random one (env <c>Setup__Code</c>; used by Umbrel's <c>$APP_PASSWORD</c> and E2E).
-    /// Compared after normalization (case, dashes and spaces ignored). Never logged nor written to disk.
+    /// Compared after normalization (case, dashes and spaces ignored); at least <see cref="MinCodeLength"/> characters, since it
+    /// is never rotated. Never logged nor written to disk.
     /// </summary>
     public string? Code { get; set; }
+
+    /// <summary>Empty (generate a code) or at least <see cref="MinCodeLength"/> characters after normalization.</summary>
+    public bool HasValidCode => SetupCode.Normalize(Code).Length is 0 or >= MinCodeLength;
 }
 
 /// <summary>
 /// Singleton <see cref="ISetupCodeProvider"/>. The code is <c>Setup:Code</c> when configured, else 12 random Crockford base32
 /// characters generated at process start. While setup is incomplete (<see cref="Announce"/>), a generated code is logged at
 /// Warning and written to <c>{DataPath}/setup-code.txt</c> (owner-only on Unix); <see cref="OnSetupCompleted"/> deletes the
-/// file. After <see cref="MaxFailedAttempts"/> failed verifications the code is replaced by a new random one.
+/// file and from then on nothing is verified, rotated or announced. After <see cref="MaxFailedAttempts"/> failed
+/// verifications a generated code is replaced by a new random one; a configured code (which the operator reads from their own
+/// configuration, e.g. Umbrel's app password) is kept, and only the per-IP <c>setup</c> rate limit slows guessing.
 /// </summary>
 public sealed partial class SetupCodeProvider : ISetupCodeProvider
 {
@@ -37,6 +46,7 @@ public sealed partial class SetupCodeProvider : ISetupCodeProvider
     private bool _isConfigured;
     private int _failedAttempts;
     private bool _announcing;
+    private bool _setupCompleted;
 
     public SetupCodeProvider(IOptions<SetupOptions> options, DataDirectory dataDirectory, ILogger<SetupCodeProvider> logger)
     {
@@ -84,6 +94,13 @@ public sealed partial class SetupCodeProvider : ISetupCodeProvider
     {
         lock (_lock)
         {
+            // A request that checked "setup incomplete" just before another one completed it: nothing is left to verify, and
+            // its failure must neither count nor rotate (which would announce a new code after completion).
+            if (_setupCompleted)
+            {
+                return false;
+            }
+
             if (SetupCode.Matches(_code, candidate))
             {
                 return true;
@@ -92,8 +109,17 @@ public sealed partial class SetupCodeProvider : ISetupCodeProvider
             _failedAttempts++;
             if (_failedAttempts >= MaxFailedAttempts)
             {
-                LogRotatingAfterFailures(_failedAttempts);
-                RotateLocked();
+                if (_isConfigured)
+                {
+                    // Replacing the operator's own code would only let anyone on the network block setup.
+                    LogConfiguredCodeFailures(_failedAttempts);
+                    _failedAttempts = 0;
+                }
+                else
+                {
+                    LogRotatingAfterFailures(_failedAttempts);
+                    RotateLocked();
+                }
             }
 
             return false;
@@ -108,11 +134,19 @@ public sealed partial class SetupCodeProvider : ISetupCodeProvider
         }
     }
 
-    /// <summary>Setup is incomplete: logs the code (a configured one only by reference) and writes the file for a generated one.</summary>
+    /// <summary>
+    /// Setup is incomplete: logs the code (a configured one only by reference) and writes the file for a generated one. Does
+    /// nothing once <see cref="OnSetupCompleted"/> was called (a start-up check may race a completion).
+    /// </summary>
     public void Announce()
     {
         lock (_lock)
         {
+            if (_setupCompleted)
+            {
+                return;
+            }
+
             _announcing = true;
             AnnounceLocked();
         }
@@ -122,6 +156,7 @@ public sealed partial class SetupCodeProvider : ISetupCodeProvider
     {
         lock (_lock)
         {
+            _setupCompleted = true;
             _announcing = false;
             DeleteFileLocked();
         }
@@ -137,6 +172,7 @@ public sealed partial class SetupCodeProvider : ISetupCodeProvider
         {
             (_code, _isConfigured) = InitialCode();
             _failedAttempts = 0;
+            _setupCompleted = false;
             _announcing = true;
             AnnounceLocked();
         }
@@ -151,8 +187,8 @@ public sealed partial class SetupCodeProvider : ISetupCodeProvider
         _isConfigured = false;
         _failedAttempts = 0;
 
-        // Rotation only happens while setup is incomplete, so the new code is always announced.
-        _announcing = true;
+        // The new code is announced unless setup has completed (then nobody needs it, and nothing may be written).
+        _announcing = !_setupCompleted;
         AnnounceLocked();
     }
 
@@ -227,6 +263,11 @@ public sealed partial class SetupCodeProvider : ISetupCodeProvider
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "{FailedAttempts} wrong setup codes were entered; replacing the setup code")]
     private partial void LogRotatingAfterFailures(int failedAttempts);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "{FailedAttempts} wrong setup codes were entered; the configured setup code (Setup:Code) stays valid")]
+    private partial void LogConfiguredCodeFailures(int failedAttempts);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not write the setup code file {Path}; the code is in the log")]
     private partial void LogFileWriteFailed(Exception exception, string path);

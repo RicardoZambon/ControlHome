@@ -109,7 +109,9 @@
       "rate_limited": "Too many attempts. Wait a moment before trying again.",
       "cross_origin": "The request was blocked because it didn't come from ControlHome itself. Reload the page.",
       "missing_header": "The request was blocked by a security check. Reload the page.",
-      "network_denied": "ControlHome only accepts connections from your home network."
+      "network_denied": "ControlHome only accepts connections from your home network.",
+      "host_denied": "This address isn't allowed. Open ControlHome by its IP address or local name, or add this host name to the allowed list.",
+      "conflict": "Someone else changed this at the same time. Reload and try again."
     },
     "validation": {
       "failed": "Some fields need your attention."

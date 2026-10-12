@@ -1,12 +1,17 @@
 using System.Net;
 using System.Net.Http.Json;
+using ControlHome.Api.Hosting;
+using ControlHome.Application.Auth;
 using ControlHome.Application.Users;
 using ControlHome.Domain.Security;
 using ControlHome.TestSupport;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace ControlHome.Api.IntegrationTests;
 
@@ -94,5 +99,84 @@ public sealed class SessionRevocationTests(AuthApiFactory factory) : IAsyncLifet
         same.StatusCode.ShouldBe(HttpStatusCode.OK);
         using var other = await otherBrowser.GetAsync("/api/auth/me", Ct);
         other.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Admin_demoting_themselves_keeps_a_session_with_the_new_role()
+    {
+        using var admin = await _host.CompleteSetupAsync(cancellationToken: Ct);
+        await admin.CreateUserAsync("second", Password, Roles.Admin, Ct);
+        using var otherBrowser = await _host.LoginAsync(AuthTestExtensions.AdminUserName, AuthTestExtensions.AdminPassword, Ct);
+        var selfId = (await admin.GetFromJsonAsync<MeDto>("/api/auth/me", Ct))!.Id;
+
+        using (var demote = await admin.PutAsJsonAsync($"/api/users/{selfId}", new UpdateUserRequest("Administrator", Roles.Member, false), Ct))
+        {
+            demote.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        // The stamp changed, yet this browser's session was re-issued with the new role ...
+        using (var me = await admin.GetAsync("/api/auth/me", Ct))
+        {
+            me.StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await me.Content.ReadFromJsonAsync<MeDto>(Ct))!.Roles.ShouldBe([Roles.Member]);
+        }
+
+        using (var users = await admin.GetAsync("/api/users", Ct))
+        {
+            users.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+            (await users.ReadProblemCodeAsync(Ct)).ShouldBe("auth.forbidden");
+        }
+
+        // ... while the user's other sessions end.
+        using var other = await otherBrowser.GetAsync("/api/auth/me", Ct);
+        other.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task Admin_resetting_their_own_password_keeps_this_session_but_ends_the_others()
+    {
+        using var admin = await _host.CompleteSetupAsync(cancellationToken: Ct);
+        using var otherBrowser = await _host.LoginAsync(AuthTestExtensions.AdminUserName, AuthTestExtensions.AdminPassword, Ct);
+        var selfId = (await admin.GetFromJsonAsync<MeDto>("/api/auth/me", Ct))!.Id;
+
+        using (var reset = await admin.PostAsJsonAsync($"/api/users/{selfId}/password", new ResetPasswordRequest("another long password"), Ct))
+        {
+            reset.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        using (var me = await admin.GetAsync("/api/auth/me", Ct))
+        {
+            me.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        using (var users = await admin.GetAsync("/api/users", Ct))
+        {
+            users.StatusCode.ShouldBe(HttpStatusCode.OK); // still an Admin, with the new stamp
+        }
+
+        using var other = await otherBrowser.GetAsync("/api/auth/me", Ct);
+        other.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public void Shipped_security_stamp_interval_is_one_minute()
+    {
+        // Read from the shipped host (this class's own host validates on every request).
+        factory.Services.GetRequiredService<IOptions<SecurityStampValidatorOptions>>().Value.ValidationInterval
+            .ShouldBe(TimeSpan.FromMinutes(1));
+        IdentitySetup.SecurityStampValidationInterval.ShouldBe(TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public void Session_cookie_is_a_thirty_day_sliding_http_only_strict_cookie()
+    {
+        var cookie = factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(IdentityConstants.ApplicationScheme);
+
+        cookie.Cookie.Name.ShouldBe(IdentitySetup.SessionCookieName);
+        cookie.Cookie.HttpOnly.ShouldBeTrue();
+        cookie.Cookie.SameSite.ShouldBe(SameSiteMode.Strict);
+        cookie.Cookie.SecurePolicy.ShouldBe(CookieSecurePolicy.SameAsRequest);
+        cookie.ExpireTimeSpan.ShouldBe(TimeSpan.FromDays(30));
+        cookie.SlidingExpiration.ShouldBeTrue();
     }
 }

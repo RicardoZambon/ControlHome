@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using ControlHome.Application.Auth;
 using ControlHome.Application.Setup;
@@ -142,31 +143,76 @@ public sealed class SetupTests(AuthApiFactory factory) : ResetAppTestBase<AuthAp
     }
 
     [Fact]
-    public async Task Twenty_wrong_codes_rotate_the_code_and_test_reset_restores_the_configured_one()
+    public async Task Wrong_codes_never_replace_the_configured_code()
     {
+        // Umbrel shows the owner the configured code (its app password); 20+ wrong guesses from the LAN must not block setup.
         using var client = Factory.CreateApiClient();
-        for (var i = 0; i < SetupCodeProvider.MaxFailedAttempts; i++)
+        for (var i = 0; i < SetupCodeProvider.MaxFailedAttempts + 1; i++)
         {
             using var wrong = await client.PostAsJsonAsync("/api/setup/complete", AuthTestExtensions.SetupRequest($"WRONG-{i}"), Ct);
             wrong.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+            (await wrong.ReadProblemCodeAsync(Ct)).ShouldBe("setup.invalid_code");
         }
 
-        // Rotated: the configured code no longer works; the new one is announced in the data folder.
         var provider = Factory.Services.GetRequiredService<SetupCodeProvider>();
+        provider.IsConfigured.ShouldBeTrue();
+        File.Exists(provider.FilePath).ShouldBeFalse();
+        using var completed = await client.PostAsJsonAsync("/api/setup/complete", AuthTestExtensions.SetupRequest(), Ct);
+        completed.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Test_reset_restores_the_configured_code_after_a_rotation()
+    {
+        var provider = Factory.Services.GetRequiredService<SetupCodeProvider>();
+        provider.Rotate();
         provider.IsConfigured.ShouldBeFalse();
-        (await File.ReadAllTextAsync(provider.FilePath, Ct)).Trim().ShouldBe(provider.Current);
-        using (var rotated = await client.PostAsJsonAsync("/api/setup/complete", AuthTestExtensions.SetupRequest(), Ct))
-        {
-            rotated.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-            (await rotated.ReadProblemCodeAsync(Ct)).ShouldBe("setup.invalid_code");
-        }
 
         await Factory.ResetAppAsync(Ct);
 
         provider.IsConfigured.ShouldBeTrue();
         File.Exists(provider.FilePath).ShouldBeFalse();
+        using var client = Factory.CreateApiClient();
         using var restored = await client.PostAsJsonAsync("/api/setup/complete", AuthTestExtensions.SetupRequest(), Ct);
         restored.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Missing_time_zone_is_400_validation_failed_not_a_server_error()
+    {
+        using var client = Factory.CreateApiClient();
+        var body = """
+            {
+              "setupCode": "TEST-SETUP-0001-CODE",
+              "admin": { "userName": "admin", "displayName": "Administrator", "password": "correct horse battery" },
+              "home": { "name": "Casa", "timeZoneId": null, "locale": "pt-BR", "currency": "BRL" }
+            }
+            """;
+
+        using var response = await client.PostAsync(
+            "/api/setup/complete",
+            new StringContent(body, Encoding.UTF8, "application/json"),
+            Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var problem = await response.ReadJsonAsync(Ct);
+        problem.GetProperty("code").GetString().ShouldBe("validation.failed");
+        problem.GetProperty("errors").EnumerateObject().Select(p => p.Name).ShouldBe(["home.timeZoneId"]);
+        problem.GetProperty("errors").GetProperty("home.timeZoneId").GetArrayLength().ShouldBe(1);
+        (await QueryDbAsync(db => db.Users.CountAsync(Ct))).ShouldBe(0);
+        (await QueryDbAsync(db => db.Homes.CountAsync(Ct))).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task User_name_with_a_trailing_newline_is_400_on_the_user_name()
+    {
+        using var client = Factory.CreateApiClient();
+
+        using var response = await client.PostAsJsonAsync("/api/setup/complete", AuthTestExtensions.SetupRequest(userName: "admin\n"), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.ReadJsonAsync(Ct)).GetProperty("errors").EnumerateObject().Select(p => p.Name).ShouldBe(["admin.userName"]);
+        (await QueryDbAsync(db => db.Users.CountAsync(Ct))).ShouldBe(0);
     }
 
     private static async Task<SetupStatusDto> GetStatusAsync(HttpClient client)

@@ -109,7 +109,9 @@
       "rate_limited": "Muitas tentativas. Aguarde um pouco antes de tentar de novo.",
       "cross_origin": "A requisição foi bloqueada porque não veio do próprio ControlHome. Recarregue a página.",
       "missing_header": "A requisição foi bloqueada por uma verificação de segurança. Recarregue a página.",
-      "network_denied": "O ControlHome só aceita conexões da sua rede doméstica."
+      "network_denied": "O ControlHome só aceita conexões da sua rede doméstica.",
+      "host_denied": "Este endereço não é permitido. Abra o ControlHome pelo IP ou pelo nome local, ou adicione este nome à lista de permitidos.",
+      "conflict": "Outra pessoa alterou isto ao mesmo tempo. Recarregue e tente novamente."
     },
     "validation": {
       "failed": "Alguns campos precisam de atenção."

@@ -1,11 +1,10 @@
 using System.Net;
-using System.Net.Sockets;
 
 namespace ControlHome.Api.Security;
 
 /// <summary>
-/// Keeps denied-network reports (log line + audit row) from flooding: at most one per source per <see cref="Window"/>,
-/// where a source is an IPv4 address or an IPv6 /64 (one host usually owns a whole /64). At most
+/// Keeps denied-request reports (log line + audit row) from flooding: at most one per source per <see cref="Window"/>,
+/// where a source is an IPv4 address or an IPv6 /64 (<see cref="ClientNetworkPolicy.SourceKey"/>). At most
 /// <see cref="MaxTrackedSources"/> sources are tracked per window; while that many are tracked, new sources are not
 /// reported, which also bounds the rows written per window.
 /// </summary>
@@ -23,7 +22,7 @@ internal sealed class NetworkDeniedAuditThrottle(TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        var source = SourceKey(address);
+        var source = ClientNetworkPolicy.SourceKey(address);
         var now = timeProvider.GetUtcNow();
         lock (_lock)
         {
@@ -57,18 +56,5 @@ internal sealed class NetworkDeniedAuditThrottle(TimeProvider timeProvider)
                 _lastReported.Remove(source);
             }
         }
-    }
-
-    private static string SourceKey(IPAddress address)
-    {
-        address = ClientNetworkPolicy.Normalize(address)!;
-        if (address.AddressFamily != AddressFamily.InterNetworkV6)
-        {
-            return address.ToString();
-        }
-
-        var bytes = address.GetAddressBytes();
-        Array.Clear(bytes, 8, 8);
-        return $"{new IPAddress(bytes)}/64";
     }
 }
