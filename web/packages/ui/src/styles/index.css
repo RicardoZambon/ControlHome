@@ -1,0 +1,16 @@
+/* Entry point of the design system: `@import '@controlhome/ui/styles.css'`. */
+@import 'tailwindcss';
+@import './tokens.css';
+@import './theme.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}

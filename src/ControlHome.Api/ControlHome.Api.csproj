@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>ControlHome.Api</RootNamespace>
+    <UserSecretsId>controlhome-api</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ControlHome.Infrastructure\ControlHome.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

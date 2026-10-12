@@ -1,0 +1,98 @@
+# ControlHome secret-scanning rules (gitleaks v8.30.x).
+#
+# Used by:
+#   - the pre-commit hook  (scripts/check-secrets.sh, enabled with `git config core.hooksPath .githooks`)
+#   - CI                   (.github/workflows/ci.yml, job `secrets`, full history)
+#
+# The default gitleaks rule set is kept and extended with project-specific rules. Allowlists below only ever
+# exempt *values that are not secrets* (placeholders, env-var references, code expressions) or the literal fake
+# examples used in the docs - never whole files or directories.
+#
+# Need a one-off exception? Prefer fixing the content (use a placeholder such as <password> or ${VAR}). As a last
+# resort add an inline `gitleaks:allow` comment on that line and explain why in the commit message.
+
+title = "ControlHome"
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------------------------------------------
+# Password in a connection string or env file, e.g. `...;Password=...;` or `MSSQL_SA_PASSWORD=...`.
+# ---------------------------------------------------------------------------------------------------------------
+[[rules]]
+id = "connection-string-password"
+description = "Password in a connection string or environment file"
+# Same match as `(?i)(password|pwd)\s*=\s*[^;"'\s]{3,}`, but the key is a non-capturing group and the value is the
+# secret group: gitleaks treats the first capture group as "the secret", so capturing the key would redact the
+# word "Password" and print the actual value.
+regex = '''(?i)(?:password|pwd)\s*=\s*([^;"'\s]{3,})'''
+secretGroup = 1
+keywords = ["password", "pwd"]
+
+  [[rules.allowlists]]
+  description = "Placeholders and variable references are not values: ${VAR}, $VAR, %VAR%, <password>, {{ x }}, ***, ..."
+  regexTarget = "match"
+  regexes = [
+    '''(?i)(?:password|pwd)\s*=\s*(?:\$\{?[A-Za-z_]|\$\(|%[A-Za-z_][A-Za-z0-9_]*%|<[^>\s]*>|\{\{|\*{3,}|\.{3}|…)''',
+  ]
+
+  [[rules.allowlists]]
+  # Source code is formatted with spaces around '=' (prettier / dotnet format); connection strings and .env files
+  # are not. Exempt only *code expressions*: `password = ref('')`, `Password = request.Password`,
+  # `password = form.value.password`, `Password = newPassword,` ...
+  description = "Code assignments whose right-hand side is an expression, not a literal"
+  regexTarget = "match"
+  regexes = [
+    # identifier followed by member access, call, indexer, `!` or a PowerShell Verb-Noun cmdlet name
+    '''(?i)(?:password|pwd)\s+=\s+[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$]|\(|\[|!|-[A-Za-z])''',
+    # a bare identifier that itself names a password variable/property (e.g. `Password = newPassword,`)
+    '''(?i)(?:password|pwd)\s+=\s+(?:[A-Za-z_$][\w$]*)?(?:password|pwd)[\w$]*[,)\]}]*$''',
+  ]
+
+# ---------------------------------------------------------------------------------------------------------------
+# The development SQL login must never appear in a committed connection string (it lives in user-secrets).
+# `ControlHome_App` (the documented least-privilege production login) does not match because of the \b.
+# ---------------------------------------------------------------------------------------------------------------
+[[rules]]
+id = "controlhome-dev-login"
+description = "Development SQL login name in a connection string"
+regex = '''(?i)user\s*id\s*=\s*ControlHome\b'''
+keywords = ["controlhome"]
+
+# ---------------------------------------------------------------------------------------------------------------
+# Camera / NVR credentials embedded in an RTSP URL, e.g. rtsp://admin:secret@192.168.1.20:554/...
+# ---------------------------------------------------------------------------------------------------------------
+[[rules]]
+id = "rtsp-credentials"
+description = "Credentials embedded in an RTSP URL"
+regex = '''rtsp://[^:/\s]+:[^@\s]+@'''
+keywords = ["rtsp://"]
+
+  [[rules.allowlists]]
+  description = "Template placeholders for user/password: rtsp://{user}:{password}@, rtsp://${USER}:..., rtsp://<user>:..."
+  regexTarget = "match"
+  regexes = [
+    '''^rtsp://(?:\$?\{[^}\s]*\}|<[^>\s]*>|%[A-Za-z_][A-Za-z0-9_]*%):(?:\$?\{[^}\s]*\}|<[^>\s]*>|%[A-Za-z_][A-Za-z0-9_]*%|\*+)@$''',
+  ]
+
+# ---------------------------------------------------------------------------------------------------------------
+# Literal, fake examples used in plans and Markdown docs (e.g. the hook's self-test value `Password=hunter2x;`).
+# Only these exact example strings are exempt, and only inside docs/plans/ or *.md files.
+# ---------------------------------------------------------------------------------------------------------------
+[[allowlists]]
+description = "Documented fake examples (literal strings only) in docs/plans/ and Markdown files"
+condition = "AND"
+targetRules = ["connection-string-password", "rtsp-credentials"]
+paths = [
+  '''(?:^|/)docs/plans/''',
+  '''(?i)\.md$''',
+]
+regexTarget = "match"
+regexes = [
+  # the self-test example from the phase-0 plan
+  '''^(?i:password)=hunter2x$''',
+  # the generic example credentials rtsp://user:pass@
+  '''^rtsp://user:pass@$''',
+  # the rtsp-credentials regex itself, quoted in docs
+  '''^rtsp://\[\^''',
+]

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# ControlHome pre-commit hook - blocks commits that would publish a secret (this is a public repo).
+# Enable once per clone (scripts/setup-dev.* does it for you):
+#   git config core.hooksPath .githooks
+# The check itself lives in scripts/check-secrets.sh (runnable by hand too).
+set -euo pipefail
+exec bash "$(git rev-parse --show-toplevel)/scripts/check-secrets.sh" "$@"

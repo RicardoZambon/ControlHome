@@ -1,0 +1,16 @@
+# Normalize line endings: LF everywhere in the repo (Docker/Linux friendly).
+* text=auto eol=lf
+*.ps1 text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pfx binary

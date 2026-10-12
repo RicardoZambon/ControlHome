@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ControlHome.Domain/ControlHome.Domain.csproj" />
+    <Project Path="src/ControlHome.Application/ControlHome.Application.csproj" />
+    <Project Path="src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj" />
+    <Project Path="src/ControlHome.Api/ControlHome.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ControlHome.Architecture.Tests/ControlHome.Architecture.Tests.csproj" />
+    <Project Path="tests/ControlHome.Api.IntegrationTests/ControlHome.Api.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
