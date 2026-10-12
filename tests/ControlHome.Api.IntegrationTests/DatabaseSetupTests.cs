@@ -145,11 +145,19 @@ public sealed class DatabaseSetupFlowTests(PreDatabaseApiFactory factory) : ICla
         status.DatabaseSource.ShouldBe("file");
         status.DatabaseError.ShouldBeNull();
 
-        // Saved encrypted: none of what was typed is readable in the file.
+        // Saved encrypted: no connection-string syntax and none of what was typed is readable in the file. The payload is
+        // base64, so short values (e.g. the login "sa") can appear in the ciphertext by chance: only values long enough to
+        // be meaningful are compared, case-sensitively (base64 is case-sensitive).
         var file = await File.ReadAllTextAsync(Path.Combine(factory.DataPath, "config", DatabaseConfigFile.FileName), Ct);
-        foreach (var typed in new[] { request.Password, request.UserName, request.Host, request.Database })
+        foreach (var keyword in new[] { "Password=", "User ID=", "Initial Catalog=", "Database=", "Server=", "Data Source=" })
         {
-            file.ShouldNotContain(typed, Case.Insensitive);
+            file.ShouldNotContain(keyword, Case.Insensitive);
+        }
+
+        foreach (var typed in new[] { request.Password, request.UserName, request.Host, request.Database }
+                     .Where(static value => value.Length >= 6))
+        {
+            file.ShouldNotContain(typed, Case.Sensitive);
         }
 
         // Only while nothing is configured.
