@@ -65,4 +65,19 @@ public static class ErrorCodes
     public const string FilesUnsupportedType = "files.unsupported_type";
     public const string FilesTooLarge = "files.too_large";
     public const string FilesInvalidImage = "files.invalid_image";
+
+    // Devices and integrations
+    public const string DevicesNotFound = "devices.not_found";
+    public const string EndpointsNotFound = "endpoints.not_found";
+    public const string IntegrationsNotFound = "integrations.not_found";
+
+    // Commands: 400 commands.invalid_arguments carries field errors errors["arguments.<key>"] with the commands.argument_* codes
+    public const string CommandsInvalidArguments = "commands.invalid_arguments";
+    public const string CommandsArgumentRequired = "commands.argument_required";
+    public const string CommandsArgumentUnknown = "commands.argument_unknown";
+    public const string CommandsArgumentInvalidType = "commands.argument_invalid_type";
+    public const string CommandsArgumentOutOfRange = "commands.argument_out_of_range";
+    public const string CommandsArgumentNotOnStep = "commands.argument_not_on_step";
+    public const string CommandsArgumentNotAllowed = "commands.argument_not_allowed";
+    public const string CommandsArgumentTooLong = "commands.argument_too_long";
 }

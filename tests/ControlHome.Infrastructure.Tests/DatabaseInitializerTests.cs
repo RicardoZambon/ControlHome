@@ -45,6 +45,7 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
                     "auth.RoleClaims", "auth.Roles", "auth.UserClaims", "auth.UserLogins", "auth.UserRoles", "auth.UserTokens",
                     "auth.Users", "ch.AuditLog", "ch.DataProtectionKeys", "ch.Homes", "ch.__EFMigrationsHistory",
                     "ch.Floors", "ch.Rooms", "ch.StoredFiles",
+                    "ch.Integrations", "ch.Devices", "ch.Endpoints", "ch.EndpointCapabilities", "ch.DeviceAttributes", "ch.AttributeState",
                 ],
                 ignoreOrder: true);
             (await ColumnTypeAsync(name, "ch.Homes", "Tariff", ct)).ShouldBe("json");
@@ -53,6 +54,13 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
             (await ColumnTypeAsync(name, "ch.Floors", "RowVersion", ct)).ShouldBe("timestamp");
             (await ColumnTypeAsync(name, "ch.Rooms", "Polygon", ct)).ShouldBe("json");
             (await ColumnTypeAsync(name, "ch.StoredFiles", "Data", ct)).ShouldBe("varbinary");
+            (await ColumnTypeAsync(name, "ch.Integrations", "ConfigJson", ct)).ShouldBe("json");
+            (await ColumnTypeAsync(name, "ch.Devices", "ConnectionsJson", ct)).ShouldBe("json");
+            (await ColumnTypeAsync(name, "ch.EndpointCapabilities", "ConstraintsJson", ct)).ShouldBe("json");
+            (await ColumnTypeAsync(name, "ch.EndpointCapabilities", "GenericDefinitionJson", ct)).ShouldBe("json");
+            (await ColumnTypeAsync(name, "ch.AttributeState", "Json", ct)).ShouldBe("json");
+            (await ColumnTypeAsync(name, "ch.AttributeState", "Kind", ct)).ShouldBe("tinyint");
+            (await ColumnTypeAsync(name, "auth.Users", "SafetyPinHash", ct)).ShouldBe("varchar");
         }
         finally
         {

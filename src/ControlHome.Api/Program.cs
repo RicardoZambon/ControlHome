@@ -12,6 +12,7 @@ using ControlHome.Api.Security;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Auth;
+using ControlHome.Application.Devices;
 using ControlHome.Application.Files;
 using ControlHome.Application.Floors;
 using ControlHome.Application.Homes;
@@ -73,6 +74,7 @@ try
     builder.Services.AddAuditing();
     builder.Services.AddFloors();
     builder.Services.AddFiles();
+    builder.Services.AddDevices();
 
     var app = builder.Build();
 

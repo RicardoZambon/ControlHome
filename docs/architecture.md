@@ -64,7 +64,7 @@ The full rationale is in [ADR 0001](adr/0001-stack-and-architecture.md).
 ControlHome.slnx · global.json {sdk 10.0.302, rollForward latestFeature} · Directory.Build.props · Directory.Packages.props
 .config/dotnet-tools.json (dotnet-ef 10.0.x) · .editorconfig · CLAUDE.md · docs/STATUS.md
 src/ControlHome.Domain                   no deps: entities, CapabilityDefinition/ValueSchema, automation definition records
-src/ControlHome.Connectors.Abstractions  → Domain: descriptor/flow/runtime/context contracts, ICameraStreamRegistry, helpers   (later)
+src/ControlHome.Connectors.Abstractions  → Domain: descriptor/flow/runtime/context contracts, helpers (1.2); ICameraStreamRegistry (later)
 src/ControlHome.Automation               → Domain only: engine + ports (IStateReader, ICommandDispatcher, ISceneRunner,       (later)
                                            INotifier, IAutomationStore, TimeProvider); no EF
 src/ControlHome.Application              → Domain, Automation, Connectors.Abstractions: use-case services incl.
@@ -152,6 +152,18 @@ Device ─► Endpoint ─► EndpointCapability ─► Attribute (int Attribute
   attribute such as `remoteControlEnabled`.
 - **`Attribute`** has an **int `AttributeId`**, used by every state, history and energy table.
 
+Tables (1.2, schema `ch`): `Integrations` (config in a `json` column, secrets Data-Protection-encrypted in
+`SecretsProtected`), `Devices` (unique `(IntegrationId, ExternalId)`), `Endpoints` (unique `(DeviceId, Key)`, key `main`
+for single-endpoint devices), `EndpointCapabilities` (unique `(EndpointId, CapabilityId)`; `ConstraintsJson` and
+`GenericDefinitionJson` are `json`), `DeviceAttributes` (identity = `AttributeId`, unique `(EndpointCapabilityId, Key)`)
+and `AttributeState` (one row per attribute). Deleting an integration cascades down the chain. `Device.RoomId`,
+`Endpoint.RoomId` and `Device.ParentDeviceId` do **not** cascade in the database (SQL Server allows one cascade path per
+table): `FloorService` takes devices and endpoints out of rooms it deletes.
+
+`AttributeState` spreads a `StateValue` over typed columns by `Kind` (`tinyint`): booleans (as 1/0) and numbers in `Num`
+(`float`), strings up to 255 characters in `Str`, longer strings and JSON objects/arrays in `Json`
+(`AttributeState.Encode/Decode`).
+
 ### Capability definitions
 
 - `CapabilityDefinition` is **defined in code** and served at `/api/capabilities`.
@@ -167,8 +179,25 @@ Device ─► Endpoint ─► EndpointCapability ─► Attribute (int Attribute
     battery, presence.
   - Other: camera, applianceCycle.
   - A **generic** capability reuses ValueSchema for any vendor property that has no mapping.
-- **ValueSchema types:** bool, number or int (min, max, step, scale, unit), enum, string, flags/bitmap, json
-  (read-only), momentary.
+- **ValueSchema types:** bool, number or int (min, max, step, unit), enum, string, flags/bitmap, json
+  (read-only), momentary. Polymorphic System.Text.Json with discriminator `type`; stored capability JSON uses
+  `CapabilityJson.Options` (camelCase, discriminator accepted anywhere in an object).
+- **Values** travel as `StateValue` = `{ kind: 'bool'|'number'|'string'|'json'|'null', b?, n?, s?, j? }`.
+- **Momentary attributes** (`MomentarySchema`, e.g. `button.press` with events `single|double|long`) are updated only by
+  connector events (`ReportEvent`); their value is the last event name.
+- **Constraints** narrow a capability per endpoint (`CapabilityConstraints`, JSON
+  `{"attributes": {"<key>": {min, max, step, values, dependsOn, cases}}}`): ranges, enum subsets, and ranges that depend
+  on another attribute's current value (an AC's target range per `mode`). They apply to the attribute and to every
+  command argument bound to it (`ArgumentDefinition.Attribute`). `CommandValidator.Validate(command, args, constraints,
+  currentState?)` checks required/unknown members, types, ranges, steps and allowed values; the API reports failures as
+  400 `commands.invalid_arguments` with `errors["arguments.<key>"]` = `commands.argument_*`.
+- **Writable** attributes are set by the command whose only required argument is bound to them
+  (`CapabilityDefinition.FindSetter`); a connector's `generic` definition must provide such setters.
+- **Gated commands:** `CommandDefinition.GateAttribute` names a boolean attribute that must be true
+  (`applianceCycle.start|pause|stop` need `remoteControlEnabled`).
+- **Safety flags:** `SafetyCritical` (`lock.unlock`, `doorOpener.open`, `alarmPanel.disarm`) or per device class
+  (`SafetyCriticalForDeviceClasses`: `cover.open` and `cover.setPosition` on `gate`/`garage`); ask
+  `IsSafetyCriticalFor(deviceClass)`. `FailSafe`: `lock.lock`, `cover.close`.
 - **Units:** connectors convert values to canonical units (W, Wh, °C, %) before reporting them.
 
 ### Endpoint or child device?
@@ -217,8 +246,19 @@ a point-in-polygon test.
 - **Availability:** while a runtime is down, the supervisor marks its devices Unknown. Each device class has a last-seen
   timeout so sleepy sensors aren't marked offline, and offline notifications are debounced by 2 min.
 - **Shared helpers:** HttpClient with Microsoft.Extensions.Http.Resilience, token buckets, an adaptive poller with
-  hot-poll after a command, and error classification (401 → `NeedsReauth`, 402 or a plan error → `PlanRequired`,
-  429 → backoff).
+  hot-poll after a command (`AdaptivePoller`), and error classification (`ConnectorErrorClassifier`: 401 →
+  `NeedsReauth`, 402 or a plan error → `PlanRequired`, 429 → backoff for `Retry-After`, 408/5xx → transient).
+  `IQuotaCounter` (per calendar period) is injected into connector factories by DI; `FieldSchemaValidator` checks
+  configuration forms with the command-argument rules.
+- **Command outcomes:** `CommandOutcome.Accepted | Completed | Rejected(code, message)`; standard codes in
+  `CommandRejectionCodes` (`duplicate`, `idempotency_required`, `unknown_device`, `unknown_endpoint`,
+  `unsupported_command`, `invalid_arguments`, `unavailable`, `refused`).
+- **Simulated connector** (`simulated`, config `{ "preset": "basic" | "demo", "seed": 42 }`, default seed from
+  `Simulated:Seed`): a dimmable light, a plug (power random walk, energy integrated over the clock), an AC (room
+  temperature drifting to the target; mode-dependent target range), a door contact with battery and a smart lock.
+  Ticks every 5 s of the context's `TimeProvider`; commands apply after 150 ms; idempotency keys are remembered for
+  10 min (a repeated key → `duplicate`; a safety-critical batch without a key → `idempotency_required`). Deterministic
+  for a seed and clock.
 
 ---
 

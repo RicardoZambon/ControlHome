@@ -169,6 +169,25 @@
       "unsupported_type": "Use uma imagem PNG, JPEG ou WebP.",
       "too_large": "A imagem é grande demais. Use uma de até 10 MB e 40 megapixels.",
       "invalid_image": "Não foi possível ler a imagem. Ela pode estar danificada; tente exportá-la de novo."
+    },
+    "devices": {
+      "not_found": "Esse dispositivo não existe mais. Recarregue a página."
+    },
+    "endpoints": {
+      "not_found": "Esse controle do dispositivo não existe mais. Recarregue a página."
+    },
+    "integrations": {
+      "not_found": "Essa integração não existe mais. Recarregue a página."
+    },
+    "commands": {
+      "invalid_arguments": "O dispositivo não aceita esse valor.",
+      "argument_required": "É preciso informar um valor aqui.",
+      "argument_unknown": "Este dispositivo não tem essa configuração.",
+      "argument_invalid_type": "Esse não é o tipo de valor certo.",
+      "argument_out_of_range": "Esse valor está fora da faixa do dispositivo.",
+      "argument_not_on_step": "Escolha um valor dentro dos passos do dispositivo.",
+      "argument_not_allowed": "O dispositivo não aceita essa opção.",
+      "argument_too_long": "Esse texto é longo demais para o dispositivo."
     }
   }
 }

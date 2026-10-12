@@ -20,6 +20,11 @@
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Connector SDK">
+    <!-- ILogger for connectors (Connectors.Abstractions references Domain only, not the ASP.NET Core shared framework). -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+  </ItemGroup>
+
   <ItemGroup Label="Imaging">
     <!-- Linux native assets without fontconfig/freetype dependencies: the runtime image is chiseled (no package manager). -->
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />

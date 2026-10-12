@@ -1,6 +1,7 @@
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Identity;
 using ControlHome.Domain.Auditing;
+using ControlHome.Domain.Devices;
 using ControlHome.Domain.Files;
 using ControlHome.Domain.Homes;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
@@ -30,6 +31,18 @@ public sealed class ControlHomeDbContext(DbContextOptions<ControlHomeDbContext> 
     public DbSet<Room> Rooms => Set<Room>();
 
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+
+    public DbSet<Integration> Integrations => Set<Integration>();
+
+    public DbSet<Device> Devices => Set<Device>();
+
+    public DbSet<Endpoint> Endpoints => Set<Endpoint>();
+
+    public DbSet<EndpointCapability> EndpointCapabilities => Set<EndpointCapability>();
+
+    public DbSet<DeviceAttribute> DeviceAttributes => Set<DeviceAttribute>();
+
+    public DbSet<AttributeState> AttributeStates => Set<AttributeState>();
 
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
