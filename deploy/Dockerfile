@@ -24,7 +24,7 @@ COPY web/package.json web/package-lock.json web/.npmrc ./
 COPY web/apps/web/package.json apps/web/
 COPY web/packages/api-client/package.json packages/api-client/
 COPY web/packages/ui/package.json packages/ui/
-RUN --mount=type=cache,id=controlhome-npm,target=/root/.npm \
+RUN --mount=type=cache,id=controlhome-npm,target=/root/.npm,sharing=locked \
     npm ci
 
 COPY web/ ./
@@ -49,13 +49,13 @@ COPY src/ControlHome.Domain/ControlHome.Domain.csproj src/ControlHome.Domain/
 COPY src/ControlHome.Application/ControlHome.Application.csproj src/ControlHome.Application/
 COPY src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj src/ControlHome.Infrastructure/
 COPY src/ControlHome.Api/ControlHome.Api.csproj src/ControlHome.Api/
-RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages \
+RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing=locked \
     dotnet restore src/ControlHome.Api/ControlHome.Api.csproj -a "$TARGETARCH"
 
 # The committed web/packages/api-client/openapi.json is the source of the API client: no build-time OpenAPI generation here
 # (it would run the freshly built app, which cannot work when cross-compiling).
 COPY src/ src/
-RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages \
+RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing=locked \
     dotnet publish src/ControlHome.Api/ControlHome.Api.csproj \
         -c Release \
         -a "$TARGETARCH" \
