@@ -1,9 +1,9 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
+using ControlHome.TestSupport;
 
 namespace ControlHome.Api.IntegrationTests;
 
-public sealed class HealthTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public sealed class HealthTests(ControlHomeApiFactory factory) : IClassFixture<ControlHomeApiFactory>
 {
     [Fact]
     public async Task Live_returns_200_Healthy()
@@ -18,7 +18,7 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory) : IClass
     }
 
     [Fact]
-    public async Task Ready_returns_200_Healthy()
+    public async Task Ready_returns_200_Healthy_when_the_database_is_ready()
     {
         using var client = factory.CreateClient();
 
@@ -37,6 +37,7 @@ public sealed class HealthTests(WebApplicationFactory<Program> factory) : IClass
     {
         using var spa = new TempSpaDirectory();
         using var spaFactory = factory.WithWebHostBuilder(b => b.UseSetting("ControlHome:SpaPath", spa.Root));
+        await spaFactory.WaitUntilReadyAsync(ControlHomeApiFactory.ReadyTimeout);
         using var client = spaFactory.CreateClient();
 
         using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);

@@ -5,7 +5,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Hosting abstractions, options, Data Protection core: the same shared framework the Api runs on. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ControlHome.Application\ControlHome.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ControlHome.Infrastructure.Tests" />
   </ItemGroup>
 
 </Project>

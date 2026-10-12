@@ -16,6 +16,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "check:colors": "node scripts/check-colors.mjs",
+    "gen:api": "npm run gen -w @controlhome/api-client",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

@@ -101,7 +101,11 @@ flowchart RL
 Rules (an arrow means "may reference"):
 
 - `Domain` references nothing (no EF Core, no ASP.NET Core).
-- `Application` never references `Infrastructure`, `Api` or ASP.NET Core; `Infrastructure` never references `Api`.
+- `Application` never references `Infrastructure`, `Api` or the ASP.NET Core web stack: no `Microsoft.AspNetCore.App`
+  framework reference and no `Microsoft.AspNetCore.Http`/`.Mvc`/`.Builder`/`.Routing`/`.Hosting`/`.Authentication`
+  types. It may use ASP.NET Core Identity's model (`IdentityUser`, `UserManager`, namespace
+  `Microsoft.AspNetCore.Identity`, from the `Microsoft.Extensions.Identity.*` packages). `Infrastructure` never
+  references `Api`.
 - `Automation` references `Domain` only — no EF.
 - `Connectors.<Vendor>` references `Connectors.Abstractions` only; connectors are registered statically by the Api
   (`AddConnector<T>()`), never loaded as plugins.

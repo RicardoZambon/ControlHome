@@ -44,18 +44,24 @@ try {
         if (-not $raw) { throw 'ConnectionStrings:ControlHome is not set in user-secrets (run scripts/setup-dev.ps1).' }
         $cs = $raw.Substring('ConnectionStrings:ControlHome = '.Length)
         $builder = [System.Data.Common.DbConnectionStringBuilder]::new()
-        $builder.ConnectionString = $cs
+        # Not `$builder.ConnectionString = ...`: PowerShell treats the builder as a dictionary, so that would only add a
+        # key named "ConnectionString" (and Database removal / host resolution below would silently do nothing).
+        $builder.set_ConnectionString($cs)
         foreach ($k in @('Database', 'Initial Catalog')) { if ($builder.ContainsKey($k)) { [void]$builder.Remove($k) } }
-        # Containers cannot resolve mDNS (*.local) names: resolve on the host.
-        $server = [string]$builder['Server']
-        $hostPart, $portPart = $server -split ',', 2
-        if ($hostPart -like '*.local') {
+        # Containers cannot resolve names only the host can (mDNS *.local, NetBIOS/LLMNR single-label names): resolve
+        # on the host and map the name with --add-host, so the connection string (and TLS name checks) keep the name.
+        $serverKey = @('Server', 'Data Source') | Where-Object { $builder.ContainsKey($_) } | Select-Object -First 1
+        $server = if ($serverKey) { [string]$builder[$serverKey] } else { '' }
+        $hostPart = (($server -replace '^(?i:tcp):', '') -split '[,\\]', 2)[0].Trim()
+        $parsedIp = $null
+        if ($hostPart -and $hostPart -notin @('localhost', '.', '(local)') -and
+            -not [System.Net.IPAddress]::TryParse($hostPart, [ref]$parsedIp)) {
             $ip = [System.Net.Dns]::GetHostAddresses($hostPart) |
                 Where-Object { $_.AddressFamily -eq 'InterNetwork' } | Select-Object -First 1
-            if ($ip) { $builder['Server'] = if ($portPart) { "$($ip.IPAddressToString),$portPart" } else { $ip.IPAddressToString } }
+            if ($ip) { $dockerArgs += @('--add-host', "$($hostPart):$($ip.IPAddressToString)") }
         }
         $envFile = New-TemporaryFile
-        Set-Content -Path $envFile -Value "CONTROLHOME_TEST_SQLSERVER=$($builder.ConnectionString)" -NoNewline
+        Set-Content -Path $envFile -Value "CONTROLHOME_TEST_SQLSERVER=$($builder.get_ConnectionString())" -NoNewline
         $dockerArgs += @('--env-file', $envFile.FullName)
     }
 
@@ -68,7 +74,7 @@ try {
         # Stream the working tree (tracked + untracked, minus ignored build output) into the container.
         $files = git ls-files --cached --others --exclude-standard
         $tarList = New-TemporaryFile
-        Set-Content -Path $tarList -Value ($files -join "`n")
+        Set-Content -Path $tarList -Value ($files -join "`n") -NoNewline
         tar -c -f - -T $tarList.FullName | docker @dockerArgs
         $exit = $LASTEXITCODE
         Remove-Item $tarList -Force
