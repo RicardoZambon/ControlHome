@@ -14,7 +14,8 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- Needed so IDE0005 (unnecessary usings) is reported on build; also feeds OpenAPI XML comments later. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- CS1591: missing XML docs; CS1573: only some record parameters documented (the docs feed OpenAPI descriptions). -->
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
   </PropertyGroup>
 
 </Project>

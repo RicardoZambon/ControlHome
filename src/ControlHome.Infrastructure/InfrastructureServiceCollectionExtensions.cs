@@ -1,0 +1,71 @@
+using ControlHome.Application.Abstractions;
+using ControlHome.Application.Auditing;
+using ControlHome.Infrastructure.Auditing;
+using ControlHome.Infrastructure.Configuration;
+using ControlHome.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+
+namespace ControlHome.Infrastructure;
+
+public static class InfrastructureServiceCollectionExtensions
+{
+    /// <summary>
+    /// Options, data directory, DbContext (+ <see cref="IControlHomeDb"/>), database readiness and the audit log.
+    /// Everything is resolved lazily: registering opens no connection and reads no file.
+    /// The <see cref="DatabaseInitializer"/> is added separately by <see cref="AddDatabaseInitializer"/>.
+    /// </summary>
+    public static IServiceCollection AddControlHomeInfrastructure(this IServiceCollection services)
+    {
+        services.AddOptions<ControlHomeOptions>().BindConfiguration(ControlHomeOptions.SectionName);
+        services.AddOptions<DatabaseOptions>().BindConfiguration(DatabaseOptions.SectionName);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<DataDirectory>();
+        services.TryAddSingleton<IDatabaseConnectionProvider, ConfigurationDatabaseConnectionProvider>();
+        services.TryAddSingleton<DatabaseReadiness>();
+        services.TryAddSingleton<IDatabaseStatus, DatabaseStatus>();
+
+        services.AddDbContext<ControlHomeDbContext>(ConfigureDbContext);
+        services.AddScoped<IControlHomeDb>(sp => sp.GetRequiredService<ControlHomeDbContext>());
+        services.AddScoped<IAuditLog, AuditLog>();
+        services.AddScoped<DatabaseReset>();
+
+        return services;
+    }
+
+    /// <summary>Starts <see cref="DatabaseInitializer"/> with the host (not during build-time OpenAPI generation).</summary>
+    public static IServiceCollection AddDatabaseInitializer(this IServiceCollection services)
+    {
+        services.AddHostedService<DatabaseInitializer>();
+        return services;
+    }
+
+    private static void ConfigureDbContext(IServiceProvider services, DbContextOptionsBuilder options)
+    {
+        var connectionString = services.GetRequiredService<IDatabaseConnectionProvider>().GetConnectionString();
+        if (connectionString is null)
+        {
+            options.UseSqlServer(ConfigureSqlServer);
+        }
+        else
+        {
+            options.UseSqlServer(connectionString, ConfigureSqlServer);
+        }
+
+        if (services.GetService<IHostEnvironment>()?.IsDevelopment() == true)
+        {
+            options.EnableSensitiveDataLogging();
+        }
+    }
+
+    private static void ConfigureSqlServer(Microsoft.EntityFrameworkCore.Infrastructure.SqlServerDbContextOptionsBuilder sql)
+    {
+        // SQL Server 2025 is required: native json columns and 2025 semantics are always on.
+        sql.UseCompatibilityLevel(170);
+        sql.EnableRetryOnFailure();
+        sql.MigrationsHistoryTable(ControlHomeDbContext.MigrationsHistoryTable, ControlHomeDbContext.AppSchema);
+    }
+}

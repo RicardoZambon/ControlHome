@@ -101,7 +101,11 @@ flowchart RL
 Rules (an arrow means "may reference"):
 
 - `Domain` references nothing (no EF Core, no ASP.NET Core).
-- `Application` never references `Infrastructure`, `Api` or ASP.NET Core; `Infrastructure` never references `Api`.
+- `Application` never references `Infrastructure`, `Api` or the ASP.NET Core web stack: no `Microsoft.AspNetCore.App`
+  framework reference and no `Microsoft.AspNetCore.Http`/`.Mvc`/`.Builder`/`.Routing`/`.Hosting`/`.Authentication`
+  types. It may use ASP.NET Core Identity's model (`IdentityUser`, `UserManager`, namespace
+  `Microsoft.AspNetCore.Identity`, from the `Microsoft.Extensions.Identity.*` packages). `Infrastructure` never
+  references `Api`.
 - `Automation` references `Domain` only — no EF.
 - `Connectors.<Vendor>` references `Connectors.Abstractions` only; connectors are registered statically by the Api
   (`AddConnector<T>()`), never loaded as plugins.
@@ -353,7 +357,9 @@ The `StateProcessor`, in order:
   aborts their SignalR connections.
 - Passwords: at least 10 characters, no composition rules.
 - Authorization: fallback policy = authenticated; policies `Admin` (Admin), `Member` (Admin | Member), `Viewer` (any
-  role).
+  role). `Admin` also checks the database on every request (the user exists, is enabled, is in the Admin role and the
+  session's security stamp is current), so a demoted or disabled admin loses Admin access at once rather than at the next
+  stamp check; user administration re-checks the caller again inside its lock (403 `auth.forbidden`).
 
 ### Roles
 
@@ -362,30 +368,59 @@ can't be removed, demoted or disabled (`users.last_admin`), and an admin can't d
 
 ### Cross-origin protection (global middleware)
 
-- Every mutation (any method other than GET/HEAD/OPTIONS) **and** every WebSocket/SignalR upgrade must carry an
-  `Origin` equal to the app's own origin (`{scheme}://{host}` after forwarded headers); a missing or foreign Origin gets
-  **403 `request.cross_origin`**.
+- `UseControlHomeRequestEdge()` (`Api/Security`) runs right after the exception handler and before static files and
+  routing: forwarded headers → security headers → network allowlist → host name check → origin checks.
+- Every mutation (any method other than GET/HEAD/OPTIONS) **and** every WebSocket/SignalR upgrade (HTTP/1.1
+  `Upgrade: websocket`, or HTTP/2 extended CONNECT) must carry an `Origin` equal to the app's own origin
+  (`{scheme}://{host}` after forwarded headers; host case-insensitive, default ports implied, exactly one serialized
+  origin with no path); a missing, `null` or foreign Origin gets **403 `request.cross_origin`**.
 - Non-WebSocket mutations also need the header **`X-ControlHome: 1`** (403 `request.missing_header`). `/api/hooks/*`
   is exempt.
 - Hubs are server → client only. **No CORS policy is ever registered.**
-- Every response carries `Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; media-src 'self'
-  blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; object-src
-  'none'; base-uri 'self'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and
-  `X-Frame-Options: DENY`.
+- Every response (errors and exception responses included) carries `Content-Security-Policy: default-src 'self';
+  img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src
+  'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: same-origin` and `X-Frame-Options: DENY`. They are added when the response starts unless an
+  endpoint set that header itself. In Development only, `/scalar*` gets a CSP that also allows Scalar's inline
+  bootstrap script and its fonts from `fonts.scalar.com`.
 
 ### Network edge
 
-- Forwarded headers are trusted only from the app_proxy subnet (`Network:TrustedProxyNetworks`, empty by default).
+- Forwarded headers (`X-Forwarded-For`, `-Proto`, `-Host`; one hop) are applied only from trusted proxies. With
+  `Network:TrustedProxyNetworks` empty (default) that is the framework default, loopback proxies only; when set (the
+  app_proxy subnet on Umbrel), exactly those networks replace it. Behind a proxy that is not trusted, every client looks
+  like the proxy.
 - `Network:AllowedClientNetworks` defaults to loopback, RFC 1918, CGNAT, ULA and link-local (`127.0.0.0/8, ::1/128,
   10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, fc00::/7, fe80::/10`); anything else gets **403
-  `request.network_denied`** and an audit entry.
+  `request.network_denied`** and an audit entry (`security.network_denied`). Loopback is always allowed (the container
+  healthcheck), and a request without a remote address (Unix socket, TestServer) passes.
+- **Host names (DNS rebinding).** The same-origin check compares `Origin` with the request's own `Host`, which a
+  rebinding page controls (its name re-pointed at the app's LAN address, loaded in a household member's browser), and its
+  connection comes from an allowed LAN address. So every request, whatever the method or path (GET responses would be
+  readable too, `/api/hooks/*` included), must name the app by a host it answers to (after forwarded headers): an IP
+  literal, `localhost`, a single-label name (`umbrel`), a name under `.localhost`, `.local`, `.home.arpa`, `.lan` or
+  `.internal`, or an entry of `Network:AllowedHostNames` (exact names or `*.suffix`, e.g. a Tailscale MagicDNS or custom
+  DNS name). Anything else, or no `Host`, gets **403 `request.host_denied`** and an audit entry (`security.host_denied`).
+- The lists are a comma-separated string (`Network__AllowedClientNetworks=192.168.1.0/24, fd00::/8` replaces the whole
+  list) or an array; network entries are addresses or CIDR networks (canonical IPv4 only), host name entries are DNS
+  names or `*.suffix` (no scheme, no port). An invalid entry stops startup with an error naming the setting and the entry.
+- Denied requests are logged and audited **at most once per source per 10 minutes** (a source is an IPv4 address or an
+  IPv6 /64; network and host denials are throttled separately), with at most 1024 sources tracked per window, so a flood
+  cannot fill the audit log. While the database is not ready the denial is only logged.
 
 ### Login protection
 
-- Rate limits per IP and per username (`login`: 10/min/IP).
+- Rate limits per client (`login`: 10/min per IPv4 address or IPv6 /64), one budget shared by sign-in, password change
+  and the reset-token redemption.
 - Lockout starts at 5 failures for 5 min and backs off (`5 min × 2^ConsecutiveLockouts`) up to 1 h; it is never
   permanent and resets on success. Responses: 401 `auth.invalid_credentials`, 423 `auth.locked_out`
   (`retryAfterSeconds`), 403 `auth.disabled`.
+- Every check of a password runs under the user's sign-in lock (`ControlHome.Login.{id}`) and counts towards the same
+  lockout: a wrong current password on `POST /api/auth/me/password` counts like a failed sign-in (400
+  `auth.password_incorrect`, audited `auth.password.change_failed`; 423 while locked out), so a session cannot be used to
+  guess the password.
+- Unknown user names are counted the same way (in memory, at most 1024 names): they too get 423 after 5 failures, so
+  responses never reveal which names exist. A client that disconnects mid-check is still counted and audited.
 
 ### Setup lifecycle
 
@@ -394,9 +429,11 @@ can't be removed, demoted or disabled (`users.last_admin`), and an admin can't d
   409 `setup.already_completed` — exactly one admin is ever created.
 - **Setup code:** 12 Crockford base32 characters from `RandomNumberGenerator` (shown as `XXXX-XXXX-XXXX`), compared in
   constant time after normalization, regenerated on every process start and rotated after 20 failed attempts. It is
-  logged and written to `<data>/setup-code.txt` only while setup is incomplete (deleted on completion), and can be
-  overridden with `Setup__Code` (used by Umbrel `$APP_PASSWORD` and E2E). Wrong attempts are rate-limited (`setup`:
-  5 per 10 min per IP) and return 400 `setup.invalid_code`.
+  logged and written to `<data>/setup-code.txt` only while setup is incomplete (deleted on completion; afterwards no
+  code is accepted, rotated or announced), and can be overridden with `Setup__Code` (used by Umbrel `$APP_PASSWORD` and
+  E2E; at least 12 characters, else startup fails). A configured code is **never rotated** (the owner reads it from their
+  own configuration; rotating it would let anyone on the LAN block setup). Wrong attempts are rate-limited (`setup`:
+  5 per 10 min per IPv4 address or IPv6 /64) and return 400 `setup.invalid_code`.
 - The wizard covers: admin account, home name, language, time zone, location, currency and tariff, plus an optional
   "Load demo home". When no database is configured yet, it starts with a database step (see
   [Deployment](#12-deployment)).
@@ -442,7 +479,8 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
 - **Health:** `GET /health/live` (process up) and `GET /health/ready` (database `Ready`), both anonymous.
 - **SPA hosting:** the API serves the built SPA from the same origin (`ControlHome:SpaPath` or `wwwroot`), falls back
   to `index.html` for any non-`/api`, non-`/hubs`, non-`/health` path, and returns a 404 ProblemDetails (never
-  `index.html`) for unknown `/api/*` paths.
+  `index.html`) for unknown `/api/*` paths, or 405 `request.method_not_allowed` with an `Allow` header when the path
+  exists for other methods.
 
 ---
 

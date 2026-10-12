@@ -92,9 +92,16 @@ add_needle() {
     \'*\')
       value="${value#\'}"; value="${value%\'}"; value="${value//\'\'/\'}" ;;
   esac
-  if [ "${#value}" -ge "$MIN_SECRET_LENGTH" ]; then
-    needles+=("$value")
+  if [ "${#value}" -lt "$MIN_SECRET_LENGTH" ]; then
+    return 0
   fi
+  # A value that already appears in committed content (e.g. a dev password equal to the project name) can't be
+  # leaked by this commit and would flag every file - skip it. Whole connection strings are still checked, and
+  # gitleaks' connection-string rules still apply.
+  if git rev-parse --verify -q HEAD >/dev/null 2>&1 && git grep -qF -e "$value" HEAD -- 2>/dev/null; then
+    return 0
+  fi
+  needles+=("$value")
 }
 
 user_secrets_args=()

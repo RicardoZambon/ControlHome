@@ -285,13 +285,16 @@ fc00::/7, fe80::/10`; `TrustedProxyNetworks` default empty).
 - Endpoints (anonymous): `GET /api/setup/status` → `SetupStatusDto` (works when DB not ready: `SetupCompleted=false`);
   `POST /api/setup/complete` → 200 `MeDto` and signs the admin in. Rate limit policy `setup`: 5 / 10 min per IP.
 - Rules: code normalized (upper, remove `-`/spaces), compared with `CryptographicOperations.FixedTimeEquals`; code = 12 Crockford
-  base32 chars from `RandomNumberGenerator`, displayed as `XXXX-XXXX-XXXX`; `Setup:Code` config overrides; logged at Warning
+  base32 chars from `RandomNumberGenerator`, displayed as `XXXX-XXXX-XXXX`; `Setup:Code` config overrides (≥ 12 chars after
+  normalization, else startup fails; never rotated); logged at Warning
   (`"First-run setup code: {SetupCode}"`) and written to `{dataPath}/setup-code.txt` only while setup is incomplete; deleted on
-  completion; 20 failed verifications → `Rotate()` + log new code. Completion runs in a transaction holding
+  completion (after which nothing is verified, rotated or announced); 20 failed verifications of a generated code → `Rotate()`
+  + log new code. Completion runs in a transaction holding
   `sp_getapplock('ControlHome.Setup', 'Exclusive', 'Transaction')`; if `SetupCompletedAtUtc` already set → 409
   `setup.already_completed`. Creates roles if missing, the admin (role Admin), the Home row, sets `SetupCompletedAtUtc`, audits
   `setup.completed`. Validation (FluentValidation): user name 3–64 `[A-Za-z0-9._@-]`, password ≥ 10 chars, home name 1–80,
-  TimeZoneId must resolve via `TimeZoneInfo.TryFindSystemTimeZoneById`, Locale ∈ {pt-BR, en}, Currency 3 letters, lat −90..90,
+  TimeZoneId a canonical IANA id (resolves via `TimeZoneInfo.TryFindSystemTimeZoneById` with `HasIanaId`, exact spelling, and
+  maps to a Windows zone; Windows ids, tzdata file names and case variants are 400), Locale ∈ {pt-BR, en}, Currency 3 letters, lat −90..90,
   lon −180..180. Wrong code → 400 `setup.invalid_code`.
 - Tests: status before/after; wrong code → 400 and no user created; valid → 200, cookie set, `/api/auth/me` works; second call →
   409; **two concurrent completes → exactly one 200**; `Setup__Code` override honoured; validation errors → 400 with `errors`.

@@ -4,6 +4,17 @@
     <RootNamespace>ControlHome.Application</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    Application may use ASP.NET Core Identity's *model* (IdentityUser, UserManager: namespace Microsoft.AspNetCore.Identity
+    from the Microsoft.Extensions.Identity.* packages) but never the web stack: no FrameworkReference to
+    Microsoft.AspNetCore.App and no Http/Mvc/Routing/Hosting/Authentication types (enforced by the architecture tests).
+  -->
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\ControlHome.Domain\ControlHome.Domain.csproj" />
   </ItemGroup>

@@ -1,0 +1,35 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace ControlHome.Infrastructure.Persistence;
+
+/// <summary>
+/// Deletes every row from the app and Identity tables (FK-safe order) and re-seeds the roles, returning the database to its
+/// freshly-initialized state. Used only by the <c>Testing</c>-environment endpoint <c>POST /api/_test/reset</c>.
+/// Data Protection keys are kept, so the key ring stays valid.
+/// </summary>
+public sealed class DatabaseReset(ControlHomeDbContext db)
+{
+    public async Task ResetAsync(CancellationToken cancellationToken)
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async ct =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            await db.UserTokens.ExecuteDeleteAsync(ct);
+            await db.UserLogins.ExecuteDeleteAsync(ct);
+            await db.UserClaims.ExecuteDeleteAsync(ct);
+            await db.UserRoles.ExecuteDeleteAsync(ct);
+            await db.RoleClaims.ExecuteDeleteAsync(ct);
+            await db.Users.ExecuteDeleteAsync(ct);
+            await db.Roles.ExecuteDeleteAsync(ct);
+            await db.AuditLog.ExecuteDeleteAsync(ct);
+            await db.Homes.ExecuteDeleteAsync(ct);
+
+            await RoleSeeder.SeedAsync(db, ct);
+            await transaction.CommitAsync(ct);
+        }, cancellationToken);
+
+        db.ChangeTracker.Clear();
+    }
+}

@@ -87,6 +87,49 @@ jobs:
       - name: Build
         run: npm run build
 
+  api-client-drift:
+    name: API client drift (committed OpenAPI document and generated client)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET (version from global.json)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Set up Node (version from web/.nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the API (regenerates web/packages/api-client/openapi.json)
+        run: dotnet build src/ControlHome.Api -c Release
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Regenerate the API client
+        working-directory: web
+        run: npm run gen:api
+
+      - name: Fail on drift (rebuild the API, run `npm run gen:api` in web/ and commit the result)
+        run: |
+          git diff --exit-code -- web/packages/api-client
+          untracked="$(git ls-files --others --exclude-standard -- web/packages/api-client)"
+          if [ -n "$untracked" ]; then
+            echo "Generated files are not committed:"
+            echo "$untracked"
+            exit 1
+          fi
+
   secrets:
     name: Secret scan (gitleaks, full history)
     runs-on: ubuntu-latest

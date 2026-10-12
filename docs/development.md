@@ -107,11 +107,20 @@ dotnet test                    # unit + architecture + integration
 ```
 
 - Integration tests that need SQL Server start **Testcontainers** `mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04`
-  (Docker must be running). Alternatively set `CONTROLHOME_TEST_SQLSERVER` to a *server-level* connection string (no
-  `Initial Catalog`): the fixture then creates `ControlHome_Test_<8 hex>` per run, drops it afterwards and first cleans
-  up `ControlHome_Test_%` databases older than 2 h.
+  (Docker must be running; the container starts on first use, so unit-only runs don't need it). Alternatively set
+  `CONTROLHOME_TEST_SQLSERVER` to a *server-level* connection string (no `Initial Catalog`): the fixture then creates
+  `ControlHome_Test_<8 hex run id><suffix>` databases, drops them afterwards and first cleans up `ControlHome_Test_%`
+  databases older than 2 h.
+- Shared test infrastructure lives in `tests/ControlHome.TestSupport`: `SqlServerFixture` (xunit assembly fixture),
+  `ControlHomeApiFactory` (environment `Testing`, its own database and temp data path, setup code
+  `TEST-SETUP-0001-CODE`, waits for `/health/ready`) and `CreateApiClient()` (same-origin `Origin`, `X-ControlHome: 1`,
+  cookies).
 - `tests/ControlHome.Architecture.Tests` enforces the project reference graph
   (`Domain` ← `Application` ← `Infrastructure` ← `Api`).
+- **Windows Smart App Control** may block freshly built `ControlHome.*.dll` files ("An Application Control policy has
+  blocked this file"). Don't change the Windows setting; run the tests in Linux with `./scripts/test-docker.ps1`. The
+  build-time OpenAPI step also loads the built DLLs; if it is blocked, build with
+  `dotnet build -p:OpenApiGenerateDocumentsOnBuild=false` and let CI (or a Linux build) regenerate `openapi.json`.
 - Rules of the house: xunit.v3 + Shouldly + NSubstitute; no MediatR / AutoMapper / FluentAssertions / Moq; inject
   `TimeProvider`; TDD for domain, engine and connector logic.
 

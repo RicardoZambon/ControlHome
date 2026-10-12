@@ -5,8 +5,34 @@
     <UserSecretsId>controlhome-api</UserSecretsId>
   </PropertyGroup>
 
+  <PropertyGroup Label="Build-time OpenAPI document (committed; the web API client is generated from it)">
+    <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/../../web/packages/api-client</OpenApiDocumentsDirectory>
+    <OpenApiGenerateDocumentsOptions>--file-name openapi</OpenApiGenerateDocumentsOptions>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.File" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\ControlHome.Infrastructure\ControlHome.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ControlHome.Api.IntegrationTests" />
+    <InternalsVisibleTo Include="ControlHome.TestSupport" />
   </ItemGroup>
 
 </Project>
