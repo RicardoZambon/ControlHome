@@ -208,6 +208,7 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
         }
 
         var removed = existing.Values.Where(r => !kept.Contains(r.Id)).ToList();
+        await ClearRoomAsync(removed.Select(r => r.Id).ToList(), cancellationToken);
         foreach (var room in removed)
         {
             floor.Rooms.Remove(room);
@@ -227,16 +228,18 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
         static string Path(int index, string field) => string.Create(CultureInfo.InvariantCulture, $"rooms[{index}].{field}");
     }
 
-    /// <summary>Deletes the floor and its rooms.</summary>
+    /// <summary>Deletes the floor and its rooms; devices and endpoints in those rooms lose their room.</summary>
     public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
     {
-        var floor = await db.Floors.SingleOrDefaultAsync(f => f.Id == id, cancellationToken);
+        // Rooms are loaded so they are deleted after the device/endpoint room references are cleared.
+        var floor = await db.Floors.Include(f => f.Rooms).SingleOrDefaultAsync(f => f.Id == id, cancellationToken);
         if (floor is null)
         {
             return NotFound();
         }
 
-        db.Floors.Remove(floor); // rooms go with it (ON DELETE CASCADE)
+        await ClearRoomAsync(floor.Rooms.Select(r => r.Id).ToList(), cancellationToken);
+        db.Floors.Remove(floor); // rooms go with it (cascade)
         await auditLog.WriteAsync(
             new AuditEvent(AuditActions.FloorDeleted, FloorTarget, IdOf(floor), new { floor.Name }),
             cancellationToken);
@@ -264,6 +267,31 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
         }
 
         return ToDto(floor);
+    }
+
+    /// <summary>
+    /// Takes devices and endpoints out of rooms about to be deleted (saved with the deletion). The room foreign keys do
+    /// not cascade in the database: SQL Server allows only one cascade path to a table, and endpoints would have two
+    /// (room → endpoint, room → device → endpoint).
+    /// </summary>
+    private async Task ClearRoomAsync(IReadOnlyCollection<int> roomIds, CancellationToken cancellationToken)
+    {
+        if (roomIds.Count == 0)
+        {
+            return;
+        }
+
+        var devices = await db.Devices.Where(d => d.RoomId != null && roomIds.Contains(d.RoomId.Value)).ToListAsync(cancellationToken);
+        foreach (var device in devices)
+        {
+            device.RoomId = null;
+        }
+
+        var endpoints = await db.Endpoints.Where(e => e.RoomId != null && roomIds.Contains(e.RoomId.Value)).ToListAsync(cancellationToken);
+        foreach (var endpoint in endpoints)
+        {
+            endpoint.RoomId = null;
+        }
     }
 
     private static bool IsCurrent(Floor floor, string clientRowVersion, out byte[] rowVersion) =>

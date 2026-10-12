@@ -179,6 +179,43 @@
       "unsupported_type": "Use uma imagem PNG, JPEG ou WebP.",
       "too_large": "A imagem é grande demais. Use uma de até 10 MB e 40 megapixels.",
       "invalid_image": "Não foi possível ler a imagem. Ela pode estar danificada; tente exportá-la de novo."
+    },
+    "devices": {
+      "not_found": "Esse dispositivo não existe mais. Recarregue a página."
+    },
+    "endpoints": {
+      "not_found": "Esse controle do dispositivo não existe mais. Recarregue a página."
+    },
+    "integrations": {
+      "not_found": "Essa integração não existe mais. Recarregue a página.",
+      "invalid_config": "Algumas configurações não são válidas. Confira os campos destacados."
+    },
+    "connectors": {
+      "not_found": "Esse tipo de integração não está disponível nesta versão."
+    },
+    "commands": {
+      "invalid_arguments": "O dispositivo não aceita esse valor.",
+      "argument_required": "É preciso informar um valor aqui.",
+      "argument_unknown": "Este dispositivo não tem essa configuração.",
+      "argument_invalid_type": "Esse não é o tipo de valor certo.",
+      "argument_out_of_range": "Esse valor está fora da faixa do dispositivo.",
+      "argument_not_on_step": "Escolha um valor dentro dos passos do dispositivo.",
+      "argument_not_allowed": "O dispositivo não aceita essa opção.",
+      "argument_too_long": "Esse texto é longo demais para o dispositivo.",
+      "unsupported": "Este dispositivo não aceita essa ação.",
+      "duplicate": "Essa ação já foi enviada.",
+      "gate_closed": "O dispositivo não aceita controle remoto agora. Ative o controle remoto no próprio aparelho.",
+      "unavailable": "A integração deste dispositivo não está funcionando agora. Tente novamente em instantes.",
+      "refused": "O dispositivo recusou a ação.",
+      "timed_out": "O dispositivo não confirmou a tempo. Verifique o estado dele.",
+      "failed": "A ação não deu certo. Tente novamente."
+    },
+    "safety": {
+      "step_up_required": "Confirme com o seu PIN de segurança.",
+      "locked": "Muitos PINs errados. As ações de segurança ficam bloqueadas por um tempo.",
+      "not_allowed": "Você não tem permissão para esta ação de segurança.",
+      "pin_not_set": "Defina primeiro um PIN de segurança no seu perfil.",
+      "pin_incorrect": "Esse PIN não está correto."
     }
   }
 }

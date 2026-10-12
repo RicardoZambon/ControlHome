@@ -46,7 +46,48 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         { "GET", "/api/rooms", "listRooms", AuthorizationPolicies.Viewer, null },
         { "POST", "/api/files", "uploadFile", AuthorizationPolicies.Admin, null },
         { "GET", "/api/files/{id:guid}", "getFile", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/auth/me/pin", "getSafetyPin", Authenticated, null },
+        { "PUT", "/api/auth/me/pin", "setSafetyPin", Authenticated, null },
+        { "POST", "/api/auth/step-up", "stepUp", Authenticated, null },
+        { "GET", "/api/capabilities", "listCapabilities", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/connectors", "listConnectors", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/integrations", "listIntegrations", AuthorizationPolicies.Viewer, null },
+        { "POST", "/api/integrations", "createIntegration", AuthorizationPolicies.Admin, null },
+        { "DELETE", "/api/integrations/{id:guid}", "deleteIntegration", AuthorizationPolicies.Admin, null },
+        { "GET", "/api/devices", "listDevices", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/devices/{id:guid}", "getDevice", AuthorizationPolicies.Viewer, null },
+        { "PUT", "/api/devices/{id:guid}", "updateDevice", AuthorizationPolicies.Admin, null },
+        { "PUT", "/api/endpoints/{id:guid}", "updateEndpoint", AuthorizationPolicies.Admin, null },
+        { "PUT", "/api/endpoints/{id:guid}/favorite", "setEndpointFavorite", AuthorizationPolicies.Member, null },
+        { "POST", "/api/endpoints/{id:guid}/commands", "sendCommand", AuthorizationPolicies.Member, null },
+        { "GET", "/api/state", "getState", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/system/status", "getSystemStatus", AuthorizationPolicies.Viewer, null },
     };
+
+    [Fact]
+    public async Task Hub_message_payloads_are_in_the_committed_openapi_components()
+    {
+        using var document = await OpenApiDocument.LoadAsync(TestContext.Current.CancellationToken);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+
+        foreach (var name in new[] { "StateDelta", "AvailabilityChangedDto", "IntegrationStatusChangedDto", "CommandStatusDto", "SystemStatusDto", "StateValue" })
+        {
+            schemas.TryGetProperty(name, out _).ShouldBeTrue($"{name} missing from openapi.json components");
+        }
+
+        schemas.GetProperty("StateDelta").GetProperty("properties").GetProperty("attributeId").ValueKind.ShouldBe(JsonValueKind.Object);
+    }
+
+    [Fact]
+    public void The_home_hub_is_mapped_and_requires_a_signed_in_user()
+    {
+        var dataSource = factory.Services.GetRequiredService<EndpointDataSource>();
+        var hub = dataSource.Endpoints.OfType<RouteEndpoint>().Where(e => e.RoutePattern.RawText == "/hubs/home").ToList();
+
+        hub.ShouldNotBeEmpty();
+        hub.ShouldAllBe(e => e.Metadata.GetMetadata<IAllowAnonymous>() == null);
+        hub.ShouldAllBe(e => e.Metadata.GetOrderedMetadata<IAuthorizeData>().Any());
+    }
 
     [Theory]
     [MemberData(nameof(Routes))]

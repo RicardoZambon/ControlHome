@@ -15,17 +15,18 @@ public sealed class AuditLog(IControlHomeDb db, ICurrentActor actor, TimeProvide
     {
         ArgumentNullException.ThrowIfNull(auditEvent);
 
+        var who = auditEvent.Actor ?? AuditActorSnapshot.From(actor);
         db.AuditLog.Add(new AuditLogEntry
         {
             OccurredAtUtc = timeProvider.GetUtcNow(),
-            ActorType = actor.Type,
-            ActorId = actor.UserId?.ToString("D", CultureInfo.InvariantCulture),
-            ActorName = actor.UserName,
+            ActorType = who.Type,
+            ActorId = who.UserId?.ToString("D", CultureInfo.InvariantCulture),
+            ActorName = who.UserName,
             Action = auditEvent.Action,
             TargetType = auditEvent.TargetType,
             TargetId = auditEvent.TargetId,
             DetailsJson = auditEvent.Details is null ? null : JsonSerializer.Serialize(auditEvent.Details, auditEvent.Details.GetType(), _json),
-            IpAddress = actor.IpAddress,
+            IpAddress = who.IpAddress,
         });
 
         await db.SaveChangesAsync(cancellationToken);

@@ -27,6 +27,21 @@ public static class AuditActions
 
     public const string FileUploaded = "files.uploaded";
 
+    public const string IntegrationCreated = "integrations.created";
+    public const string IntegrationDeleted = "integrations.deleted";
+
+    public const string DeviceUpdated = "devices.updated";
+    public const string EndpointUpdated = "endpoints.updated";
+    public const string EndpointFavoriteChanged = "endpoints.favorite_changed";
+
+    /// <summary>A device command finished (outcome confirmed, failed, timed_out or superseded).</summary>
+    public const string CommandExecuted = "commands.executed";
+
+    public const string SafetyPinSet = "safety.pin.set";
+    public const string SafetyStepUpSucceeded = "safety.step_up.succeeded";
+    public const string SafetyStepUpFailed = "safety.step_up.failed";
+    public const string SafetyStepUpLocked = "safety.step_up.locked";
+
     public const string NetworkDenied = "security.network_denied";
     public const string HostDenied = "security.host_denied";
 }

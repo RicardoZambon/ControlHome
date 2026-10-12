@@ -4,7 +4,10 @@ using NetArchTest.Rules;
 
 namespace ControlHome.Architecture.Tests;
 
-/// <summary>Enforces the reference graph: Domain (no deps) ← Application ← Infrastructure ← Api.</summary>
+/// <summary>
+/// Enforces the reference graph: Domain (no deps) ← Application ← Infrastructure ← Api; Connectors.Abstractions → Domain;
+/// Connectors.&lt;Vendor&gt; → Connectors.Abstractions only.
+/// </summary>
 /// <remarks>
 /// Assemblies are inspected from disk (Mono.Cecil via <see cref="Types.FromFile"/>) instead of being loaded into the test
 /// process, so the rules never execute project code and are unaffected by OS code-integrity policies on dev machines.
@@ -15,7 +18,14 @@ public sealed class ReferenceRulesTests
     private const string Application = "ControlHome.Application";
     private const string Infrastructure = "ControlHome.Infrastructure";
     private const string Api = "ControlHome.Api";
+    private const string ConnectorsPrefix = "ControlHome.Connectors.";
+    private const string ConnectorsAbstractions = "ControlHome.Connectors.Abstractions";
+    private const string SimulatedConnector = "ControlHome.Connectors.Simulated";
     private const string FixturesNamespace = "ControlHome.Architecture.Tests.Fixtures";
+
+    /// <summary>What no connector assembly (the SDK included) may depend on: the application layers, EF Core, the web stack.</summary>
+    private static readonly string[] _connectorForbidden =
+        [Application, Infrastructure, Api, "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore"];
 
     /// <summary>
     /// The ASP.NET Core web stack Application must never touch. Application MAY use ASP.NET Core Identity's model
@@ -37,7 +47,69 @@ public sealed class ReferenceRulesTests
     [Fact]
     public void Domain_has_no_dependency_on_outer_layers_or_frameworks()
     {
-        AssertNoTypeDependencies(Domain, Application, Infrastructure, Api, "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore");
+        AssertNoTypeDependencies(
+            Domain,
+            Application,
+            Infrastructure,
+            Api,
+            "ControlHome.Connectors",
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.AspNetCore",
+            "Microsoft.Extensions");
+    }
+
+    [Fact]
+    public void Connectors_Abstractions_depends_on_Domain_only()
+    {
+        AssertNoTypeDependencies(ConnectorsAbstractions, [.. _connectorForbidden, SimulatedConnector]);
+    }
+
+    [Theory]
+    [InlineData(SimulatedConnector)]
+    public void Connector_assemblies_never_depend_on_Application_Infrastructure_or_Api(string connector)
+    {
+        AssertNoTypeDependencies(connector, _connectorForbidden);
+    }
+
+    [Fact]
+    public void Connector_rule_rejects_a_connector_that_uses_the_application_layer()
+    {
+        // Guard against a vacuous pass: the Api depends on Application, so the same rule must fail for it.
+        var result = Types.FromFile(AssemblyPath(Api)).ShouldNot().HaveDependencyOnAny(_connectorForbidden).GetResult();
+
+        result.IsSuccessful.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Connectors_Abstractions_project_references_only_Domain()
+    {
+        var project = LoadProject(ConnectorsAbstractions);
+
+        ProjectReferenceNames(project).ShouldBe([Domain]);
+        ItemIncludes(project, "FrameworkReference").ShouldBeEmpty();
+        ItemIncludes(project, "PackageReference").ShouldNotContain(
+            p => p.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal) || p.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Every_connector_project_references_only_Connectors_Abstractions()
+    {
+        var connectors = Directory.GetDirectories(Path.Combine(FindRepositoryRoot(), "src"), ConnectorsPrefix + "*")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .Where(name => name != ConnectorsAbstractions)
+            .ToList();
+
+        connectors.ShouldContain(SimulatedConnector);
+        foreach (var connector in connectors)
+        {
+            var project = LoadProject(connector);
+            ProjectReferenceNames(project).ShouldBe([ConnectorsAbstractions], connector);
+            ItemIncludes(project, "FrameworkReference").ShouldBeEmpty(connector);
+            ItemIncludes(project, "PackageReference").ShouldNotContain(
+                p => p.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal) || p.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal),
+                connector);
+        }
     }
 
     [Fact]
@@ -117,16 +189,17 @@ public sealed class ReferenceRulesTests
     }
 
     [Theory]
-    [InlineData(Application, new[] { Infrastructure, Api })]
-    [InlineData(Infrastructure, new[] { Api })]
+    [InlineData(Application, new[] { Infrastructure, Api, SimulatedConnector })]
+    [InlineData(Infrastructure, new[] { Api, SimulatedConnector })]
     public void Project_does_not_reference_outer_layers(string projectName, string[] forbidden)
     {
-        var referenced = ItemIncludes(LoadProject(projectName), "ProjectReference")
-            .Select(include => Path.GetFileNameWithoutExtension(include))
-            .ToArray();
+        var referenced = ProjectReferenceNames(LoadProject(projectName));
 
         referenced.ShouldNotContain(r => forbidden.Contains(r), $"{projectName} references [{string.Join(", ", referenced)}]");
     }
+
+    private static string[] ProjectReferenceNames(XDocument project) =>
+        ItemIncludes(project, "ProjectReference").Select(include => Path.GetFileNameWithoutExtension(include)).ToArray();
 
     private static void AssertNoTypeDependencies(string assemblyName, params string[] forbidden)
     {
