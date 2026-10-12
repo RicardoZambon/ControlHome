@@ -1,0 +1,35 @@
+{
+  "name": "@controlhome/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles/index.css",
+    "./components/*.vue": "./src/components/*.vue",
+    "./components/*": "./src/components/*/index.ts",
+    "./lib/*": "./src/lib/*.ts"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc -b"
+  },
+  "dependencies": {
+    "@lucide/vue": "1.49.0",
+    "@vueuse/core": "14.4.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "tailwind-merge": "3.7.0"
+  },
+  "peerDependencies": {
+    "reka-ui": "^2.11.0",
+    "tailwindcss": "^4.3.3",
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "reka-ui": "2.11.0",
+    "vue": "3.5.43"
+  }
+}

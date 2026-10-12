@@ -1,0 +1,127 @@
+/*
+ * ControlHome design tokens: the only file in the repository that defines colors.
+ *
+ * - Values are OKLCH inside the sRGB gamut, so every browser renders the same color.
+ * - `:root` is the light theme, `.dark` (set on <html>) is the dark theme.
+ * - Every `--x` / `--x-foreground` pair reaches WCAG AA (>= 4.5:1). Primary, destructive and the device
+ *   states also reach >= 3:1 against the page and card surfaces, so they work as icon and border colors.
+ *   `--input` and `--ring` reach >= 3:1 against the surfaces (WCAG 1.4.11 non-text contrast).
+ *   `tokens.test.ts` enforces all of this; run `npm test` after changing a value.
+ * - Components never use these variables directly: `theme.css` maps them to Tailwind utilities
+ *   (`bg-primary`, `text-state-on-foreground`, ...).
+ */
+
+:root {
+  color-scheme: light;
+
+  --radius: 0.75rem;
+
+  --black: oklch(0 0 0);
+  --white: oklch(1 0 0);
+
+  /* Surfaces: calm, slightly cool neutrals. */
+  --background: oklch(0.985 0.004 230);
+  --foreground: oklch(0.22 0.025 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.025 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.025 250);
+
+  /* Brand: deep teal. */
+  --primary: oklch(0.52 0.085 195);
+  --primary-foreground: oklch(0.985 0.005 195);
+  --secondary: oklch(0.955 0.008 230);
+  --secondary-foreground: oklch(0.27 0.03 250);
+  --muted: oklch(0.955 0.006 230);
+  --muted-foreground: oklch(0.48 0.02 250);
+  --accent: oklch(0.945 0.025 195);
+  --accent-foreground: oklch(0.32 0.05 205);
+  --destructive: oklch(0.55 0.2 27);
+  --destructive-foreground: oklch(0.985 0.005 27);
+
+  /* Lines and focus. */
+  --border: oklch(0.91 0.008 230);
+  --input: oklch(0.65 0.015 240);
+  --ring: oklch(0.55 0.09 195);
+
+  /* Navigation sidebar. */
+  --sidebar: oklch(0.97 0.005 230);
+  --sidebar-foreground: oklch(0.27 0.03 250);
+  --sidebar-primary: oklch(0.52 0.085 195);
+  --sidebar-primary-foreground: oklch(0.985 0.005 195);
+  --sidebar-accent: oklch(0.93 0.02 205);
+  --sidebar-accent-foreground: oklch(0.27 0.04 220);
+  --sidebar-border: oklch(0.9 0.008 230);
+  --sidebar-ring: oklch(0.55 0.09 195);
+
+  /* Device states. */
+  --state-on: oklch(0.53 0.135 150);
+  --state-on-foreground: oklch(0.985 0.005 150);
+  --state-off: oklch(0.55 0.008 250);
+  --state-off-foreground: oklch(0.985 0 0);
+  --state-offline: oklch(0.48 0.035 260);
+  --state-offline-foreground: oklch(0.985 0.005 260);
+  --state-warn: oklch(0.62 0.145 48);
+  --state-warn-foreground: oklch(0.2 0.04 50);
+  --state-energy: oklch(0.65 0.125 72);
+  --state-energy-foreground: oklch(0.22 0.05 65);
+  --state-danger: oklch(0.55 0.2 27);
+  --state-danger-foreground: oklch(0.985 0.005 27);
+  --state-info: oklch(0.52 0.13 250);
+  --state-info-foreground: oklch(0.985 0.005 250);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces: deep slate. */
+  --background: oklch(0.17 0.012 250);
+  --foreground: oklch(0.96 0.005 230);
+  --card: oklch(0.21 0.014 250);
+  --card-foreground: oklch(0.96 0.005 230);
+  --popover: oklch(0.23 0.015 250);
+  --popover-foreground: oklch(0.96 0.005 230);
+
+  /* Brand: bright teal on dark surfaces, dark text on brand fills. */
+  --primary: oklch(0.76 0.12 195);
+  --primary-foreground: oklch(0.2 0.035 215);
+  --secondary: oklch(0.28 0.015 250);
+  --secondary-foreground: oklch(0.96 0.005 230);
+  --muted: oklch(0.27 0.014 250);
+  --muted-foreground: oklch(0.72 0.015 240);
+  --accent: oklch(0.31 0.035 205);
+  --accent-foreground: oklch(0.95 0.02 195);
+  --destructive: oklch(0.68 0.18 25);
+  --destructive-foreground: oklch(0.18 0.03 25);
+
+  /* Lines and focus. */
+  --border: oklch(0.3 0.015 250);
+  --input: oklch(0.52 0.02 245);
+  --ring: oklch(0.72 0.115 195);
+
+  /* Navigation sidebar. */
+  --sidebar: oklch(0.195 0.013 250);
+  --sidebar-foreground: oklch(0.96 0.005 230);
+  --sidebar-primary: oklch(0.76 0.12 195);
+  --sidebar-primary-foreground: oklch(0.2 0.035 215);
+  --sidebar-accent: oklch(0.27 0.025 220);
+  --sidebar-accent-foreground: oklch(0.96 0.005 230);
+  --sidebar-border: oklch(0.28 0.015 250);
+  --sidebar-ring: oklch(0.72 0.115 195);
+
+  /* Device states: lighter fills with dark text. */
+  --state-on: oklch(0.74 0.15 150);
+  --state-on-foreground: oklch(0.2 0.04 150);
+  --state-off: oklch(0.7 0.005 250);
+  --state-off-foreground: oklch(0.18 0.01 250);
+  --state-offline: oklch(0.6 0.045 260);
+  --state-offline-foreground: oklch(0.14 0.01 260);
+  --state-warn: oklch(0.76 0.15 55);
+  --state-warn-foreground: oklch(0.2 0.04 50);
+  --state-energy: oklch(0.82 0.15 80);
+  --state-energy-foreground: oklch(0.22 0.05 70);
+  --state-danger: oklch(0.68 0.18 25);
+  --state-danger-foreground: oklch(0.18 0.03 25);
+  --state-info: oklch(0.72 0.12 250);
+  --state-info-foreground: oklch(0.18 0.03 250);
+}

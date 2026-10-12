@@ -1,0 +1,4 @@
+@import '@controlhome/ui/styles.css';
+
+/* Let Tailwind see the classes used by the design-system package (it lives outside this app). */
+@source '../../../../packages/ui/src';
