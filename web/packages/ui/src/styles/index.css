@@ -1,5 +1,12 @@
 /* Entry point of the design system: `@import '@controlhome/ui/styles.css'`. */
 @import 'tailwindcss';
+/* Enter/exit animations used by dialog, sheet, popover, select, dropdown-menu and tooltip (animate-in, fade-*, zoom-*, slide-*). */
+@import 'tw-animate-css';
+/*
+ * Toast styles (vue-sonner). In the components layer, so utilities win over its hard-coded colors and shadows;
+ * `components/ui/sonner/Sonner.vue` points its color variables at the tokens.
+ */
+@import 'vue-sonner/style.css' layer(components);
 @import './tokens.css';
 @import './theme.css';
 
@@ -7,7 +14,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
 
   body {
