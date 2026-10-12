@@ -6,6 +6,7 @@ using ControlHome.Api.Features.Testing;
 using ControlHome.Api.Features.Users;
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
+using ControlHome.Api.Security;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Setup;
 using ControlHome.Infrastructure;
@@ -35,6 +36,7 @@ try
     builder.Services.AddControlHomeIdentity();
     builder.Services.AddControlHomeRateLimiting();
     builder.Services.AddControlHomeValidation();
+    builder.Services.AddControlHomeRequestEdge();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddScoped<ICurrentActor, CurrentActor>();
     builder.Services.AddHealthChecks()
@@ -53,7 +55,7 @@ try
     }
 
     app.UseStatusCodePages();
-    // Task 0.2-B: app.UseControlHomeRequestEdge() goes here (origin/header checks, network allowlist, security headers).
+    app.UseControlHomeRequestEdge(); // forwarded headers, security headers, network allowlist, origin/header checks
     app.UseControlHomeSpaStaticFiles();
     app.UseRouting();
     app.UseMiddleware<DatabaseGateMiddleware>();
