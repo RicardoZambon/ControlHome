@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { getFloor, listFloors, type FloorDto, type FloorSummaryDto } from '@controlhome/api-client'
-import { Alert, AlertDescription, Button, Skeleton, cn } from '@controlhome/ui'
+import { Alert, AlertDescription, Button, Label, Skeleton, Switch, cn } from '@controlhome/ui'
 import { ArrowLeft, PencilRuler, RefreshCw } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import PageHeader from '../../../components/PageHeader.vue'
@@ -12,11 +12,15 @@ import { floorEyebrow, sortFloors, totalAreaM2 } from '../../../components/floor
 import { formatArea, roomAreaM2 } from '../../../components/floorplan/measure'
 import { roomColorClasses } from '../../../components/floorplan/roomColors'
 import { roomIcon } from '../../../components/floorplan/roomIcons'
+import { usePageTrail } from '../../../composables/usePageTrail'
 import { useProblem } from '../../../composables/useProblem'
 import { unwrap } from '../../../lib/problem'
 import { useSessionStore } from '../../../stores/session'
 
-/** A floor in view mode: the plan (pan, zoom, tap a room), its rooms, the other floors, and (Admin) the editor. */
+/**
+ * A floor in view mode: the plan (pan, zoom, tap a room), its rooms, the other floors, and (Admin) the editor. The
+ * traced plan image stays off unless asked for ("Show original plan"), and then faint.
+ */
 const { t, locale } = useI18n()
 const route = useRoute()
 const session = useSessionStore()
@@ -65,13 +69,22 @@ const summary = computed(() => {
     : count
 })
 
+usePageTrail(() =>
+  floor.value ? [{ label: t('floors.title'), to: { name: 'floors' } }, { label: floor.value.name }] : null,
+)
+
 const isLarge = useMediaQuery('(min-width: 1024px)')
+const isPhone = useMediaQuery('(max-width: 639px)')
 /** The plan box follows the floor's proportions on narrow screens (within reason). */
 const planAspect = computed(() => {
   const ratio = floor.value ? floor.value.widthCm / Math.max(floor.value.heightCm, 1) : 4 / 3
-  // A little taller than the floor itself: the dimension lines need room around it.
-  return Math.min(1.5, Math.max(0.8, ratio)) * 0.78
+  // A touch taller than the floor itself, for the padding around the sheet (phones show no dimension lines).
+  return Math.min(1.5, Math.max(0.8, ratio)) * 0.92
 })
+
+const originalId = useId()
+const showOriginal = ref(false)
+watch(floorId, () => (showOriginal.value = false))
 
 function toggleRoom(id: number): void {
   selectedRoomId.value = selectedRoomId.value === id ? null : id
@@ -80,9 +93,10 @@ function toggleRoom(id: number): void {
 
 <template>
   <div>
+    <!-- Phones: the top bar shows only the floor's name, so the way back to every floor is here. -->
     <RouterLink
       :to="{ name: 'floors' }"
-      class="mb-4 inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      class="mb-4 inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:hidden"
     >
       <ArrowLeft class="size-3.5" aria-hidden="true" />
       {{ t('floors.view.back') }}
@@ -100,13 +114,14 @@ function toggleRoom(id: number): void {
 
     <template v-else>
       <PageHeader
-        :eyebrow="floor ? floorEyebrow(floor, t) : undefined"
+        :eyebrow="(floor && floorEyebrow(floor, t)) || undefined"
         :title="floor?.name ?? t('floors.view.title')"
         :description="summary || undefined"
         class="pb-6 md:pb-8"
       >
+        <!-- Editing on a phone is the rarer task: a quiet button there, the plan comes first. -->
         <template v-if="session.isAdmin && floor" #actions>
-          <Button as-child class="max-sm:w-full">
+          <Button as-child :variant="isPhone ? 'outline' : 'default'" :size="isPhone ? 'sm' : 'default'">
             <RouterLink :to="{ name: 'floor-edit', params: { id: floor.id } }">
               <PencilRuler />
               {{ t('floors.editPlan') }}
@@ -136,7 +151,7 @@ function toggleRoom(id: number): void {
           "
         >
           <span class="font-medium">{{ entry.name }}</span>
-          <span class="text-xs">{{ floorEyebrow(entry, t) }}</span>
+          <span v-if="floorEyebrow(entry, t)" class="text-xs">{{ floorEyebrow(entry, t) }}</span>
         </RouterLink>
       </nav>
 
@@ -151,6 +166,7 @@ function toggleRoom(id: number): void {
             v-else-if="floor"
             class="size-full"
             :floor="floor"
+            :background-image="showOriginal ? 'shown' : 'auto'"
             :selected-room-id="selectedRoomId"
             @room-click="(room) => room.id && toggleRoom(room.id)"
             @background-click="selectedRoomId = null"
@@ -213,6 +229,15 @@ function toggleRoom(id: number): void {
               </button>
             </li>
           </ul>
+
+          <!-- The traced plan image, faintly under the rooms -->
+          <div
+            v-if="floor?.background"
+            class="mt-2 flex items-center justify-between gap-3 rounded-xl border bg-card px-3 py-2.5"
+          >
+            <Label :for="originalId" class="text-sm font-normal">{{ t('floors.view.showOriginal') }}</Label>
+            <Switch :id="originalId" v-model="showOriginal" />
+          </div>
         </section>
       </div>
     </template>

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { formatArea, formatLength, roomAreaM2 } from './measure'
+import { formatArea, formatDimensions, formatLength, roomAreaM2 } from './measure'
+
+describe('formatDimensions', () => {
+  it('width × depth in metres, as homeowners say it', () => {
+    expect(formatDimensions(900, 800, 'en')).toBe('9 × 8 m')
+    expect(formatDimensions(450, 325, 'en')).toBe('4.5 × 3.25 m')
+    expect(formatDimensions(450, 50, 'pt-BR')).toBe('4,5 × 0,5 m')
+  })
+})
 
 describe('formatLength', () => {
   it('centimetres below a metre, metres from there on', () => {

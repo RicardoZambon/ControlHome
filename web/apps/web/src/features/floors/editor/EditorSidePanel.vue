@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button, Tabs, TabsContent, TabsList, TabsTrigger, cn } from '@controlhome/ui'
-import { CircleAlert, Pentagon } from '@lucide/vue'
+import { CircleAlert, Pentagon, X } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import KeyHint from '../../../components/KeyHint.vue'
@@ -15,7 +15,8 @@ import { useEditor, type PanelTab } from './useEditorState'
 
 /**
  * The editor's side panel (a sheet below lg): Rooms (the list, or the selected room's properties), Floor (its
- * properties) and Background (the traced image). After a save attempt that found problems it lists them at the top.
+ * properties) and Image (the traced background image). After a save attempt that found problems it lists them at the
+ * top. A room row and the room on the plan highlight each other under the pointer.
  */
 const { t, locale } = useI18n()
 const state = useEditor()
@@ -108,28 +109,34 @@ function onTab(value: string | number): void {
 
       <TabsContent value="rooms" class="mt-0">
         <RoomPropertiesPanel v-if="state.selectedRoom.value" :key="state.selectedRoom.value.key" />
-        <section v-else class="grid gap-4" :aria-label="t('floors.editor.tabs.rooms')">
-          <div class="flex items-baseline justify-between gap-3">
-            <h2 class="font-serif text-lg font-medium">{{ t('floors.editor.tabs.rooms') }}</h2>
-            <span v-if="rooms.length > 0" class="text-sm text-muted-foreground tabular-nums">
-              {{ t('floors.roomCount', rooms.length) }} · {{ total }}
-            </span>
-          </div>
+        <section v-else class="grid gap-3" :aria-label="t('floors.editor.tabs.rooms')">
+          <p v-if="rooms.length > 0" class="text-sm text-muted-foreground tabular-nums">
+            {{ t('floors.roomCount', rooms.length) }} · {{ total }}
+          </p>
 
-          <ul v-if="rooms.length > 0" class="grid gap-1">
+          <ul v-if="rooms.length > 0" class="-mx-2 grid gap-0.5">
             <li v-for="room in rooms" :key="room.key">
               <button
                 type="button"
-                class="group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
+                :class="
+                  cn(
+                    'group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring',
+                    state.hoverRoomKey.value === room.key && 'bg-accent/60',
+                  )
+                "
                 @click="state.select(room.key)"
                 @pointerenter="state.hoverRoomKey.value = room.key"
                 @pointerleave="state.hoverRoomKey.value = null"
               >
-                <span
-                  :class="cn('flex size-9 shrink-0 items-center justify-center rounded-lg', room.colors.tint)"
-                  aria-hidden="true"
-                >
-                  <component :is="room.Icon" class="size-4" />
+                <!-- The room's color as it looks on the plan, with its icon -->
+                <span class="shrink-0 rounded-lg bg-card" aria-hidden="true">
+                  <span
+                    :class="
+                      cn('flex size-9 items-center justify-center rounded-lg border', room.colors.sample)
+                    "
+                  >
+                    <component :is="room.Icon" class="size-4" />
+                  </span>
                 </span>
                 <span class="grid min-w-0 flex-1">
                   <span class="truncate text-sm font-medium">
@@ -142,13 +149,24 @@ function onTab(value: string | number): void {
                   class="size-4 shrink-0 text-destructive"
                   :aria-label="t('floors.editor.rooms.invalid')"
                 />
-                <span :class="cn('size-2.5 shrink-0 rounded-full', room.colors.swatch)" aria-hidden="true" />
               </button>
             </li>
           </ul>
           <p v-else class="text-sm text-muted-foreground">{{ t('floors.editor.rooms.empty') }}</p>
 
-          <Button variant="outline" class="justify-between" @click="state.setTool('draw')">
+          <Button
+            v-if="state.tool.value === 'draw'"
+            variant="outline"
+            class="mt-1 justify-between"
+            @click="state.setTool('select')"
+          >
+            <span class="flex items-center gap-2">
+              <X />
+              {{ t('floors.editor.rooms.cancelDraw') }}
+            </span>
+            <KeyHint keys="Esc" />
+          </Button>
+          <Button v-else variant="outline" class="mt-1 justify-between" @click="state.setTool('draw')">
             <span class="flex items-center gap-2">
               <Pentagon />
               {{ t('floors.editor.rooms.draw') }}

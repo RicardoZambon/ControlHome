@@ -19,9 +19,9 @@ describe('floorEyebrow', () => {
         ? `Level ${String(params?.n)}`
         : key
 
-  it('is the level, unless the name already says it', () => {
+  it('is the friendly level, or nothing when the name already says it', () => {
     expect(floorEyebrow({ name: 'Térreo', level: 0 }, named)).toBe('Ground floor')
-    expect(floorEyebrow({ name: ' ground FLOOR ', level: 0 }, named)).toBe('Level 0')
+    expect(floorEyebrow({ name: ' ground FLOOR ', level: 0 }, named)).toBe('')
   })
 })
 

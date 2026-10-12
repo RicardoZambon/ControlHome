@@ -1,5 +1,5 @@
 import type { FloorBackgroundDto } from '@controlhome/api-client'
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import type { CanvasPointer, CanvasPointerHandler } from '../../../components/floorplan/FloorPlanCanvas.vue'
 import { areaCm2, type Point } from '../../../components/floorplan/geometry'
 import { moveBackground } from './tools/backgroundTool'
@@ -39,6 +39,8 @@ export interface EditorPointerOptions {
 /** Visible corner handles (radius, px) and how far around them a press grabs them. */
 export const HANDLE_RADIUS_PX = { fine: 5, coarse: 7 }
 const GRAB_RADIUS_PX = { fine: 10, coarse: 22 }
+/** While drawing, how close to the first corner (px) a click or tap closes the outline (drawn as the close target). */
+export const CLOSE_RADIUS_PX = { fine: 10, coarse: 24 }
 /** Walls shorter than this on screen get no midpoint handle (it would crowd the corners). */
 export const MIDPOINT_MIN_WALL_PX = 72
 
@@ -59,6 +61,19 @@ export function useEditorPointer(state: EditorState, options: EditorPointerOptio
   const scale = () => options.scale()
   const grab = () => (options.coarse() ? GRAB_RADIUS_PX.coarse : GRAB_RADIUS_PX.fine) / scale()
   const floor = () => state.draft.value.floor
+
+  // What the previous tool tracked (the drawing cursor, a snap marker, a hovered handle) means nothing to the next one.
+  // Synchronous: a tool used for a moment (Draw, then straight back to Select) still clears.
+  watch(
+    state.tool,
+    () => {
+      cursor.value = null
+      snapKind.value = null
+      hover.value = { kind: 'none' }
+      rectangle.value = null
+    },
+    { flush: 'sync' },
+  )
 
   function context(excludeKey: string | null, ownVertices: readonly Point[] = []) {
     return snapContext(state.rooms.value, { gridCm: floor().gridCm, excludeKey, ownVertices })
@@ -232,7 +247,8 @@ export function useEditorPointer(state: EditorState, options: EditorPointerOptio
       return
     }
     if (current?.kind !== 'draw') return
-    const result = addDrawPoint(state.drawing.value, current.start, grab())
+    const closeRadius = (options.coarse() ? CLOSE_RADIUS_PX.coarse : CLOSE_RADIUS_PX.fine) / scale()
+    const result = addDrawPoint(state.drawing.value, current.start, closeRadius)
     state.drawing.value = result.state
     if (result.closed) {
       state.addRoom(result.closed)

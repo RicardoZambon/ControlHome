@@ -508,11 +508,18 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
 - **`/dev/ui-kit`** (Admin only) renders every token and component for visual review.
 - **Floor-plan editor (SVG)** (1.1: `components/floorplan/*` shared, `features/floors/*`)
   - One `FloorPlanCanvas` for view and edit: viewBox in cm, pan (drag, middle mouse, one finger), zoom (wheel, pinch,
-    buttons), fit; rooms filled with their room token at reduced opacity and outlined in the solid token, labelled
-    with name and area; dashboard previews use it non-interactive (`FloorPreview`).
+    buttons), fit; rooms filled with their room token at reduced opacity (stronger on the dark theme) and outlined in
+    the solid token with screen-pixel strokes, labelled with name and area sized to the room on screen; the selected
+    room gets a focus-colored ring outside its outline; dashboard previews use it non-interactive (`FloorPreview`).
+  - The traced background image is a tracing aid: only the editor draws it; the view shows it on request ("Show
+    original plan", at most 15 % opacity) and previews never do.
   - Snapping (12 screen px) to the grid, own vertices, and other rooms' vertices and edges; closest wins, Alt disables.
-  - Tools: Select (move room, drag corner, wall midpoint or double-click adds a corner, Delete), Draw room (clicks or
-    a dragged rectangle), Calibrate, Background. Pure tool functions in `features/floors/editor/tools/*`.
+  - Tools: Select (move room, drag corner, wall midpoint or double-click adds a corner, Delete with an undo toast),
+    Draw room (clicks or a dragged rectangle; on touch screens Finish / Undo corner / Cancel buttons), plus the
+    background image's Calibrate and Move in the panel's Image tab. Rectangular rooms also take a typed width × depth
+    and position. Pure tool functions in `features/floors/editor/tools/*`.
+  - The editor is a focused task: on phones the bottom tab bar steps aside and the panel is a sheet that peeks out
+    below the plan.
   - Polygon validation (`geometry.ts` mirrors `PolygonMath` and `RoomPolygonRules` with the same tests) and
     undo/redo (`useCommandStack`, immutable snapshots) on a draft, which is saved or cancelled explicitly (leave guard).
     A save is `PUT /api/floors/{id}` (properties, background) and/or `PUT …/layout`, ordered so rooms fit both the old

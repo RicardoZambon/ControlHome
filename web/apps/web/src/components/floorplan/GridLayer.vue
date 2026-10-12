@@ -12,7 +12,7 @@ const props = defineProps<{
   gridCm: number
   /** Screen px per cm. */
   scale: number
-  /** Only the metre lines (dashboard-size previews, where the editor grid would be noise). */
+  /** Only faint metre lines (dashboard-size previews, where the editor grid would be noise). */
   minimal?: boolean
 }>()
 
@@ -53,7 +53,7 @@ const majorPath = computed(() => lines(steps.value.major, null))
     <path
       v-if="majorPath"
       :d="majorPath"
-      :class="minimal ? 'stroke-border' : 'stroke-muted-foreground/25'"
+      :class="minimal ? 'stroke-border/60' : 'stroke-muted-foreground/25'"
       stroke-width="1"
       vector-effect="non-scaling-stroke"
       shape-rendering="crispEdges"

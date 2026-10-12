@@ -63,12 +63,25 @@ function mergeErrors(a: DraftErrors, b: DraftErrors | null): DraftErrors {
   return { rooms, floor, count }
 }
 
+/** A room just deleted: its name, and an undo that works once and only while nothing else has changed. */
+export interface DeletedRoom {
+  name: string
+  undo: () => boolean
+}
+
+export interface EditorStateOptions {
+  /** "Room" in "Room 2", the name of a drawn room. */
+  roomBaseName: () => string
+  /** A room was deleted (by any part of the editor): the page offers to undo it. */
+  onRoomDeleted?: (deleted: DeletedRoom) => void
+}
+
 /**
  * Everything the floor-plan editor knows: the floor as the server has it, the draft being edited (with undo/redo), the
  * active tool and its in-progress state, the selection, validation and saving. Provided by the editor page and injected
  * by its parts (`useEditor()`).
  */
-export function useEditorState(options: { roomBaseName: () => string }) {
+export function useEditorState(options: EditorStateOptions) {
   const stack = useCommandStack<Draft>(EMPTY_DRAFT)
   const draft = stack.present
   const floorId = ref<number | null>(null)
@@ -128,6 +141,8 @@ export function useEditorState(options: { roomBaseName: () => string }) {
     tool.value = next
     drawing.value = emptyDraw()
     calibration.value = emptyCalibration()
+    // A highlight from the previous tool would stick (Draw highlights corners and walls, never whole rooms).
+    hoverRoomKey.value = null
     if (next === 'background' || next === 'calibrate') panelTab.value = 'background'
     if (next === 'draw') selection.value = { roomKey: null, vertex: null }
   }
@@ -169,12 +184,30 @@ export function useEditorState(options: { roomBaseName: () => string }) {
     )
   }
 
-  function deleteRoom(key: string): void {
+  /** Deletes a room (one undo step); `null` when there is no such room. */
+  function deleteRoom(key: string): DeletedRoom | null {
+    const room = draft.value.rooms.find((entry) => entry.key === key)
+    if (!room) return null
     stack.execute(
-      withRooms(draft.value.rooms.filter((room) => room.key !== key)),
+      withRooms(draft.value.rooms.filter((entry) => entry.key !== key)),
       'floors.editor.history.deleteRoom',
     )
     if (selection.value.roomKey === key) selection.value = { roomKey: null, vertex: null }
+    if (hoverRoomKey.value === key) hoverRoomKey.value = null
+    const after = draft.value
+    let used = false
+    const deleted: DeletedRoom = {
+      name: room.name,
+      undo: () => {
+        if (used || draft.value !== after) return false
+        used = true
+        stack.undo()
+        select(key)
+        return true
+      },
+    }
+    options.onRoomDeleted?.(deleted)
+    return deleted
   }
 
   function updateFloor(patch: Partial<DraftFloor>, mergeKey?: string): void {

@@ -12,8 +12,7 @@
   "level": {
     "ground": "Ground floor",
     "above": "Floor {n}",
-    "below": "Basement {n}",
-    "number": "Level {n}"
+    "below": "Basement {n}"
   },
   "empty": {
     "title": "Draw your first floor",
@@ -28,8 +27,8 @@
     "busy": "Deleting…"
   },
   "toast": {
-    "created": "{name} added. Draw its rooms now.",
-    "deleted": "{name} deleted.",
+    "created": "Floor “{name}” added. Draw its rooms now.",
+    "deleted": "Floor “{name}” deleted.",
     "saved": "Floor plan saved."
   },
   "validation": {
@@ -53,6 +52,7 @@
     "back": "All floors",
     "rooms": "Rooms",
     "switchFloor": "Floors",
+    "showOriginal": "Show original plan",
     "noRoomsTitle": "No rooms yet",
     "noRooms": "An admin can draw the rooms of this floor.",
     "noRoomsAdmin": "Open the editor to draw the rooms of this floor.",
@@ -60,11 +60,10 @@
     "drawRooms": "Draw rooms"
   },
   "editor": {
-    "title": "Edit floor plan",
-    "heading": "Editing {name}",
-    "back": "Back to {name}",
+    "title": "Edit plan",
+    "eyebrow": "Editing the plan",
     "unsaved": "Unsaved changes",
-    "saved": "All changes saved",
+    "clean": "No changes",
     "save": "Save",
     "saving": "Saving…",
     "saveFailed": "Couldn't save the floor plan.",
@@ -74,6 +73,7 @@
     "roomBase": "Room",
     "properties": "Properties",
     "propertiesDescription": "Rooms, floor and background image.",
+    "openPanel": "Show rooms and properties",
     "undo": "Undo",
     "redo": "Redo",
     "undoAction": "Undo: {action}",
@@ -82,26 +82,34 @@
     "tools": {
       "label": "Editing tools",
       "select": "Select and move",
+      "selectShort": "Select",
       "draw": "Draw room",
-      "calibrate": "Calibrate scale",
-      "background": "Background image"
+      "drawShort": "Draw room"
+    },
+    "drawing": {
+      "label": "Drawing a room",
+      "start": "Draw",
+      "finish": "Finish ({count} corners)",
+      "undoCorner": "Undo corner",
+      "cancel": "Cancel"
     },
     "hints": {
-      "select": "Click a room to select it and drag to move it. Drag a corner to reshape it, or a wall's middle dot to add one.",
+      "select": "Drag rooms and corners; a wall's middle dot adds a corner.",
       "selectShort": "Tap a room to select it.",
-      "draw": "Click to place corners; finish on the first corner or with Enter. Or drag to draw a rectangle. Alt places freely.",
-      "drawShort": "Tap to place corners; tap the first corner to finish.",
-      "drawNextShort": "{count} corners placed. Tap the first corner to finish; Undo takes one back.",
-      "drawNext": "{count} corners placed. Finish on the first corner or with Enter; Backspace takes one back, Esc cancels.",
-      "calibrate": "Click a point on the image whose distance to another point you know.",
+      "draw": "Click the corners, or drag a rectangle. Alt places freely.",
+      "drawShort": "Tap the corners; tap the first one to finish.",
+      "drawNextShort": "{count} corners. Tap the first one or Finish.",
+      "drawNext": "{count} corners · first corner or Enter finishes · Esc cancels",
+      "calibrate": "Click the first of two points a known distance apart.",
       "calibrateSecond": "Now click the second point.",
       "background": "Drag to move the image under the plan.",
-      "noBackground": "Upload a plan image in the Background panel first."
+      "noBackground": "Upload a plan image in the Image tab first."
     },
     "history": {
       "addRoom": "Add room",
       "deleteRoom": "Delete room",
       "moveRoom": "Move room",
+      "resizeRoom": "Resize room",
       "nudge": "Move room",
       "moveCorner": "Move corner",
       "addCorner": "Add corner",
@@ -120,7 +128,7 @@
     "tabs": {
       "rooms": "Rooms",
       "floor": "Floor",
-      "background": "Background"
+      "background": "Image"
     },
     "empty": {
       "title": "Draw your first room",
@@ -131,6 +139,7 @@
     "rooms": {
       "empty": "Draw the rooms of this floor; each gets a name, a color and an icon.",
       "draw": "Draw a room",
+      "cancelDraw": "Cancel drawing",
       "invalid": "Needs attention"
     },
     "room": {
@@ -139,13 +148,18 @@
       "untitled": "Untitled room",
       "name": "Name",
       "presets": "Quick names",
+      "size": "Size",
+      "width": "Width (m)",
+      "depth": "Depth (m)",
+      "fromLeft": "From left (m)",
+      "fromTop": "From top (m)",
       "color": "Color",
       "icon": "Icon",
-      "corners": "{count} corners",
-      "cornerSelected": "Corner {n} selected",
+      "cornerSelected": "Corner {n}",
       "removeCorner": "Remove corner",
       "minCorners": "A room needs at least 3 corners.",
-      "delete": "Delete room"
+      "delete": "Delete room",
+      "deleted": "Room “{name}” deleted."
     },
     "presets": {
       "living": "Living room",
@@ -155,7 +169,7 @@
       "office": "Office",
       "dining": "Dining room",
       "laundry": "Laundry",
-      "hall": "Hall",
+      "hall": "Entrance",
       "garage": "Garage",
       "garden": "Garden"
     },
@@ -198,7 +212,7 @@
     },
     "background": {
       "title": "Background image",
-      "description": "Trace your rooms over a scan or a photo of the floor plan. It shows faintly under the rooms.",
+      "description": "Trace your rooms over a scan or a photo of the floor plan. It shows faintly under the rooms while you edit.",
       "upload": "Upload a plan image",
       "replace": "Replace image",
       "uploading": "Uploading…",

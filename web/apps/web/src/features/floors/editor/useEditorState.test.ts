@@ -226,4 +226,36 @@ describe('useEditorState', () => {
     expect(state.tool.value).toBe('draw')
     expect(state.selection.value.roomKey).toBeNull()
   })
+
+  it('a new tool forgets the hovered room (Draw never highlights whole rooms)', () => {
+    const state = editor()
+    state.hoverRoomKey.value = state.draft.value.rooms[0]!.key
+    state.setTool('draw')
+    expect(state.hoverRoomKey.value).toBeNull()
+  })
+
+  it('deleting a room hands back its name and a one-shot undo', () => {
+    const state = editor()
+    const key = state.draft.value.rooms[0]!.key
+    state.select(key)
+    const deleted = state.deleteRoom(key)
+    expect(deleted?.name).toBe('Living')
+    expect(state.rooms.value).toHaveLength(0)
+    expect(deleted!.undo()).toBe(true)
+    expect(state.rooms.value.map((room) => room.name)).toEqual(['Living'])
+    expect(state.selection.value.roomKey).toBe(key)
+    // Only once: the room is back.
+    expect(deleted!.undo()).toBe(false)
+    expect(state.rooms.value).toHaveLength(1)
+  })
+
+  it("the delete's undo does nothing once something else was edited", () => {
+    const state = editor()
+    const other = state.addRoom(square(500, 0, 300))
+    const deleted = state.deleteRoom(state.draft.value.rooms[0]!.key)
+    state.updateRoom(other, { name: 'Office' }, 'rename')
+    expect(deleted!.undo()).toBe(false)
+    expect(state.rooms.value.map((room) => room.name)).toEqual(['Office'])
+    expect(state.deleteRoom('no-such-room')).toBeNull()
+  })
 })

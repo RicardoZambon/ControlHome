@@ -63,6 +63,11 @@ const props = withDefaults(
     interactive?: boolean
     /** Dashboard-size: smaller labels and padding, no rulers or controls. */
     compact?: boolean
+    /**
+     * The traced background image. It is a tracing aid, so `auto` shows it only in the editor (not in view mode or
+     * previews); `shown` shows it in view mode too, capped at 15 % opacity (the view page's "Show original plan").
+     */
+    backgroundImage?: 'auto' | 'shown' | 'hidden'
     handler?: CanvasPointerHandler
     /** A drag that no tool takes pans the plan. */
     panOnDrag?: boolean
@@ -73,7 +78,7 @@ const props = withDefaults(
     cursorClass?: string
     class?: HTMLAttributes['class']
   }>(),
-  { mode: 'view', interactive: true, panOnDrag: true, focusableRooms: true },
+  { mode: 'view', interactive: true, panOnDrag: true, focusableRooms: true, backgroundImage: 'auto' },
 )
 
 const emit = defineEmits<{
@@ -90,14 +95,24 @@ defineSlots<{
 
 const { t, locale } = useI18n()
 const patternId = `floorplan-dots-${useId()}`
+const ringClipId = `floorplan-ring-${useId()}`
+
+/** Below this width (px) the canvas is phone-size: zoom buttons in a row, and the view drops the dimension lines. */
+const NARROW_PX = 560
 
 const container = ref<HTMLElement | null>(null)
 const content = computed(() => ({ x: 0, y: 0, width: props.floor.widthCm, height: props.floor.heightCm }))
-// Room for the dimension lines around the sheet (less on phones, where every pixel of plan counts).
+// Room for the dimension lines around the sheet (less on phones, where every pixel of plan counts; the view drops the
+// lines on phones, where the scale bar is enough).
 const panZoom = usePanZoom({
   container,
   content,
-  padding: () => (props.compact ? 10 : (container.value?.clientWidth ?? 1000) < 480 ? 34 : 44),
+  padding: () => {
+    if (props.compact) return 10
+    const width = container.value?.clientWidth ?? 1000
+    if (props.mode === 'view' && width < NARROW_PX) return 14
+    return width < 480 ? 34 : 44
+  },
 })
 const { viewBox, scale } = panZoom
 
@@ -233,6 +248,15 @@ function onPointerLeave(): void {
   if (gesture === 'none') props.handler?.leave?.()
 }
 
+/**
+ * The canvas works on pointer events only. After a tap the browser would also send the compatibility mouse events and
+ * a click to whatever is under the finger by then, such as a dialog the tap just opened (the calibration's), and
+ * press its button. Cancelling the touch's end drops them.
+ */
+function onTouchEnd(event: TouchEvent): void {
+  if ((props.interactive || props.handler) && event.cancelable) event.preventDefault()
+}
+
 function onDblclick(event: MouseEvent): void {
   props.handler?.dblclick?.(pointerOf(event))
 }
@@ -248,6 +272,28 @@ function onWheel(event: WheelEvent): void {
 
 const hovered = computed(() => props.hoverRoomId ?? ownHover.value)
 
+// --- Background, selection ------------------------------------------------------------------------------------------
+const backgroundVisible = computed(() => {
+  if (!props.floor.background || props.backgroundImage === 'hidden') return false
+  if (props.backgroundImage === 'shown') return true
+  return props.mode === 'edit' && !props.compact
+})
+
+const pointsOf = (polygon: readonly Point[]) => polygon.map((p) => `${p.x},${p.y}`).join(' ')
+
+/**
+ * The selected room's outline: a 2 px ring in the focus color just outside the room's own stroke, drawn above every
+ * room (clipped to the outside of the room, so the fill and the label stay as they are).
+ */
+const selectedRoom = computed(() => props.floor.rooms.find((room) => same(props.selectedRoomId, keyOf(room))))
+const ringClipPath = computed(() => {
+  const room = selectedRoom.value
+  if (!room || room.polygon.length < 3) return ''
+  const { x, y, width, height } = viewBox.value
+  const outline = room.polygon.map((p, index) => `${index === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join('')
+  return `M${x} ${y}h${width}v${height}h${-width}Z${outline}Z`
+})
+
 // --- Rulers and scale bar ------------------------------------------------------------------------------------------
 const widthLabel = computed(() => formatLength(props.floor.widthCm, locale.value))
 const heightLabel = computed(() => formatLength(props.floor.heightCm, locale.value))
@@ -259,8 +305,10 @@ const zoomIn = () => panZoom.zoomBy(1.25)
 const zoomOut = () => panZoom.zoomBy(0.8)
 const fit = () => panZoom.fit()
 
-/** A phone-size canvas: the zoom buttons go in a row along the bottom, where they cover less of the plan. */
-const narrow = computed(() => panZoom.size.value.width > 0 && panZoom.size.value.width < 560)
+/** A phone-size canvas. */
+const narrow = computed(() => panZoom.size.value.width > 0 && panZoom.size.value.width < NARROW_PX)
+/** Dimension lines around the sheet: not on previews, nor on a phone-size view (the scale bar is enough there). */
+const rulers = computed(() => !props.compact && !(props.mode === 'view' && narrow.value))
 
 const zoomControls = computed(() => [
   { label: t('floorplan.zoomIn'), icon: Plus, key: '+', run: zoomIn },
@@ -302,6 +350,7 @@ const ariaLabel = computed(() =>
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @pointerleave="onPointerLeave"
+      @touchend="onTouchEnd"
       @dblclick="onDblclick"
       @wheel="onWheel"
       @contextmenu.prevent
@@ -331,8 +380,9 @@ const ariaLabel = computed(() =>
         class="pointer-events-none fill-card drop-shadow-md"
       />
       <BackgroundLayer
-        v-if="floor.background"
+        v-if="floor.background && backgroundVisible"
         :background="floor.background"
+        :max-opacity="mode === 'edit' ? undefined : 0.15"
         @loaded="emit('background-loaded', $event)"
       />
       <GridLayer
@@ -353,7 +403,7 @@ const ariaLabel = computed(() =>
       />
 
       <!-- Dimension lines, like on a drawing -->
-      <g v-if="!compact" class="pointer-events-none" aria-hidden="true">
+      <g v-if="rulers" class="pointer-events-none" aria-hidden="true">
         <g class="stroke-muted-foreground/60" :stroke-width="px(1)">
           <path
             :d="`M0 ${-px(22)}H${floor.widthCm}M0 ${-px(28)}V${-px(16)}M${floor.widthCm} ${-px(28)}V${-px(16)}`"
@@ -399,8 +449,25 @@ const ariaLabel = computed(() =>
           :invalid="invalid.has(keyOf(room))"
           :focusable="focusableRooms && !compact"
           :compact="compact"
+          :underlay="mode === 'view' && !backgroundVisible"
           class="pointer-events-none"
           @activate="emit('room-click', room, keyOf(room))"
+        />
+      </g>
+
+      <!-- The selected room: a ring just outside its outline, above every room -->
+      <g v-if="selectedRoom && ringClipPath" class="pointer-events-none" aria-hidden="true">
+        <clipPath :id="ringClipId" clipPathUnits="userSpaceOnUse">
+          <path :d="ringClipPath" clip-rule="evenodd" />
+        </clipPath>
+        <polygon
+          :points="pointsOf(selectedRoom.polygon)"
+          fill="none"
+          class="stroke-ring"
+          stroke-width="5.5"
+          stroke-linejoin="round"
+          vector-effect="non-scaling-stroke"
+          :clip-path="`url(#${ringClipId})`"
         />
       </g>
 
@@ -422,29 +489,24 @@ const ariaLabel = computed(() =>
         />
       </div>
 
-      <!-- Zoom -->
+      <!-- Zoom: a row along the bottom edge, level with the scale bar -->
       <div
         v-if="interactive"
-        :class="
-          cn(
-            'absolute right-3 bottom-3 flex overflow-hidden rounded-lg border bg-background/90 shadow-sm backdrop-blur-sm',
-            narrow ? 'flex-row' : 'flex-col',
-          )
-        "
+        class="absolute right-3 bottom-3 flex overflow-hidden rounded-lg border bg-background/90 shadow-sm backdrop-blur-sm"
       >
         <Tooltip v-for="(control, index) in zoomControls" :key="control.label">
           <TooltipTrigger as-child>
             <Button
               variant="ghost"
               size="icon-sm"
-              :class="cn('rounded-none', index === 1 && (narrow ? 'border-x' : 'border-y'))"
+              :class="cn('rounded-none', index === 1 && 'border-x')"
               :aria-label="control.label"
               @click="control.run"
             >
               <component :is="control.icon" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent :side="narrow ? 'top' : 'left'" class="flex items-center gap-2">
+          <TooltipContent side="top" class="flex items-center gap-2">
             {{ control.label }}
             <KeyHint v-if="mode === 'edit'" :keys="[control.key]" />
           </TooltipContent>

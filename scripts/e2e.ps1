@@ -44,8 +44,10 @@
     ./scripts/e2e.ps1 -Screenshots
     ./scripts/e2e.ps1 -NoBuild --project desktop --grep "last admin"
     ./scripts/e2e.ps1 -PreDb -NoBuild
+    ./scripts/e2e.ps1 -NoBuild floorplan-edit.spec.ts
 #>
-[CmdletBinding()]
+# No positional parameters: every bare argument (a spec file, --project, --grep) goes to Playwright, never to -SetupCode.
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [switch] $Screenshots,
     [switch] $NoBuild,

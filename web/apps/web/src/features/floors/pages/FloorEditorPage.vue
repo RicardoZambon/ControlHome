@@ -18,7 +18,7 @@ import {
   cn,
   toast,
 } from '@controlhome/ui'
-import { ArrowLeft, ImageUp, Pentagon, RefreshCw, SlidersHorizontal, Trash2 } from '@lucide/vue'
+import { Check, ChevronUp, ImageUp, Layers, Pentagon, RefreshCw, Undo2, X } from '@lucide/vue'
 import { useEventListener, useMediaQuery } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -33,8 +33,10 @@ import {
 import KeyHint from '../../../components/KeyHint.vue'
 import FloorPlanCanvas from '../../../components/floorplan/FloorPlanCanvas.vue'
 import type { Point } from '../../../components/floorplan/geometry'
-import { formatArea, formatLength, roomAreaM2 } from '../../../components/floorplan/measure'
+import { formatArea, formatDimensions, formatLength, roomAreaM2 } from '../../../components/floorplan/measure'
 import { roomColorClasses } from '../../../components/floorplan/roomColors'
+import { roomIcon } from '../../../components/floorplan/roomIcons'
+import { usePageTrail } from '../../../composables/usePageTrail'
 import { useProblem } from '../../../composables/useProblem'
 import { unwrap } from '../../../lib/problem'
 import CalibrationDialog from '../editor/CalibrationDialog.vue'
@@ -43,21 +45,31 @@ import EditorSidePanel from '../editor/EditorSidePanel.vue'
 import EditorToolbar from '../editor/EditorToolbar.vue'
 import { commandFor, isTypingTarget } from '../editor/shortcuts'
 import { calibrateBackground } from '../editor/tools/calibrateTool'
-import { removeLastDrawPoint } from '../editor/tools/drawTool'
+import { sizeOf } from '../editor/tools/dimensions'
+import { canCloseDraw, removeLastDrawPoint } from '../editor/tools/drawTool'
 import { clampMove, removeVertex, translatePolygon } from '../editor/tools/selectTool'
 import { useEditorPointer } from '../editor/useEditorPointer'
-import { provideEditor, useEditorState } from '../editor/useEditorState'
+import { provideEditor, useEditorState, type DeletedRoom } from '../editor/useEditorState'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const problem = useProblem()
 
-const state = useEditorState({ roomBaseName: () => t('floors.editor.roomBase') })
+/** Every deleted room (Delete key, the panel) gets a toast that can bring it back. */
+function offerUndo(deleted: DeletedRoom): void {
+  toast(t('floors.editor.room.deleted', { name: deleted.name.trim() || t('floors.editor.room.untitled') }), {
+    action: { label: t('floors.editor.undo'), onClick: () => void deleted.undo() },
+  })
+}
+
+const state = useEditorState({ roomBaseName: () => t('floors.editor.roomBase'), onRoomDeleted: offerUndo })
 provideEditor(state)
 
 const isLarge = useMediaQuery('(min-width: 1024px)')
 const coarse = useMediaQuery('(pointer: coarse)')
+/** Touch screens, and phone-size windows: bigger handles, tap wording, on-screen drawing actions. */
+const touchUi = computed(() => coarse.value || !isLarge.value)
 const mod = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
 
 // --- Loading ----------------------------------------------------------------------------------------------------------
@@ -81,6 +93,16 @@ watch(floorId, load, { immediate: true })
 const viewRoute = computed<RouteLocationRaw>(() => ({ name: 'floor', params: { id: floorId.value } }))
 const floorName = computed(() => state.server.value?.name ?? '')
 
+usePageTrail(() =>
+  floorName.value
+    ? [
+        { label: t('floors.title'), to: { name: 'floors' } },
+        { label: floorName.value, to: viewRoute.value },
+        { label: t('floors.editor.title') },
+      ]
+    : null,
+)
+
 // --- Canvas and pointer -------------------------------------------------------------------------------------------------
 const canvas = ref<InstanceType<typeof FloorPlanCanvas> | null>(null)
 const spaceDown = ref(false)
@@ -90,7 +112,7 @@ const calibrationError = ref('')
 
 const pointer = useEditorPointer(state, {
   scale: () => canvas.value?.scale ?? 1,
-  coarse: () => coarse.value,
+  coarse: () => touchUi.value,
   onCalibrationPoints: (a, b) => {
     calibrationPoints.value = { a, b }
     calibrationError.value = ''
@@ -145,8 +167,10 @@ const hint = computed(() => {
   switch (state.tool.value) {
     case 'draw': {
       const count = state.drawing.value.points.length
-      if (count === 0) return t(coarse.value ? 'floors.editor.hints.drawShort' : 'floors.editor.hints.draw')
-      return t(coarse.value ? 'floors.editor.hints.drawNextShort' : 'floors.editor.hints.drawNext', { count })
+      if (count === 0) return t(touchUi.value ? 'floors.editor.hints.drawShort' : 'floors.editor.hints.draw')
+      return t(touchUi.value ? 'floors.editor.hints.drawNextShort' : 'floors.editor.hints.drawNext', {
+        count,
+      })
     }
     case 'calibrate':
       return state.calibration.value.a
@@ -157,12 +181,13 @@ const hint = computed(() => {
         ? t('floors.editor.hints.background')
         : t('floors.editor.hints.noBackground')
     default:
-      return t(coarse.value ? 'floors.editor.hints.selectShort' : 'floors.editor.hints.select')
+      return t(touchUi.value ? 'floors.editor.hints.selectShort' : 'floors.editor.hints.select')
   }
 })
+/** Where the pointer is, while placing points (drawing, calibrating). */
 const coordinates = computed(() => {
   const cursor = pointer.cursor.value
-  if (!cursor) return ''
+  if (!cursor || (state.tool.value !== 'draw' && state.tool.value !== 'calibrate')) return ''
   const metres = (cm: number) =>
     new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
       cm / 100,
@@ -173,6 +198,24 @@ const coordinates = computed(() => {
 const showEmpty = computed(
   () => !loading.value && state.rooms.value.length === 0 && state.tool.value === 'select',
 )
+
+// --- Drawing on a touch screen: Finish, Undo corner, Cancel ---------------------------------------------------------
+const drawing = computed(() => state.tool.value === 'draw')
+const corners = computed(() => state.drawing.value.points.length)
+const canFinish = computed(() => canCloseDraw(state.drawing.value))
+
+function finishDrawing(): void {
+  pointer.finishDrawing()
+}
+
+function undoCorner(): void {
+  state.drawing.value = removeLastDrawPoint(state.drawing.value)
+}
+
+function cancelDrawing(): void {
+  pointer.cancelTool()
+  state.setTool('select')
+}
 
 // --- Side panel / sheet ----------------------------------------------------------------------------------------------
 const sheetOpen = ref(false)
@@ -185,16 +228,28 @@ function traceImage(): void {
   if (!isLarge.value) sheetOpen.value = true
 }
 
-const selected = computed(() => state.selectedRoom.value)
-const selectedArea = computed(() =>
-  selected.value ? formatArea(roomAreaM2(selected.value.polygon), locale.value) : '',
-)
+const selected = computed(() => (state.tool.value === 'select' ? state.selectedRoom.value : null))
+const selectedSummary = computed(() => {
+  const room = selected.value
+  if (!room) return ''
+  const size = sizeOf(room.polygon)
+  return `${formatArea(roomAreaM2(room.polygon), locale.value)} · ${formatDimensions(size.width, size.height, locale.value)}`
+})
+const floorSummary = computed(() => {
+  const rooms = state.rooms.value
+  const count = t('floors.roomCount', rooms.length)
+  if (rooms.length === 0) return count
+  const total = rooms.reduce((sum, room) => sum + roomAreaM2(room.polygon), 0)
+  return `${count} · ${formatArea(total, locale.value)}`
+})
 
 // --- Saving, leaving --------------------------------------------------------------------------------------------------
 const conflictOpen = ref(false)
 const leaveOpen = ref(false)
 let pendingLeave: RouteLocationRaw | null = null
 let allowLeave = false
+
+const dirty = computed(() => !loading.value && !loadError.value && state.isDirty.value)
 
 async function save(): Promise<void> {
   const outcome = await state.save()
@@ -274,7 +329,7 @@ const activatesWithKey = (target: EventTarget | null) =>
 
 function deleteSelection(): void {
   if (state.tool.value === 'draw' && state.drawing.value.points.length > 0) {
-    state.drawing.value = removeLastDrawPoint(state.drawing.value)
+    undoCorner()
     return
   }
   const room = state.selectedRoom.value
@@ -374,25 +429,14 @@ useEventListener(window, 'blur', () => (spaceDown.value = false))
 
 <template>
   <div
-    class="flex h-[calc(100dvh-8.25rem-env(safe-area-inset-bottom))] min-h-[32rem] flex-col gap-3 md:h-[calc(100dvh-6.25rem)]"
+    class="flex h-[calc(100dvh-5rem-env(safe-area-inset-bottom))] min-h-[32rem] flex-col gap-3 md:h-[calc(100dvh-6.25rem)]"
   >
-    <!-- Header: where we are, save state, Cancel / Save -->
+    <!-- Header: the floor, its save state, Cancel / Save -->
     <header class="flex flex-wrap items-end gap-x-4 gap-y-2">
-      <div class="min-w-0 flex-1">
-        <RouterLink
-          :to="viewRoute"
-          class="inline-flex items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft class="size-3.5" aria-hidden="true" />
-          {{ floorName ? t('floors.editor.back', { name: floorName }) : t('floors.view.back') }}
-        </RouterLink>
+      <div class="grid min-w-0 flex-1 gap-1">
+        <p class="eyebrow">{{ t('floors.editor.eyebrow') }}</p>
         <h1 class="truncate font-serif text-2xl font-medium tracking-tight md:text-3xl">
-          <template v-if="floorName">
-            <!-- Phones: the floor's name is enough next to Cancel and Save. -->
-            <span class="sm:hidden">{{ floorName }}</span>
-            <span class="hidden sm:inline">{{ t('floors.editor.heading', { name: floorName }) }}</span>
-          </template>
-          <template v-else>{{ t('floors.editor.title') }}</template>
+          {{ floorName || t('floors.editor.title') }}
         </h1>
       </div>
       <div class="flex items-center gap-2">
@@ -400,19 +444,30 @@ useEventListener(window, 'blur', () => (spaceDown.value = false))
           v-if="!loading && !loadError"
           class="mr-1 hidden items-center gap-2 text-sm text-muted-foreground sm:flex"
           aria-live="polite"
+          data-testid="save-state"
         >
-          <span
-            :class="cn('size-2 rounded-full', state.isDirty.value ? 'bg-state-warn' : 'bg-state-on')"
-            aria-hidden="true"
-          />
-          {{ state.isDirty.value ? t('floors.editor.unsaved') : t('floors.editor.saved') }}
+          <span v-if="dirty" class="size-2 rounded-full bg-state-warn" aria-hidden="true" />
+          {{ dirty ? t('floors.editor.unsaved') : t('floors.editor.clean') }}
         </span>
         <Button variant="outline" :disabled="state.saving.value" @click="cancel">
           {{ t('common.cancel') }}
         </Button>
-        <Button :loading="state.saving.value" :disabled="loading || !!loadError" @click="save">
+        <Button
+          class="relative"
+          :loading="state.saving.value"
+          :disabled="loading || !!loadError || (!dirty && !state.saving.value)"
+          @click="save"
+        >
           {{ state.saving.value ? t('floors.editor.saving') : t('floors.editor.save') }}
           <KeyHint :keys="`${mod}+S`" class="ml-1 hidden lg:inline-flex" />
+          <!-- Phones have no room for the status: a dot on Save says there is something to save. -->
+          <template v-if="dirty">
+            <span
+              class="absolute -top-1 -right-1 size-3 rounded-full bg-state-warn ring-2 ring-background sm:hidden"
+              aria-hidden="true"
+            />
+            <span class="sr-only sm:hidden">({{ t('floors.editor.unsaved') }})</span>
+          </template>
         </Button>
       </div>
     </header>
@@ -432,123 +487,206 @@ useEventListener(window, 'blur', () => (spaceDown.value = false))
 
     <Skeleton v-else-if="loading" class="flex-1 rounded-2xl" />
 
-    <div v-else class="flex min-h-0 flex-1 gap-3">
-      <div
-        class="relative -mx-3 min-w-0 flex-1 overflow-hidden border-y shadow-sm sm:mx-0 sm:rounded-2xl sm:border"
-      >
-        <FloorPlanCanvas
-          ref="canvas"
-          class="size-full"
-          mode="edit"
-          :floor="plan"
-          :selected-room-id="state.tool.value === 'select' ? state.selection.value.roomKey : null"
-          :hover-room-id="state.hoverRoomKey.value"
-          :invalid-room-ids="state.invalidRoomKeys.value"
-          :handler="pointer.handler"
-          :force-pan="spaceDown"
-          :cursor-class="spaceDown ? 'cursor-grab' : pointer.cursorClass.value"
-          @background-loaded="state.backgroundSize.value = $event"
-          @room-click="(_room, key) => state.select(key)"
+    <template v-else>
+      <div class="flex min-h-0 flex-1 gap-3">
+        <div
+          class="relative -mx-3 min-w-0 flex-1 overflow-hidden border-y shadow-sm sm:mx-0 sm:rounded-2xl sm:border"
         >
-          <template #overlay="{ scale }">
-            <EditorOverlay :scale="scale" :pointer="pointer" :coarse="coarse" />
-          </template>
-          <template #controls>
-            <div
-              class="pointer-events-none absolute inset-x-2 top-2 flex flex-col items-start gap-2 sm:inset-x-3 sm:top-3"
-            >
-              <div class="pointer-events-auto max-w-full">
-                <EditorToolbar :show-properties="!isLarge" @properties="sheetOpen = true" />
+          <FloorPlanCanvas
+            ref="canvas"
+            class="size-full"
+            mode="edit"
+            :floor="plan"
+            :selected-room-id="state.tool.value === 'select' ? state.selection.value.roomKey : null"
+            :hover-room-id="state.tool.value === 'select' ? state.hoverRoomKey.value : null"
+            :invalid-room-ids="state.invalidRoomKeys.value"
+            :handler="pointer.handler"
+            :force-pan="spaceDown"
+            :cursor-class="spaceDown ? 'cursor-grab' : pointer.cursorClass.value"
+            @background-loaded="state.backgroundSize.value = $event"
+            @room-click="(_room, key) => state.select(key)"
+          >
+            <template #overlay="{ scale }">
+              <EditorOverlay :scale="scale" :pointer="pointer" :coarse="touchUi" />
+            </template>
+            <template #controls>
+              <div
+                class="pointer-events-none absolute inset-x-2 top-2 flex flex-col items-start gap-2 sm:inset-x-3 sm:top-3"
+              >
+                <div class="pointer-events-auto max-w-full">
+                  <EditorToolbar :labels="isLarge" />
+                </div>
+
+                <!-- Phones and tablets: what the active tool expects -->
+                <p
+                  v-if="!isLarge && state.tool.value !== 'select'"
+                  class="max-w-full rounded-lg bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur-md"
+                  aria-live="polite"
+                >
+                  {{ hint }}
+                </p>
               </div>
 
-              <!-- Phones and tablets: the selected room, with a way into its properties -->
-              <div
-                v-if="!isLarge && selected && state.tool.value === 'select'"
-                class="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border bg-background/95 py-1 pr-1 pl-3 shadow-md backdrop-blur-md"
-              >
-                <span
-                  :class="cn('size-2.5 shrink-0 rounded-full', roomColorClasses(selected.colorToken).swatch)"
-                  aria-hidden="true"
-                />
-                <span class="min-w-0 truncate text-sm font-medium">{{ selected.name }}</span>
-                <span class="shrink-0 text-xs text-muted-foreground tabular-nums">{{ selectedArea }}</span>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  :aria-label="t('floors.editor.properties')"
-                  @click="sheetOpen = true"
+              <!-- A touch screen beside the side panel: the drawing actions float over the plan -->
+              <div v-if="isLarge && coarse && drawing" class="absolute bottom-3 left-1/2 -translate-x-1/2">
+                <div
+                  role="toolbar"
+                  :aria-label="t('floors.editor.drawing.label')"
+                  class="flex items-center gap-1.5 rounded-xl border bg-background/95 p-1.5 shadow-md backdrop-blur-md"
                 >
-                  <SlidersHorizontal />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  :aria-label="t('floors.editor.room.delete')"
-                  @click="state.deleteRoom(selected.key)"
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-
-              <p
-                v-else-if="!isLarge && state.tool.value !== 'select'"
-                class="max-w-full rounded-lg bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur-md"
-              >
-                {{ hint }}
-              </p>
-            </div>
-
-            <!-- Desktop hint bar -->
-            <p
-              v-if="isLarge"
-              class="pointer-events-none absolute bottom-3 left-1/2 flex w-max max-w-[calc(100%-15rem)] -translate-x-1/2 items-center gap-3 rounded-xl border bg-background/90 px-4 py-1.5 text-xs leading-snug text-muted-foreground shadow-sm backdrop-blur-md"
-              aria-live="polite"
-            >
-              <span class="line-clamp-2">{{ hint }}</span>
-              <span
-                v-if="coordinates"
-                class="shrink-0 border-l pl-3 font-medium text-foreground tabular-nums"
-              >
-                {{ coordinates }}
-              </span>
-            </p>
-
-            <!-- Empty floor: how to start -->
-            <div v-if="showEmpty" class="pointer-events-none absolute inset-0 grid place-items-center p-6">
-              <div
-                class="pointer-events-auto grid max-w-sm justify-items-center gap-3 rounded-2xl border bg-background/95 p-6 text-center shadow-lg backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95"
-              >
-                <span class="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <Pentagon class="size-6" aria-hidden="true" />
-                </span>
-                <h2 class="font-serif text-xl font-medium">{{ t('floors.editor.empty.title') }}</h2>
-                <p class="text-sm text-muted-foreground">{{ t('floors.editor.empty.description') }}</p>
-                <div class="flex flex-wrap justify-center gap-2 pt-1">
-                  <Button @click="state.setTool('draw')">
-                    <Pentagon />
-                    {{ t('floors.editor.empty.start') }}
-                    <KeyHint keys="R" class="ml-1" />
+                  <Button size="sm" :disabled="!canFinish" @click="finishDrawing">
+                    <Check />
+                    {{ t('floors.editor.drawing.finish', { count: corners }) }}
                   </Button>
-                  <Button variant="outline" @click="traceImage">
-                    <ImageUp />
-                    {{ t('floors.editor.empty.trace') }}
+                  <Button size="sm" variant="outline" :disabled="corners === 0" @click="undoCorner">
+                    <Undo2 />
+                    {{ t('floors.editor.drawing.undoCorner') }}
+                  </Button>
+                  <Button size="sm" variant="ghost" @click="cancelDrawing">
+                    {{ t('floors.editor.drawing.cancel') }}
                   </Button>
                 </div>
               </div>
-            </div>
-          </template>
-        </FloorPlanCanvas>
+
+              <!-- Desktop hint bar: one line, with the cursor's position while drawing or calibrating -->
+              <p
+                v-else-if="isLarge"
+                class="pointer-events-none absolute bottom-3 left-1/2 flex w-max max-w-[calc(100%-17rem)] -translate-x-1/2 items-center gap-3 rounded-lg border bg-background/90 px-3 py-1.5 text-xs leading-5 text-muted-foreground shadow-sm backdrop-blur-md"
+                aria-live="polite"
+              >
+                <span class="truncate" :title="hint">{{ hint }}</span>
+                <span
+                  v-if="coordinates"
+                  class="shrink-0 border-l pl-3 font-medium text-foreground tabular-nums"
+                >
+                  {{ coordinates }}
+                </span>
+              </p>
+
+              <!-- Empty floor: how to start -->
+              <div v-if="showEmpty" class="pointer-events-none absolute inset-0 grid place-items-center p-6">
+                <div
+                  class="pointer-events-auto grid max-w-sm justify-items-center gap-3 rounded-2xl border bg-background/95 p-6 text-center shadow-lg backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95"
+                >
+                  <span
+                    class="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary"
+                  >
+                    <Pentagon class="size-6" aria-hidden="true" />
+                  </span>
+                  <h2 class="font-serif text-xl font-medium">{{ t('floors.editor.empty.title') }}</h2>
+                  <p class="text-sm text-muted-foreground">{{ t('floors.editor.empty.description') }}</p>
+                  <div class="flex flex-wrap justify-center gap-2 pt-1">
+                    <Button @click="state.setTool('draw')">
+                      <Pentagon />
+                      {{ t('floors.editor.empty.start') }}
+                      <KeyHint keys="R" class="ml-1 max-lg:hidden" />
+                    </Button>
+                    <Button variant="outline" @click="traceImage">
+                      <ImageUp />
+                      {{ t('floors.editor.empty.trace') }}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </FloorPlanCanvas>
+        </div>
+
+        <aside
+          v-if="isLarge"
+          class="flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-sm xl:w-88"
+          :aria-label="t('floors.editor.properties')"
+        >
+          <EditorSidePanel />
+        </aside>
       </div>
 
-      <aside
-        v-if="isLarge"
-        class="flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-sm xl:w-88"
-        :aria-label="t('floors.editor.properties')"
+      <!--
+        Phones and tablets: the panel as a sheet that always peeks out below the plan. While drawing it holds the
+        drawing actions (touch screens have no Enter, Backspace or Esc).
+      -->
+      <div
+        v-if="!isLarge"
+        class="-mx-3 -mb-3 flex min-h-16 items-center gap-2 rounded-t-2xl border-x border-t bg-card px-3 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_-6px_var(--shadow-color)] sm:mx-0"
+        data-testid="editor-peek"
       >
-        <EditorSidePanel />
-      </aside>
-    </div>
+        <div
+          v-if="drawing"
+          role="toolbar"
+          :aria-label="t('floors.editor.drawing.label')"
+          class="flex w-full items-center gap-2"
+        >
+          <Button class="min-w-0 flex-1" :disabled="!canFinish" @click="finishDrawing">
+            <Check />
+            <span class="truncate">{{ t('floors.editor.drawing.finish', { count: corners }) }}</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            :disabled="corners === 0"
+            :aria-label="t('floors.editor.drawing.undoCorner')"
+            @click="undoCorner"
+          >
+            <Undo2 />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            :aria-label="t('floors.editor.drawing.cancel')"
+            @click="cancelDrawing"
+          >
+            <X />
+          </Button>
+        </div>
+
+        <template v-else>
+          <button
+            type="button"
+            class="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-haspopup="dialog"
+            @click="sheetOpen = true"
+          >
+            <span v-if="selected" class="shrink-0 rounded-lg bg-card" aria-hidden="true">
+              <span
+                :class="
+                  cn(
+                    'flex size-9 items-center justify-center rounded-lg border',
+                    roomColorClasses(selected.colorToken).sample,
+                  )
+                "
+              >
+                <component :is="roomIcon(selected.icon)" class="size-4" />
+              </span>
+            </span>
+            <span
+              v-else
+              class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+              aria-hidden="true"
+            >
+              <Layers class="size-4" />
+            </span>
+            <span class="grid min-w-0 flex-1">
+              <template v-if="selected">
+                <span class="truncate text-sm font-medium">
+                  {{ selected.name.trim() || t('floors.editor.room.untitled') }}
+                </span>
+                <span class="truncate text-xs text-muted-foreground tabular-nums">{{ selectedSummary }}</span>
+              </template>
+              <template v-else>
+                <span class="truncate text-sm font-medium">{{ t('floors.editor.tabs.rooms') }}</span>
+                <span class="truncate text-xs text-muted-foreground tabular-nums">{{ floorSummary }}</span>
+              </template>
+            </span>
+            <span class="sr-only">{{ t('floors.editor.openPanel') }}</span>
+            <ChevronUp class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </button>
+          <Button v-if="!selected" variant="outline" class="shrink-0" @click="state.setTool('draw')">
+            <Pentagon />
+            {{ t('floors.editor.drawing.start') }}
+          </Button>
+        </template>
+      </div>
+    </template>
 
     <Sheet v-if="!isLarge" v-model:open="sheetOpen">
       <SheetContent

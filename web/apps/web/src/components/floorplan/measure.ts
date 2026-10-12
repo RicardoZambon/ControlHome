@@ -15,6 +15,12 @@ export function formatLength(cm: number, locale: string): string {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(cm / 100)} m`
 }
 
+/** "9 × 8 m": a room's width and depth in metres (at most two decimals), the way people size rooms. */
+export function formatDimensions(widthCm: number, heightCm: number, locale: string): string {
+  const metres = new Intl.NumberFormat(locale, { maximumFractionDigits: 2 })
+  return `${metres.format(widthCm / 100)} × ${metres.format(heightCm / 100)} m`
+}
+
 /** "18.5 m²". */
 export function formatArea(m2: number, locale: string): string {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(m2)} m²`

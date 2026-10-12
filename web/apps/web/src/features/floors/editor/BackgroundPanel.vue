@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { uploadFile } from '@controlhome/api-client'
 import { Button, Label, Slider } from '@controlhome/ui'
-import { ImageUp, Move, Ruler, Trash2 } from '@lucide/vue'
+import { ImageUp, Move, Ruler, Trash } from '@lucide/vue'
 import { computed, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
@@ -91,7 +91,7 @@ function remove(): void {
 <template>
   <section class="grid gap-5" :aria-label="t('floors.editor.background.title')">
     <div class="grid gap-1">
-      <h2 class="font-serif text-lg leading-tight font-medium">{{ t('floors.editor.background.title') }}</h2>
+      <h2 class="leading-tight font-semibold">{{ t('floors.editor.background.title') }}</h2>
       <p class="text-sm text-muted-foreground">{{ t('floors.editor.background.description') }}</p>
     </div>
 
@@ -190,7 +190,7 @@ function remove(): void {
           class="text-destructive hover:bg-destructive/10 hover:text-destructive"
           @click="remove"
         >
-          <Trash2 />
+          <Trash />
           {{ t('floors.editor.background.remove') }}
         </Button>
       </div>

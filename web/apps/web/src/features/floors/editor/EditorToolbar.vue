@@ -8,17 +8,20 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  cn,
 } from '@controlhome/ui'
-import { ImageUp, MousePointer2, Pentagon, Redo2, Ruler, SlidersHorizontal, Undo2 } from '@lucide/vue'
+import { MousePointer2, Pentagon, Redo2, Undo2 } from '@lucide/vue'
 import { computed, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import KeyHint from '../../../components/KeyHint.vue'
 import { TOOL_KEYS } from './shortcuts'
 import { useEditor, type EditorTool } from './useEditorState'
 
-/** The floating tool bar on the canvas: tools, undo/redo, and (below lg) the properties sheet. */
-defineProps<{ showProperties?: boolean }>()
-const emit = defineEmits<{ properties: [] }>()
+/**
+ * The floating tool bar on the canvas: the two everyday tools (Select, Draw room), labelled when there is room, and
+ * undo/redo. The background image's tools (move, calibrate) are one-time setup steps: they live in the Image tab.
+ */
+defineProps<{ labels?: boolean }>()
 
 const { t } = useI18n()
 const state = useEditor()
@@ -26,15 +29,18 @@ const state = useEditor()
 /** "Ctrl" or "⌘" in shortcut hints. */
 const mod = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
 
-const tools = computed<{ id: EditorTool; icon: Component; label: string; disabled?: boolean }[]>(() => [
-  { id: 'select', icon: MousePointer2, label: t('floors.editor.tools.select') },
-  { id: 'draw', icon: Pentagon, label: t('floors.editor.tools.draw') },
-  { id: 'background', icon: ImageUp, label: t('floors.editor.tools.background') },
+const tools = computed<{ id: EditorTool; icon: Component; label: string; short: string }[]>(() => [
   {
-    id: 'calibrate',
-    icon: Ruler,
-    label: t('floors.editor.tools.calibrate'),
-    disabled: !state.draft.value.background,
+    id: 'select',
+    icon: MousePointer2,
+    label: t('floors.editor.tools.select'),
+    short: t('floors.editor.tools.selectShort'),
+  },
+  {
+    id: 'draw',
+    icon: Pentagon,
+    label: t('floors.editor.tools.draw'),
+    short: t('floors.editor.tools.drawShort'),
   },
 ])
 
@@ -73,10 +79,15 @@ const redoTip = computed(() =>
             <ToggleGroupItem
               :value="tool.id"
               :aria-label="tool.label"
-              :disabled="tool.disabled"
-              class="size-control rounded-lg px-0 aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground"
+              :class="
+                cn(
+                  'h-control rounded-lg aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary aria-pressed:hover:text-primary-foreground',
+                  labels ? 'gap-2 px-3' : 'w-control px-0',
+                )
+              "
             >
               <component :is="tool.icon" class="size-4.5" />
+              <span v-if="labels" aria-hidden="true">{{ tool.short }}</span>
             </ToggleGroupItem>
           </TooltipTrigger>
           <TooltipContent side="bottom" class="flex items-center gap-2">
@@ -124,19 +135,6 @@ const redoTip = computed(() =>
           <KeyHint :keys="`${mod}+Y`" />
         </TooltipContent>
       </Tooltip>
-
-      <template v-if="showProperties">
-        <Separator orientation="vertical" class="mx-0.5 data-[orientation=vertical]:h-6" />
-        <Button
-          variant="ghost"
-          size="icon"
-          class="rounded-lg"
-          :aria-label="t('floors.editor.properties')"
-          @click="emit('properties')"
-        >
-          <SlidersHorizontal class="size-4.5" />
-        </Button>
-      </template>
     </div>
   </TooltipProvider>
 </template>

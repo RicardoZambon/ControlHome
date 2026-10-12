@@ -233,8 +233,8 @@ const comingNext = computed(() => [
           <FloorPreview :floor="planFloor" />
           <span class="flex items-center gap-3 border-t px-4 py-3">
             <span class="grid min-w-0 flex-1 gap-0.5">
-              <span class="eyebrow">{{ floorEyebrow(planFloor, t) }}</span>
-              <span class="truncate font-medium">{{ planFloor.name }}</span>
+              <span v-if="floorEyebrow(planFloor, t)" class="eyebrow">{{ floorEyebrow(planFloor, t) }}</span>
+              <span class="truncate font-serif text-lg leading-snug font-medium">{{ planFloor.name }}</span>
               <span class="text-xs text-muted-foreground tabular-nums">{{ planSummary }}</span>
             </span>
             <span class="flex shrink-0 items-center gap-1 text-sm font-medium text-primary">

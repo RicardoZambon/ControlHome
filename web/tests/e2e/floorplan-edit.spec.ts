@@ -104,21 +104,21 @@ async function clickPlan(page: Page, x: number, y: number): Promise<void> {
 const roomLabel = (page: Page, name: string): Locator =>
   planSvg(page).getByRole('button', { name: new RegExp(`^${name}, `) })
 
-/** The editor's side panel (a sheet on phones, opened from the tool bar). */
+/** The editor's side panel (on phones a sheet, opened from the bar that peeks out below the plan). */
 async function openPanel(page: Page): Promise<Locator> {
   if (isPhone(page)) {
     const sheet = page.getByRole('dialog', { name: t('floors.editor.properties') })
     if (!(await sheet.isVisible())) {
-      await page
-        .getByRole('toolbar')
-        .getByRole('button', { name: t('floors.editor.properties') })
-        .click()
+      await page.getByRole('button', { name: new RegExp(t('floors.editor.openPanel')) }).click()
     }
     await expect(sheet).toBeVisible()
     return sheet
   }
   return page.getByRole('complementary', { name: t('floors.editor.properties') })
 }
+
+/** "Unsaved changes" / "No changes" next to Save (from 640 px up). */
+const saveState = (page: Page) => page.getByTestId('save-state')
 
 async function closePanel(page: Page): Promise<void> {
   if (!isPhone(page)) return
@@ -168,7 +168,7 @@ test('an admin creates a floor, draws a room by clicking its corners and saves i
   }
   await clickPlan(page, 100, 100)
   await expect(roomLabel(page, `${t('floors.editor.roomBase')} 1`)).toBeVisible()
-  if (!isPhone(page)) await expect(page.getByText(t('floors.editor.unsaved'))).toBeVisible()
+  if (!isPhone(page)) await expect(saveState(page)).toHaveText(t('floors.editor.unsaved'))
 
   // Rename and recolor in the properties panel.
   let panel = await openPanel(page)
@@ -202,9 +202,12 @@ test('an admin creates a floor, draws a room by clicking its corners and saves i
   ).toHaveAttribute('aria-pressed', 'true')
   await closePanel(page)
 
-  await page.getByRole('button', { name: new RegExp(`^${t('floors.editor.save')}`) }).click()
+  const save = page.getByRole('button', { name: new RegExp(`^${t('floors.editor.save')}`) })
+  await save.click()
   await expect(page.getByText(t('floors.toast.saved'))).toBeVisible()
-  if (!isPhone(page)) await expect(page.getByText(t('floors.editor.saved'))).toBeVisible()
+  // Saved: nothing left to save, so Save waits for the next change.
+  await expect(save).toBeDisabled()
+  if (!isPhone(page)) await expect(saveState(page)).toHaveText(t('floors.editor.clean'))
 
   const saved = await apiGetFloor(page.request, floorId)
   expect(saved.rooms).toHaveLength(1)
@@ -219,8 +222,21 @@ test('an admin creates a floor, draws a room by clicking its corners and saves i
   // Reloading shows what was saved.
   await page.reload()
   await expect(roomLabel(page, 'Living room')).toBeVisible()
-  if (!isPhone(page)) await expect(page.getByText(t('floors.editor.saved'))).toBeVisible()
+  if (!isPhone(page)) await expect(saveState(page)).toHaveText(t('floors.editor.clean'))
   await gates.check('editor after reload')
+
+  // Deleting the room can be undone from its toast.
+  await roomLabel(page, 'Living room').focus()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Delete')
+  await expect(roomLabel(page, 'Living room')).toHaveCount(0)
+  await page
+    .getByText(t('floors.editor.room.deleted', { name: 'Living room' }))
+    .locator('xpath=ancestor::li[1]')
+    .getByRole('button', { name: t('floors.editor.undo') })
+    .click()
+  await expect(roomLabel(page, 'Living room')).toBeVisible()
+  await expect(save).toBeDisabled()
 
   // And the view page lists the room with its area (5 m × 3.5 m).
   await page.goto(`/floors/${floorId}`)
@@ -261,10 +277,14 @@ test('an admin traces a plan image and calibrates it with two points', async ({ 
   // Twice the scale (5 cm per pixel), within what pixel-rounded clicks allow.
   expect(Math.abs(saved.background!.cmPerPx - 5) / 5).toBeLessThan(0.03)
 
-  // The image is served by the API and shows in view mode too.
+  // The image is served by the API. It is a tracing aid: the view shows it only when asked.
   const image = await page.request.get(`/api/files/${saved.background!.fileId}`)
   expect(image.headers()['content-type']).toBe('image/webp')
   await page.goto(`/floors/${floor.id}`)
+  const original = page.getByRole('switch', { name: t('floors.view.showOriginal') })
+  await expect(original).toHaveAttribute('aria-checked', 'false')
+  await expect(planSvg(page).locator('image')).toHaveCount(0)
+  await original.click()
   await expect(planSvg(page).locator('image')).toHaveCount(1)
 })
 

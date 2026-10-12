@@ -138,6 +138,86 @@ describe.each(['en', 'pt-BR'] as const)('floor pages (%s)', (locale) => {
     expect(wrapper.findAll('[data-room-key]')).toHaveLength(2)
     wrapper.unmount()
   })
+
+  it('places the floor in the top bar: home › Floors › floor (› Edit plan)', async () => {
+    signedIn('Admin', locale)
+    const floors = locale === 'en' ? 'Floors' : 'Andares'
+    const view = await open('/floors/3', locale)
+    const trail = view.wrapper.find('[data-slot="breadcrumb"]')
+    expect(trail.find('a[href="/floors"]').text()).toBe(floors)
+    expect(trail.find('[aria-current="page"]').text()).toBe('Térreo')
+    view.wrapper.unmount()
+
+    const editor = await open('/floors/3/edit', locale)
+    const editTrail = editor.wrapper.find('[data-slot="breadcrumb"]')
+    expect(editTrail.find('a[href="/floors/3"]').text()).toBe('Térreo')
+    expect(editTrail.find('[aria-current="page"]').text()).toBe(
+      locale === 'en' ? 'Edit plan' : 'Editar planta',
+    )
+    editor.wrapper.unmount()
+  })
+})
+
+describe('floor editor', () => {
+  it('Save waits for a change: no changes, nothing to save', async () => {
+    signedIn('Admin', 'en')
+    const { wrapper } = await open('/floors/3/edit')
+    const save = wrapper.findAll('button').find((button) => button.text().startsWith('Save'))!
+    expect(save.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('No changes')
+    expect(wrapper.text()).not.toContain('All changes saved')
+    wrapper.unmount()
+  })
+
+  it('is a focused task: the bottom tab bar steps aside', async () => {
+    signedIn('Admin', 'en')
+    const view = await open('/floors/3')
+    expect(view.wrapper.find('nav[aria-label="Sections"]').exists()).toBe(true)
+    view.wrapper.unmount()
+    const editor = await open('/floors/3/edit')
+    expect(editor.wrapper.find('nav[aria-label="Sections"]').exists()).toBe(false)
+    editor.wrapper.unmount()
+  })
+})
+
+describe('the traced background image', () => {
+  const traced: FloorDto = {
+    ...floor,
+    background: { fileId: 'f1', opacity: 0.35, offsetXCm: 0, offsetYCm: 0, cmPerPx: 2.5 },
+  }
+
+  it('is a tracing aid: off in previews and in view mode until asked for', async () => {
+    signedIn('Admin', 'en')
+    api.getFloor.mockResolvedValue(ok(traced))
+    const list = await open('/floors')
+    expect(list.wrapper.findAll('[data-room-key]')).toHaveLength(2)
+    expect(list.wrapper.find('[data-slot="floor-background"]').exists()).toBe(false)
+    list.wrapper.unmount()
+
+    const { wrapper } = await open('/floors/3')
+    expect(wrapper.find('[data-slot="floor-background"]').exists()).toBe(false)
+    const toggle = wrapper.find('[role="switch"]')
+    expect(toggle.attributes('aria-checked')).toBe('false')
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-slot="floor-background"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('shows in the editor', async () => {
+    signedIn('Admin', 'en')
+    api.getFloor.mockResolvedValue(ok(traced))
+    const { wrapper } = await open('/floors/3/edit')
+    expect(wrapper.find('[data-slot="floor-background"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('has no switch on a floor without one', async () => {
+    signedIn('Admin', 'en')
+    const { wrapper } = await open('/floors/3')
+    expect(wrapper.find('[role="switch"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })
 
 describe('floor pages for a Member', () => {

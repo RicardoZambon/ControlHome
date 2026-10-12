@@ -21,7 +21,7 @@ import {
   Skeleton,
   toast,
 } from '@controlhome/ui'
-import { EllipsisVertical, PencilRuler, Plus, RefreshCw, Trash2 } from '@lucide/vue'
+import { Ellipsis, PencilRuler, Plus, RefreshCw, Trash } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -187,7 +187,7 @@ function onDeleteOpenChange(open: boolean): void {
         <FloorPreview :floor="card.floor" class="border-b" />
         <div class="flex items-start gap-3 p-5">
           <div class="grid min-w-0 flex-1 gap-1">
-            <p class="eyebrow">{{ card.level }}</p>
+            <p v-if="card.level" class="eyebrow">{{ card.level }}</p>
             <h2 class="truncate font-serif text-xl font-medium">
               <RouterLink
                 :to="{ name: 'floor', params: { id: card.floor.id } }"
@@ -208,7 +208,7 @@ function onDeleteOpenChange(open: boolean): void {
                 class="relative z-10 -mr-2 shrink-0"
                 :aria-label="t('floors.actions', { name: card.floor.name })"
               >
-                <EllipsisVertical />
+                <Ellipsis />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -218,7 +218,7 @@ function onDeleteOpenChange(open: boolean): void {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" @select="askDelete(card.floor)">
-                <Trash2 />
+                <Trash />
                 {{ t('common.delete') }}
               </DropdownMenuItem>
             </DropdownMenuContent>

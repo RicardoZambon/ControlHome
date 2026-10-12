@@ -2,6 +2,7 @@
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
@@ -15,6 +16,7 @@ import { useMediaQuery } from '@vueuse/core'
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import { pageTrail, type TrailItem } from '../../composables/usePageTrail'
 import { useHomeStore } from '../../stores/home'
 import BrandMark from '../brand/BrandMark.vue'
 import AppSidebar from './AppSidebar.vue'
@@ -25,7 +27,9 @@ import UserMenu from './UserMenu.vue'
 
 /**
  * The signed-in layout: collapsible sidebar, top bar and the page. On phones the sidebar is a sheet opened from the
- * menu button, and the main pages are also a bottom tab bar.
+ * menu button, and the main pages are also a bottom tab bar (except on focused tasks, such as the floor-plan editor).
+ * The top bar's breadcrumb is the home and the page: the route's title, or the trail the page set (`usePageTrail`);
+ * phones show only its last step.
  */
 const { t } = useI18n()
 const route = useRoute()
@@ -34,6 +38,7 @@ const homeStore = useHomeStore()
 const isPhone = useMediaQuery('(max-width: 768px)')
 
 const pageTitle = computed(() => (route.meta.titleKey ? t(route.meta.titleKey) : t('app.name')))
+const trail = computed<readonly TrailItem[]>(() => pageTrail.value ?? [{ label: pageTitle.value }])
 
 onMounted(() => void homeStore.load())
 </script>
@@ -74,9 +79,20 @@ onMounted(() => void homeStore.load())
               </BreadcrumbItem>
               <BreadcrumbSeparator class="hidden sm:block" />
             </template>
-            <BreadcrumbItem class="min-w-0">
-              <BreadcrumbPage class="truncate font-medium">{{ pageTitle }}</BreadcrumbPage>
-            </BreadcrumbItem>
+            <template v-for="(item, index) in trail" :key="index">
+              <template v-if="index < trail.length - 1">
+                <BreadcrumbItem class="hidden min-w-0 sm:inline-flex">
+                  <BreadcrumbLink v-if="item.to" as-child>
+                    <RouterLink :to="item.to" class="truncate">{{ item.label }}</RouterLink>
+                  </BreadcrumbLink>
+                  <span v-else class="truncate">{{ item.label }}</span>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator class="hidden sm:block" />
+              </template>
+              <BreadcrumbItem v-else class="min-w-0">
+                <BreadcrumbPage class="truncate font-medium">{{ item.label }}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </template>
           </BreadcrumbList>
         </Breadcrumb>
         <div class="ml-auto flex shrink-0 items-center sm:gap-1">
@@ -89,17 +105,22 @@ onMounted(() => void homeStore.load())
       <div
         id="main-content"
         tabindex="-1"
-        :class="
+        :class="[
+          'flex-1 outline-none',
           route.meta.fullWidth
-            ? 'flex-1 px-3 pt-3 pb-[calc(4.25rem+env(safe-area-inset-bottom))] outline-none sm:px-4 md:px-5 md:pt-4 md:pb-5'
-            : 'flex-1 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] outline-none sm:px-6 md:px-10 md:pt-10 md:pb-16'
-        "
+            ? 'px-3 pt-3 sm:px-4 md:px-5 md:pt-4 md:pb-5'
+            : 'px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:px-6 md:px-10 md:pt-10 md:pb-16',
+          route.meta.fullWidth &&
+            (route.meta.focused
+              ? 'pb-[calc(0.75rem+env(safe-area-inset-bottom))]'
+              : 'pb-[calc(4.25rem+env(safe-area-inset-bottom))]'),
+        ]"
       >
         <div :class="route.meta.fullWidth ? 'w-full' : 'mx-auto w-full max-w-6xl'">
           <slot />
         </div>
       </div>
     </SidebarInset>
-    <AppTabBar />
+    <AppTabBar v-if="!route.meta.focused" />
   </SidebarProvider>
 </template>

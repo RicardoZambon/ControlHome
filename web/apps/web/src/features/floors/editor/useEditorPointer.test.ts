@@ -1,5 +1,6 @@
 import type { FloorDto } from '@controlhome/api-client'
 import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import type { CanvasPointer } from '../../../components/floorplan/FloorPlanCanvas.vue'
 import type { Point } from '../../../components/floorplan/geometry'
 import { useEditorPointer } from './useEditorPointer'
@@ -15,7 +16,7 @@ const square = (x: number, y: number, size: number): Point[] => [
   P(x, y + size),
 ]
 
-function setup(rooms: FloorDto['rooms'] = []) {
+function setup(rooms: FloorDto['rooms'] = [], options: { coarse?: boolean } = {}) {
   const state = useEditorState({ roomBaseName: () => 'Room' })
   state.load({
     id: 1,
@@ -29,14 +30,18 @@ function setup(rooms: FloorDto['rooms'] = []) {
     rowVersion: 'v1',
   })
   const onCalibrationPoints = vi.fn()
-  const pointer = useEditorPointer(state, { scale: () => 1, coarse: () => false, onCalibrationPoints })
+  const pointer = useEditorPointer(state, {
+    scale: () => 1,
+    coarse: () => options.coarse ?? false,
+    onCalibrationPoints,
+  })
   const at = (x: number, y: number, mods: { altKey?: boolean } = {}): CanvasPointer => ({
     cm: P(x, y),
     px: P(x, y),
     event: { altKey: false, ...mods } as PointerEvent,
   })
-  const click = (x: number, y: number) => {
-    const p = at(x, y)
+  const click = (x: number, y: number, mods: { altKey?: boolean } = {}) => {
+    const p = at(x, y, mods)
     const taken = pointer.handler.down!(p)
     if (taken) pointer.handler.up!(p)
     else pointer.handler.tap!(p)
@@ -78,6 +83,36 @@ describe('drawing', () => {
     expect(state.rooms.value[0]!.polygon).toEqual([P(100, 100), P(500, 100), P(500, 400), P(100, 400)])
     expect(state.tool.value).toBe('select')
     expect(state.selection.value.roomKey).toBe(state.rooms.value[0]!.key)
+  })
+
+  it('on a touch screen the first corner closes the outline from further away (a finger-sized target)', () => {
+    const free = { altKey: true }
+    for (const coarse of [true, false]) {
+      const { state, click } = setup([], { coarse })
+      state.setTool('draw')
+      click(100, 100, free)
+      click(500, 100, free)
+      click(500, 400, free)
+      // 23 px from the first corner: inside the 24 px touch target, outside the 10 px mouse one.
+      click(123, 100, free)
+      expect(state.rooms.value).toHaveLength(coarse ? 1 : 0)
+      expect(state.drawing.value.points).toHaveLength(coarse ? 0 : 4)
+    }
+  })
+
+  it('a new tool forgets where the last one had the pointer', async () => {
+    const { state, click, pointer, at } = setup()
+    state.setTool('draw')
+    pointer.handler.move!(at(240, 180))
+    expect(pointer.cursor.value).not.toBeNull()
+    click(100, 100)
+    click(400, 100)
+    click(400, 400)
+    expect(pointer.finishDrawing()).toBe(true)
+    await nextTick()
+    expect(state.tool.value).toBe('select')
+    expect(pointer.cursor.value).toBeNull()
+    expect(pointer.snapKind.value).toBeNull()
   })
 
   it('Enter (finishDrawing) closes the outline once there are three corners', () => {

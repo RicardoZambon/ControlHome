@@ -17,6 +17,6 @@ export const routes: RouteRecordRaw[] = [
     path: '/floors/:id(\\d+)/edit',
     name: 'floor-edit',
     component: () => import('./pages/FloorEditorPage.vue'),
-    meta: { roles: ['Admin'], titleKey: 'floors.editor.title', fullWidth: true },
+    meta: { roles: ['Admin'], titleKey: 'floors.editor.title', fullWidth: true, focused: true },
   },
 ]

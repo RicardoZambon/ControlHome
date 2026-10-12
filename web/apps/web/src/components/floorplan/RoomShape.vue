@@ -6,6 +6,7 @@ import { boundsOf, labelPoint, type Point } from './geometry'
 import { formatArea, roomAreaM2 } from './measure'
 import { roomColorClasses } from './roomColors'
 import { roomIcon } from './roomIcons'
+import { roomLabelLayout } from './roomLabel'
 
 export interface PlanRoom {
   name: string
@@ -16,8 +17,9 @@ export interface PlanRoom {
 
 /**
  * One room on the plan: its outline filled with the room's color token (translucent, outline in the solid token) and a
- * label at its visual centre with the name and the area in m². Label parts drop out as the room gets small on screen.
- * Sizes are given in screen pixels and divided by `scale`, so labels and strokes look the same at every zoom.
+ * label at its visual centre with the name and the area in m², sized to the room on screen (see `roomLabelLayout`).
+ * Strokes are screen pixels at every zoom (`vector-effect: non-scaling-stroke`); labels are drawn in screen pixels too.
+ * Hover is a small step up in fill; the selection outline is drawn by the canvas, above every room.
  */
 const props = withDefaults(
   defineProps<{
@@ -31,8 +33,10 @@ const props = withDefaults(
     invalid?: boolean
     /** Keyboard focusable, announced as a button (activated with Enter or Space). */
     focusable?: boolean
-    /** Smaller labels for dashboard-size previews. */
+    /** Previews: small names, no area, a slightly stronger fill. */
     compact?: boolean
+    /** An opaque-ish card under the fill, so the drafting grid fades inside rooms (view mode). */
+    underlay?: boolean
     showIcon?: boolean
   }>(),
   { showIcon: true },
@@ -46,40 +50,22 @@ const area = computed(() => formatArea(roomAreaM2(props.room.polygon), locale.va
 const label = computed(() => (props.room.polygon.length >= 3 ? labelPoint(props.room.polygon) : null))
 const bounds = computed(() => boundsOf(props.room.polygon))
 
-const px = (value: number) => value / props.scale
-
-const strokeWidth = computed(() => px(props.selected ? 2.5 : props.hovered ? 2 : 1.5))
-const dash = computed(() => (props.invalid ? `${px(6)} ${px(4)}` : undefined))
-
-/** Which label parts fit, and how big the name is. */
-const layout = computed(() => {
-  const widthPx = (bounds.value.maxX - bounds.value.minX) * props.scale
-  const heightPx = (bounds.value.maxY - bounds.value.minY) * props.scale
-  const nameSize = props.compact ? 11 : 13
-  const areaSize = props.compact ? 10 : 11
-  if (!label.value || widthPx < 36 || heightPx < 18) return null
-  const room = props.room.name.trim()
-  // Fraunces averages about 0.55 em per character.
-  const fitChars = Math.max(1, Math.floor((widthPx * 0.86) / (nameSize * 0.55)))
-  const name = room.length > fitChars ? `${room.slice(0, Math.max(1, fitChars - 1)).trimEnd()}…` : room
-  const showArea = heightPx >= (props.compact ? 34 : 40) && widthPx >= 44
-  const showIcon = props.showIcon && heightPx >= (props.compact ? 64 : 76) && widthPx >= 44
-  const iconSize = props.compact ? 14 : 16
-  const gap = 3
-  const lines = [
-    ...(showIcon ? [{ kind: 'icon' as const, size: iconSize }] : []),
-    { kind: 'name' as const, size: nameSize * 1.25 },
-    ...(showArea ? [{ kind: 'area' as const, size: areaSize * 1.3 }] : []),
-  ]
-  const total = lines.reduce((sum, line) => sum + line.size, 0) + gap * (lines.length - 1)
-  let y = -total / 2
-  const positioned = lines.map((line) => {
-    const top = y
-    y += line.size + gap
-    return { ...line, top, center: top + line.size / 2 }
-  })
-  return { name, nameSize, areaSize, iconSize, lines: positioned }
+const fill = computed(() => {
+  if (props.compact) return colors.value.fillStrong
+  return props.selected || props.hovered ? colors.value.fillHover : colors.value.fill
 })
+
+const layout = computed(() =>
+  label.value
+    ? roomLabelLayout({
+        name: props.room.name,
+        widthPx: (bounds.value.maxX - bounds.value.minX) * props.scale,
+        heightPx: (bounds.value.maxY - bounds.value.minY) * props.scale,
+        compact: props.compact,
+        showIcon: props.showIcon,
+      })
+    : null,
+)
 
 const line = (kind: 'icon' | 'name' | 'area') => layout.value?.lines.find((entry) => entry.kind === kind)
 const Icon = computed(() => roomIcon(props.room.icon))
@@ -102,27 +88,20 @@ function onKeydown(event: KeyboardEvent): void {
     class="group/room outline-none"
     @keydown="focusable ? onKeydown($event) : undefined"
   >
-    <!-- Selection halo -->
-    <polygon
-      v-if="selected"
-      :points="points"
-      fill="none"
-      class="stroke-ring/35"
-      :stroke-width="px(8)"
-      stroke-linejoin="round"
-    />
+    <polygon v-if="underlay" :points="points" class="fill-card/85" />
     <polygon
       :points="points"
       :class="
         cn(
-          'transition-[fill-opacity,stroke-width] duration-150',
-          selected || hovered ? colors.fillActive : colors.fill,
+          'transition-[fill] duration-150 motion-reduce:transition-none',
+          fill,
           invalid ? 'stroke-destructive' : colors.stroke,
           'group-focus-visible/room:stroke-ring',
         )
       "
-      :stroke-width="strokeWidth"
-      :stroke-dasharray="dash"
+      :stroke-width="compact ? 1 : 1.5"
+      :stroke-dasharray="invalid ? '6 4' : undefined"
+      vector-effect="non-scaling-stroke"
       stroke-linejoin="round"
     />
     <g
@@ -138,7 +117,7 @@ function onKeydown(event: KeyboardEvent): void {
         :y="line('icon')!.top"
         :size="layout.iconSize"
         :stroke-width="1.75"
-        class="text-foreground/70"
+        class="text-foreground/75"
       />
       <text
         :y="line('name')!.center"
@@ -146,9 +125,9 @@ function onKeydown(event: KeyboardEvent): void {
         dominant-baseline="central"
         :font-size="layout.nameSize"
         paint-order="stroke"
-        stroke-width="2.5"
+        stroke-width="3"
         stroke-linejoin="round"
-        class="fill-foreground stroke-card/50 font-serif font-medium"
+        class="fill-foreground stroke-card/85 font-serif font-medium"
       >
         {{ layout.name }}
       </text>
@@ -159,9 +138,9 @@ function onKeydown(event: KeyboardEvent): void {
         dominant-baseline="central"
         :font-size="layout.areaSize"
         paint-order="stroke"
-        stroke-width="2.5"
+        stroke-width="3"
         stroke-linejoin="round"
-        class="fill-muted-foreground stroke-card/50 font-sans tabular-nums"
+        class="fill-foreground/75 stroke-card/85 font-sans tabular-nums"
       >
         {{ area }}
       </text>

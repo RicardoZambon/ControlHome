@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { contains, distance, type Point } from '../../../components/floorplan/geometry'
-import { formatLength } from '../../../components/floorplan/measure'
+import { boundsOf, distance, labelPoint, type Point } from '../../../components/floorplan/geometry'
+import { formatArea, formatLength, roomAreaM2 } from '../../../components/floorplan/measure'
+import { roomLabelExtent, roomLabelLayout } from '../../../components/floorplan/roomLabel'
 import { drawSegmentCrosses } from './tools/drawTool'
-import { HANDLE_RADIUS_PX, MIDPOINT_MIN_WALL_PX, type EditorPointer } from './useEditorPointer'
+import {
+  CLOSE_RADIUS_PX,
+  HANDLE_RADIUS_PX,
+  MIDPOINT_MIN_WALL_PX,
+  type EditorPointer,
+} from './useEditorPointer'
 import { useEditor } from './useEditorState'
+import { wallLabels, type Box } from './wallLabels'
 
 /**
  * What the editor draws over the plan (inside the canvas SVG, never hit by the pointer): corner and wall-midpoint
@@ -24,37 +31,73 @@ const length = (cm: number) => formatLength(cm, locale.value)
 const selected = computed(() => (state.tool.value === 'select' ? state.selectedRoom.value : null))
 const hover = computed(() => props.pointer.hover.value)
 
-/** Wall lengths of the selected room, where the wall is long enough on screen to carry a label. */
-const walls = computed(() => {
+/** Midpoint handles of the selected room, on walls long enough on screen to take one. */
+const midpoints = computed(() => {
   const polygon = selected.value?.polygon ?? []
   return polygon
-    .map((a, index) => {
-      const b = polygon[(index + 1) % polygon.length]!
-      const cm = distance(a, b)
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
-      // The label sits just outside the wall, clear of the midpoint handle.
-      let normal = { x: (b.y - a.y) / (cm || 1), y: -(b.x - a.x) / (cm || 1) }
-      if (contains(polygon, { x: mid.x + normal.x * px(3), y: mid.y + normal.y * px(3) })) {
-        normal = { x: -normal.x, y: -normal.y }
-      }
-      const offset = px(Math.abs(normal.x) > Math.abs(normal.y) ? 22 : 14)
-      const label = { x: mid.x + normal.x * offset, y: mid.y + normal.y * offset }
-      return { index, cm, mid, label }
+    .map((a, index) => ({ index, a, b: polygon[(index + 1) % polygon.length]! }))
+    .filter(({ a, b }) => distance(a, b) * props.scale >= MIDPOINT_MIN_WALL_PX)
+    .map(({ index, a, b }) => ({ index, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }))
+})
+
+/** Where the rooms' own labels are (cm), as `RoomShape` draws them: the wall lengths keep clear of them. */
+function labelBoxes(): Box[] {
+  return state.rooms.value.flatMap((room) => {
+    if (room.polygon.length < 3) return []
+    const bounds = boundsOf(room.polygon)
+    const layout = roomLabelLayout({
+      name: room.name,
+      widthPx: (bounds.maxX - bounds.minX) * props.scale,
+      heightPx: (bounds.maxY - bounds.minY) * props.scale,
     })
-    .filter((wall) => wall.cm * props.scale >= MIDPOINT_MIN_WALL_PX)
+    if (!layout) return []
+    const at = labelPoint(room.polygon)
+    const extent = roomLabelExtent(layout, formatArea(roomAreaM2(room.polygon), locale.value))
+    return [
+      {
+        minX: at.x - px(extent.halfWidth),
+        maxX: at.x + px(extent.halfWidth),
+        minY: at.y + px(extent.top),
+        maxY: at.y + px(extent.bottom),
+      },
+    ]
+  })
+}
+
+/**
+ * Wall lengths of the selected room as pills: outside each wall unless a neighbour or the floor's edge is there, and
+ * never over a room's label.
+ */
+const walls = computed(() => {
+  const room = selected.value
+  if (!room) return []
+  const { widthCm, heightCm } = state.draft.value.floor
+  return wallLabels(room.polygon, {
+    others: state.rooms.value.filter((other) => other.key !== room.key).map((other) => other.polygon),
+    widthCm,
+    heightCm,
+    scale: props.scale,
+    minWallPx: MIDPOINT_MIN_WALL_PX,
+    gapPx: (props.coarse ? HANDLE_RADIUS_PX.coarse : HANDLE_RADIUS_PX.fine) + 5,
+    text: length,
+    avoid: labelBoxes(),
+  })
 })
 
 // --- Drawing ----------------------------------------------------------------------------------------------------------
 const drawing = computed(() => (state.tool.value === 'draw' ? state.drawing.value.points : []))
 const cursor = computed(() => props.pointer.cursor.value)
 const rubberCrosses = computed(() => (cursor.value ? drawSegmentCrosses(drawing.value, cursor.value) : false))
+/** With three corners the first one closes the outline: a big, gently pulsing target (as big as its hit area). */
+const closeRadius = computed(() => (props.coarse ? CLOSE_RADIUS_PX.coarse : CLOSE_RADIUS_PX.fine))
+const canClose = computed(() => drawing.value.length >= 3)
 const closable = computed(() => {
   const first = drawing.value[0]
   return (
     !!first &&
     !!cursor.value &&
-    drawing.value.length >= 3 &&
-    distance(first, cursor.value) * props.scale <= (props.coarse ? 22 : 10)
+    canClose.value &&
+    distance(first, cursor.value) * props.scale <= closeRadius.value
   )
 })
 const rubberLength = computed(() => {
@@ -79,23 +122,32 @@ const snapPoint = computed(() => (state.tool.value === 'draw' ? cursor.value : n
   <g class="pointer-events-none" aria-hidden="true">
     <!-- Selected room: wall lengths, midpoint handles, corner handles -->
     <template v-if="selected">
-      <g v-for="wall in walls" :key="`len-${wall.index}`">
+      <g
+        v-for="wall in walls"
+        :key="`len-${wall.index}`"
+        :transform="`translate(${wall.at.x} ${wall.at.y}) scale(${1 / scale})`"
+        :data-wall-label="wall.inside ? 'inside' : 'outside'"
+      >
+        <rect
+          :x="-wall.widthPx / 2"
+          :y="-wall.heightPx / 2"
+          :width="wall.widthPx"
+          :height="wall.heightPx"
+          :rx="wall.heightPx / 2"
+          class="fill-popover/90 stroke-primary/40"
+          stroke-width="1"
+        />
         <text
-          :x="wall.label.x"
-          :y="wall.label.y"
           text-anchor="middle"
           dominant-baseline="central"
-          :font-size="px(10.5)"
-          paint-order="stroke"
-          :stroke-width="px(4)"
-          stroke-linejoin="round"
-          class="fill-primary stroke-card font-sans font-medium tabular-nums"
+          font-size="11.5"
+          class="fill-primary font-sans font-medium tabular-nums"
         >
-          {{ length(wall.cm) }}
+          {{ wall.text }}
         </text>
       </g>
       <circle
-        v-for="wall in walls"
+        v-for="wall in midpoints"
         :key="`mid-${wall.index}`"
         :cx="wall.mid.x"
         :cy="wall.mid.y"
@@ -144,12 +196,24 @@ const snapPoint = computed(() => (state.tool.value === 'draw' ? cursor.value : n
         :stroke-width="px(1.5)"
         :stroke-dasharray="`${px(6)} ${px(4)}`"
       />
+      <!-- The first corner closes the outline once there are three: a target as big as the area that takes the tap -->
+      <g v-if="canClose" :transform="`translate(${drawing[0]!.x} ${drawing[0]!.y})`" data-close-target>
+        <circle
+          :r="px(closeRadius)"
+          :class="
+            closable
+              ? 'fill-primary/25 stroke-primary'
+              : 'fill-primary/10 stroke-primary/60 motion-safe:animate-pulse'
+          "
+          :stroke-width="px(1.5)"
+        />
+      </g>
       <circle
         v-for="(corner, index) in drawing"
         :key="`draw-${index}`"
         :cx="corner.x"
         :cy="corner.y"
-        :r="index === 0 && closable ? handleRadius * 1.6 : handleRadius"
+        :r="index === 0 && canClose ? handleRadius * 1.3 : handleRadius"
         :stroke-width="px(2)"
         :class="index === 0 ? 'fill-primary stroke-card' : 'fill-card stroke-primary'"
       />

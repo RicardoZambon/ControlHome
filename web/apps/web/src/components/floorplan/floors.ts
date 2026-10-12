@@ -9,13 +9,13 @@ export function levelLabel(level: number, t: Translate): string {
 }
 
 /**
- * The small label above a floor's name: its level ("Floor 1"), or "Level 0" when the name already says the level
- * (a floor named "Ground floor"), so the two lines never repeat each other.
+ * The small label above a floor's name: its level in words ("Floor 1", "Basement 1"), or nothing when the name already
+ * says it (a floor named "Ground floor"), so the two lines never repeat each other.
  */
 export function floorEyebrow(floor: Pick<FloorSummaryDto, 'name' | 'level'>, t: Translate): string {
   const label = levelLabel(floor.level, t)
   const same = label.trim().toLocaleLowerCase() === floor.name.trim().toLocaleLowerCase()
-  return same ? t('floors.level.number', { n: floor.level }) : label
+  return same ? '' : label
 }
 
 /** The rooms' total area in m². */
