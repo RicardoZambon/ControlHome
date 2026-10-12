@@ -9,16 +9,23 @@ public static class IdentityResults
     private const string DuplicateUserName = nameof(IdentityErrorDescriber.DuplicateUserName);
     private const string PasswordMismatch = nameof(IdentityErrorDescriber.PasswordMismatch);
     private const string InvalidToken = nameof(IdentityErrorDescriber.InvalidToken);
+    private const string ConcurrencyFailure = nameof(IdentityErrorDescriber.ConcurrencyFailure);
 
     /// <summary>
-    /// Duplicate user name → 409 <c>users.duplicate_username</c>; wrong current password → 400
-    /// <c>auth.password_incorrect</c>; bad reset token → 400 <c>auth.reset_invalid</c>; anything else → 400
-    /// <c>validation.failed</c> with the messages under <c>errors[<paramref name="field"/>]</c>.
+    /// Another request changed the row first (<c>ConcurrencyFailure</c>) → 409 <c>request.conflict</c>; duplicate user name →
+    /// 409 <c>users.duplicate_username</c>; wrong current password → 400 <c>auth.password_incorrect</c>; bad reset token →
+    /// 400 <c>auth.reset_invalid</c>; anything else → 400 <c>validation.failed</c> with the messages under
+    /// <c>errors[<paramref name="field"/>]</c>.
     /// </summary>
     public static AppError ToAppError(this IdentityResult result, string field)
     {
         ArgumentNullException.ThrowIfNull(result);
         var codes = result.Errors.Select(e => e.Code).ToHashSet(StringComparer.Ordinal);
+
+        if (codes.Contains(ConcurrencyFailure))
+        {
+            return Conflict();
+        }
 
         if (codes.Contains(DuplicateUserName))
         {
@@ -44,4 +51,8 @@ public static class IdentityResults
             "One or more fields are invalid.",
             new Dictionary<string, object?>(StringComparer.Ordinal) { ["errors"] = errors });
     }
+
+    /// <summary>409 <c>request.conflict</c>: the data changed while this request was saving it; trying again may succeed.</summary>
+    public static AppError Conflict() =>
+        AppError.Conflict(ErrorCodes.RequestConflict, "The data changed while saving; try again.");
 }

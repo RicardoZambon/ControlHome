@@ -1,10 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
+using ControlHome.Api.Hosting;
 using ControlHome.Application.Auth;
 using ControlHome.Application.Users;
 using ControlHome.Domain.Security;
 using ControlHome.TestSupport;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ControlHome.Api.IntegrationTests;
 
@@ -150,10 +155,10 @@ public sealed class UserAdminTests(AuthApiFactory factory) : ResetAppTestBase<Au
     }
 
     [Fact]
-    public async Task The_last_active_admin_cannot_be_deleted()
+    public async Task A_disabled_admin_cannot_delete_the_last_active_admin()
     {
         // admin is disabled by "second" (allowed: second stays active), then admin, whose cookie is still valid until the
-        // next security-stamp check, tries to delete second, the last active Admin.
+        // next security-stamp check, tries to delete second, the last active Admin: refused before anything happens.
         using var admin = await Factory.CompleteSetupAsync(cancellationToken: Ct);
         var adminId = (await admin.GetFromJsonAsync<MeDto>("/api/auth/me", Ct))!.Id;
         var second = await admin.CreateUserAsync("second", Password, Roles.Admin, Ct);
@@ -165,9 +170,58 @@ public sealed class UserAdminTests(AuthApiFactory factory) : ResetAppTestBase<Au
 
         using var response = await admin.DeleteAsync($"/api/users/{second.Id}", Ct);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        (await response.ReadProblemCodeAsync(Ct)).ShouldBe("users.last_admin");
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await response.ReadProblemCodeAsync(Ct)).ShouldBe("auth.forbidden");
         (await QueryDbAsync(db => db.Users.CountAsync(Ct))).ShouldBe(2);
+    }
+
+    [Theory]
+    [InlineData(true)] // demoted to Member
+    [InlineData(false)] // disabled
+    public async Task A_demoted_or_disabled_admins_existing_session_cannot_act_as_admin_or_restore_itself(bool demote)
+    {
+        // "second" keeps a valid cookie with the Admin role claim until the next security-stamp check (up to a minute).
+        using var admin = await Factory.CompleteSetupAsync(cancellationToken: Ct);
+        var adminId = (await admin.GetFromJsonAsync<MeDto>("/api/auth/me", Ct))!.Id;
+        var second = await admin.CreateUserAsync("second", Password, Roles.Admin, Ct);
+        using var stale = await Factory.LoginAsync("second", Password, Ct);
+        var change = demote ? new UpdateUserRequest("second", Roles.Member, false) : new UpdateUserRequest("second", Roles.Admin, true);
+        using (var changed = await admin.PutAsJsonAsync($"/api/users/{second.Id}", change, Ct))
+        {
+            changed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        using var restore = await stale.PutAsJsonAsync($"/api/users/{second.Id}", new UpdateUserRequest("second", Roles.Admin, false), Ct);
+        using var create = await stale.PostAsJsonAsync("/api/users", new CreateUserRequest("backdoor", "Backdoor", Password, Roles.Admin), Ct);
+        using var takeOver = await stale.PostAsJsonAsync($"/api/users/{adminId}/password", new ResetPasswordRequest("taken over password"), Ct);
+        using var delete = await stale.DeleteAsync($"/api/users/{adminId}", Ct);
+        using var list = await stale.GetAsync("/api/users", Ct);
+        using var home = await stale.PutAsJsonAsync("/api/home", new Application.Homes.UpdateHomeRequest("Mine", "UTC", null, null, "en", "USD", null), Ct);
+        using var audit = await stale.GetAsync("/api/audit", Ct);
+
+        foreach (var response in new[] { restore, create, takeOver, delete, list, home, audit })
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, $"{response.RequestMessage!.Method} {response.RequestMessage.RequestUri}");
+            (await response.ReadProblemCodeAsync(Ct)).ShouldBe("auth.forbidden");
+        }
+
+        var users = (await admin.GetFromJsonAsync<UserDto[]>("/api/users", Ct))!;
+        users.Select(u => u.UserName).ShouldBe([AuthTestExtensions.AdminUserName, "second"]);
+        var secondNow = users.Single(u => u.Id == second.Id);
+        secondNow.Role.ShouldBe(demote ? Roles.Member : Roles.Admin);
+        secondNow.IsDisabled.ShouldBe(!demote);
+        (await Factory.LoginAsync(AuthTestExtensions.AdminUserName, AuthTestExtensions.AdminPassword, Ct)).Dispose(); // unchanged
+    }
+
+    [Fact]
+    public async Task User_name_with_a_trailing_newline_is_400_on_the_user_name()
+    {
+        using var admin = await Factory.CompleteSetupAsync(cancellationToken: Ct);
+
+        using var response = await admin.PostAsJsonAsync("/api/users", new CreateUserRequest("maria\n", "Maria", Password, Roles.Member), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.ReadJsonAsync(Ct)).GetProperty("errors").EnumerateObject().Select(p => p.Name).ShouldBe(["userName"]);
     }
 
     [Fact]
@@ -221,5 +275,71 @@ public sealed class UserAdminTests(AuthApiFactory factory) : ResetAppTestBase<Au
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await response.ReadProblemCodeAsync(Ct)).ShouldBe("validation.failed");
+    }
+}
+
+/// <summary>
+/// The users service re-checks the caller under its lock even when authorization let the request through (the policy check
+/// and the change are not atomic). Here the Admin policy's database check is switched off, so only the cookie's (stale) role
+/// claim is checked before the service runs.
+/// </summary>
+[Collection(AuthCollection.Name)]
+public sealed class UserAdminCallerRecheckTests(AuthApiFactory factory) : IAsyncLifetime
+{
+    private const string Password = "a long enough password";
+
+    private WebApplicationFactory<Program> _host = null!;
+
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    public async ValueTask InitializeAsync()
+    {
+        _host = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.Remove(services.Single(d => d.ImplementationType == typeof(ActiveAdminHandler)));
+            services.AddSingleton<IAuthorizationHandler, CookieOnlyAdminHandler>();
+        }));
+        await _host.WaitUntilReadyAsync(ControlHomeApiFactory.ReadyTimeout);
+        await _host.ResetAppAsync(Ct);
+    }
+
+    public async ValueTask DisposeAsync() => await _host.DisposeAsync();
+
+    [Fact]
+    public async Task A_demoted_admin_whose_request_passed_authorization_is_still_refused()
+    {
+        using var admin = await _host.CompleteSetupAsync(cancellationToken: Ct);
+        var adminId = (await admin.GetFromJsonAsync<MeDto>("/api/auth/me", Ct))!.Id;
+        var second = await admin.CreateUserAsync("second", Password, Roles.Admin, Ct);
+        using var stale = await _host.LoginAsync("second", Password, Ct);
+        using (var demote = await admin.PutAsJsonAsync($"/api/users/{second.Id}", new UpdateUserRequest("second", Roles.Member, false), Ct))
+        {
+            demote.StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        using var restore = await stale.PutAsJsonAsync($"/api/users/{second.Id}", new UpdateUserRequest("second", Roles.Admin, false), Ct);
+        using var create = await stale.PostAsJsonAsync("/api/users", new CreateUserRequest("backdoor", "Backdoor", Password, Roles.Admin), Ct);
+        using var takeOver = await stale.PostAsJsonAsync($"/api/users/{adminId}/password", new ResetPasswordRequest("taken over password"), Ct);
+        using var delete = await stale.DeleteAsync($"/api/users/{adminId}", Ct);
+
+        foreach (var response in new[] { restore, create, takeOver, delete })
+        {
+            response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, $"{response.RequestMessage!.Method} {response.RequestMessage.RequestUri}");
+            (await response.ReadProblemCodeAsync(Ct)).ShouldBe("auth.forbidden");
+        }
+
+        var users = (await admin.GetFromJsonAsync<UserDto[]>("/api/users", Ct))!;
+        users.Select(u => (u.UserName, u.Role)).ShouldBe([(AuthTestExtensions.AdminUserName, Roles.Admin), ("second", Roles.Member)]);
+        (await _host.LoginAsync(AuthTestExtensions.AdminUserName, AuthTestExtensions.AdminPassword, Ct)).Dispose(); // unchanged
+    }
+
+    /// <summary>Accepts the Admin policy's database requirement unchecked (the role claim is still required).</summary>
+    private sealed class CookieOnlyAdminHandler : AuthorizationHandler<ActiveAdminRequirement>
+    {
+        protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, ActiveAdminRequirement requirement)
+        {
+            context.Succeed(requirement);
+            return Task.CompletedTask;
+        }
     }
 }

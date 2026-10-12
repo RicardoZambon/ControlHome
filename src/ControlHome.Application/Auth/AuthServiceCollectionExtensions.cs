@@ -9,6 +9,7 @@ public static class AuthServiceCollectionExtensions
     {
         services.AddScoped<AuthService>();
         services.AddScoped<AdminPasswordResetService>();
+        services.AddSingleton<UnknownUserLockouts>();
         return services;
     }
 }

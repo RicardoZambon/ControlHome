@@ -10,6 +10,7 @@ public static class AuditActions
     public const string LoginLockedOut = "auth.login.locked_out";
     public const string Logout = "auth.logout";
     public const string PasswordChanged = "auth.password.changed";
+    public const string PasswordChangeFailed = "auth.password.change_failed";
     public const string AdminReset = "auth.admin_reset";
 
     public const string UserCreated = "users.created";
@@ -20,4 +21,5 @@ public static class AuditActions
     public const string HomeUpdated = "home.updated";
 
     public const string NetworkDenied = "security.network_denied";
+    public const string HostDenied = "security.host_denied";
 }

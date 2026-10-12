@@ -2,18 +2,19 @@ using System.Globalization;
 using System.Net;
 using System.Threading.RateLimiting;
 using ControlHome.Api.Http;
+using ControlHome.Api.Security;
 using ControlHome.Application.Common;
 using Microsoft.Extensions.Options;
 
 namespace ControlHome.Api.Hosting;
 
-/// <summary>Rate-limit policy names.</summary>
+/// <summary>Rate-limit policy names (budgets per IPv4 address or IPv6 /64).</summary>
 public static class RateLimitPolicies
 {
     /// <summary>First-run setup: 5 per 10 minutes per IP.</summary>
     public const string Setup = "setup";
 
-    /// <summary>Login and password reset: 10 per minute per IP.</summary>
+    /// <summary>Every password check (login, password change) and token reset, one shared budget: 10 per minute per IP.</summary>
     public const string Login = "login";
 }
 
@@ -83,6 +84,6 @@ public static class RateLimitingSetup
             });
     }
 
-    private static string ClientIp(IPAddress? address) =>
-        address is null ? "unknown" : (address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address).ToString();
+    /// <summary>The IPv4 address or IPv6 /64 (privacy addresses rotated inside one /64 share a budget).</summary>
+    private static string ClientIp(IPAddress? address) => address is null ? "unknown" : ClientNetworkPolicy.SourceKey(address);
 }

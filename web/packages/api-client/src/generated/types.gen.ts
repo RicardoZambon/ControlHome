@@ -469,6 +469,14 @@ export type ChangePasswordErrors = {
      * Unauthorized
      */
     401: ProblemDetails;
+    /**
+     * Locked
+     */
+    423: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
 };
 
 export type ChangePasswordError = ChangePasswordErrors[keyof ChangePasswordErrors];

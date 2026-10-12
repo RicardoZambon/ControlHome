@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using ControlHome.Api.Security;
 using ControlHome.Application.Abstractions;
 using ControlHome.Domain.Auditing;
 
@@ -21,17 +22,5 @@ internal sealed class CurrentActor(IHttpContextAccessor accessor) : ICurrentActo
         ? accessor.HttpContext.User.Identity.Name
         : null;
 
-    public string? IpAddress
-    {
-        get
-        {
-            var address = accessor.HttpContext?.Connection.RemoteIpAddress;
-            if (address is null)
-            {
-                return null;
-            }
-
-            return (address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address).ToString();
-        }
-    }
+    public string? IpAddress => ClientNetworkPolicy.Normalize(accessor.HttpContext?.Connection.RemoteIpAddress)?.ToString();
 }

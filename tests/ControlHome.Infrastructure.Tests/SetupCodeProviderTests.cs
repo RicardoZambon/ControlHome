@@ -125,25 +125,108 @@ public sealed class SetupCodeProviderTests : IDisposable
     }
 
     [Fact]
-    public void Twenty_failed_attempts_rotate_to_a_new_random_code()
+    public void Twenty_failed_attempts_rotate_a_generated_code_to_a_new_random_one()
     {
-        var provider = Create(configured: "E2E-SETUP-CODE-1");
+        var provider = Create(configured: null);
         provider.Announce();
+        var original = provider.Current;
 
         for (var i = 1; i < SetupCodeProvider.MaxFailedAttempts; i++)
         {
             provider.Verify($"wrong-{i}").ShouldBeFalse();
         }
 
-        provider.Verify("E2E-SETUP-CODE-1").ShouldBeTrue(); // 19 failures: still the same code
+        provider.Verify(original).ShouldBeTrue(); // 19 failures: still the same code
         provider.Verify("wrong-20").ShouldBeFalse();
 
-        provider.IsConfigured.ShouldBeFalse();
         provider.Current.ShouldMatch(CodePattern);
-        provider.Verify("E2E-SETUP-CODE-1").ShouldBeFalse();
+        provider.Current.ShouldNotBe(original);
+        provider.Verify(original).ShouldBeFalse();
         provider.Verify(provider.Current).ShouldBeTrue();
         File.ReadAllText(provider.FilePath).Trim().ShouldBe(provider.Current);
         _logger.Messages.ShouldContain((LogLevel.Warning, $"First-run setup code: {provider.Current}"));
+    }
+
+    [Fact]
+    public void A_configured_code_is_never_rotated_by_failed_attempts()
+    {
+        var provider = Create(configured: "E2E-SETUP-CODE-1");
+        provider.Announce();
+
+        for (var i = 1; i <= SetupCodeProvider.MaxFailedAttempts * 3; i++)
+        {
+            provider.Verify($"wrong-{i}").ShouldBeFalse();
+        }
+
+        provider.IsConfigured.ShouldBeTrue();
+        provider.Current.ShouldBe("E2E-SETUP-CODE-1");
+        provider.Verify("e2e setup code 1").ShouldBeTrue();
+        File.Exists(provider.FilePath).ShouldBeFalse();
+        _logger.Messages.ShouldContain(m => m.Level == LogLevel.Warning && m.Message.Contains("stays valid", StringComparison.Ordinal));
+        _logger.Messages.ShouldAllBe(m => !m.Message.Contains("E2E", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void A_wrong_code_racing_the_completion_neither_rotates_nor_rewrites_the_file()
+    {
+        // A request that saw "setup incomplete" just before another one completed setup reaches Verify afterwards.
+        var provider = Create(configured: null);
+        provider.Announce();
+        var code = provider.Current;
+        for (var i = 1; i < SetupCodeProvider.MaxFailedAttempts; i++)
+        {
+            provider.Verify($"wrong-{i}").ShouldBeFalse();
+        }
+
+        provider.OnSetupCompleted();
+        _logger.Messages.Clear();
+
+        provider.Verify("wrong-20").ShouldBeFalse(); // would be the 20th failure
+        provider.Verify(code).ShouldBeFalse(); // nothing is accepted any more
+
+        provider.Current.ShouldBe(code);
+        File.Exists(provider.FilePath).ShouldBeFalse();
+        _logger.Messages.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Announcing_after_completion_does_nothing()
+    {
+        // The start-up announcer may have read "setup incomplete" just before a completion committed.
+        var provider = Create(configured: null);
+        provider.OnSetupCompleted();
+
+        provider.Announce();
+        provider.Rotate();
+
+        File.Exists(provider.FilePath).ShouldBeFalse();
+        _logger.Messages.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Reset_after_completion_accepts_and_announces_a_code_again()
+    {
+        var provider = Create(configured: null);
+        provider.OnSetupCompleted();
+
+        provider.Reset();
+
+        File.ReadAllText(provider.FilePath).Trim().ShouldBe(provider.Current);
+        provider.Verify(provider.Current).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    [InlineData("  ", true)]
+    [InlineData("ABCD-2345-WXYZ", true)]
+    [InlineData("E2E-SETUP-CODE-1", true)]
+    [InlineData("ABCD-2345-WXY", false)] // 11 characters
+    [InlineData("short", false)]
+    [InlineData("a-b-c-d-e-f-g-h-i-j-k", false)] // dashes and spaces do not count
+    public void A_configured_code_needs_at_least_twelve_characters(string? code, bool valid)
+    {
+        new SetupOptions { Code = code }.HasValidCode.ShouldBe(valid);
     }
 
     [Fact]

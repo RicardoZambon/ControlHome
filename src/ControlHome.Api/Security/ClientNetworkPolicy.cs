@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 
 namespace ControlHome.Api.Security;
 
@@ -33,4 +34,22 @@ internal sealed class ClientNetworkPolicy(IEnumerable<IPNetwork> allowedNetworks
     /// <summary><c>::ffff:a.b.c.d</c> → <c>a.b.c.d</c>; anything else unchanged.</summary>
     public static IPAddress? Normalize(IPAddress? address) =>
         address is { IsIPv4MappedToIPv6: true } ? address.MapToIPv4() : address;
+
+    /// <summary>
+    /// The client "source" an address belongs to, for per-client budgets (rate limits, audit throttling): the IPv4 address, or
+    /// the IPv6 /64 (one host usually owns a whole /64 and can rotate privacy addresses inside it at will).
+    /// </summary>
+    public static string SourceKey(IPAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+        address = Normalize(address)!;
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
+        {
+            return address.ToString();
+        }
+
+        var bytes = address.GetAddressBytes();
+        Array.Clear(bytes, 8, 8);
+        return $"{new IPAddress(bytes)}/64";
+    }
 }

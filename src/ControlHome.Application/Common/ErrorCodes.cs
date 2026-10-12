@@ -14,6 +14,8 @@ public static class ErrorCodes
     public const string RequestCrossOrigin = "request.cross_origin";
     public const string RequestMissingHeader = "request.missing_header";
     public const string RequestNetworkDenied = "request.network_denied";
+    public const string RequestHostDenied = "request.host_denied";
+    public const string RequestConflict = "request.conflict";
     public const string ValidationFailed = "validation.failed";
     public const string InternalError = "internal.error";
 

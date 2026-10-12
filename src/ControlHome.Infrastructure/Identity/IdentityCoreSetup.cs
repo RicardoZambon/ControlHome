@@ -15,8 +15,6 @@ namespace ControlHome.Infrastructure.Identity;
 /// </summary>
 public static class IdentityCoreSetup
 {
-    public const string UserNameCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._@-";
-
     public static IdentityBuilder AddControlHomeIdentityCore(this IServiceCollection services)
     {
         // Password-reset tokens (reset-admin links, admin password resets) expire after 15 minutes.
@@ -44,7 +42,7 @@ public static class IdentityCoreSetup
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequiredUniqueChars = 1;
         options.User.RequireUniqueEmail = false;
-        options.User.AllowedUserNameCharacters = UserNameCharacters;
+        options.User.AllowedUserNameCharacters = ValidationRules.UserNameCharacters; // the request validators use the same set
         options.Lockout.AllowedForNewUsers = true;
         options.Lockout.MaxFailedAccessAttempts = 5;
         options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);

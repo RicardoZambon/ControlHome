@@ -5,8 +5,8 @@ using Microsoft.Extensions.Options;
 namespace ControlHome.Api.Security;
 
 /// <summary>
-/// The request edge: forwarded headers (trusted proxies only), security headers, the client network allowlist and the
-/// cross-origin checks, in that order, before static files and routing.
+/// The request edge: forwarded headers (trusted proxies only), security headers, the client network allowlist, the host
+/// name check and the cross-origin checks, in that order, before static files and routing.
 /// </summary>
 public static class RequestEdgeExtensions
 {
@@ -25,6 +25,8 @@ public static class RequestEdgeExtensions
         services.TryAddSingleton<NetworkDeniedAuditThrottle>();
         services.TryAddSingleton(static provider => new ClientNetworkPolicy(
             IpNetworkParser.ParseAll(provider.GetRequiredService<IOptions<NetworkOptions>>().Value.AllowedClientNetworks)));
+        services.TryAddSingleton(static provider => new HostNamePolicy(
+            provider.GetRequiredService<IOptions<NetworkOptions>>().Value.AllowedHostNames));
 
         return services;
     }
@@ -37,6 +39,7 @@ public static class RequestEdgeExtensions
         app.UseForwardedHeaders();
         app.UseMiddleware<SecurityHeadersMiddleware>();
         app.UseMiddleware<NetworkAllowlistMiddleware>();
+        app.UseMiddleware<HostValidationMiddleware>();
         app.UseMiddleware<OriginValidationMiddleware>();
         return app;
     }

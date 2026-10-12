@@ -47,10 +47,14 @@ public static class AuthEndpoints
             .WithSummary("Changes the signed-in user's display name, language and theme.")
             .WithValidation<UpdateProfileRequest>();
 
+        // The current password is checked like a sign-in: same per-IP budget, and wrong ones count towards the lockout.
         me.MapPost("/password", ChangePasswordAsync)
             .WithName("changePassword")
             .WithSummary("Changes the signed-in user's password.")
-            .WithValidation<ChangePasswordRequest>(); // 400: validation.failed or auth.password_incorrect
+            .RequireRateLimiting(RateLimitPolicies.Login)
+            .WithValidation<ChangePasswordRequest>() // 400: validation.failed or auth.password_incorrect
+            .ProducesProblem(StatusCodes.Status423Locked)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         return app;
     }

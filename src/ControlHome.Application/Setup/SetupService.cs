@@ -54,7 +54,14 @@ public sealed class SetupService(
             return AppError.Validation(ErrorCodes.SetupInvalidCode, "The setup code is not valid.");
         }
 
-        var created = await exclusive.RunAsync(LockName, token => CreateAdminAndHomeAsync(request, token), cancellationToken);
+        // Chosen before the unit runs, so a commit the client saw fail can be recognized: if this admin row exists, this
+        // completion won (re-running would answer its own success with 409 setup.already_completed).
+        var adminId = Guid.CreateVersion7();
+        var created = await exclusive.RunAsync(
+            LockName,
+            token => CreateAdminAndHomeAsync(adminId, request, token),
+            token => userManager.ExistsAsync(adminId, token),
+            cancellationToken);
         if (created.IsFailure)
         {
             return created.Error;
@@ -72,7 +79,7 @@ public sealed class SetupService(
         db.Homes.AsNoTracking().AnyAsync(h => h.SetupCompletedAtUtc != null, cancellationToken);
 
     /// <summary>Runs inside the setup lock and transaction.</summary>
-    private async Task<Result<AppUser>> CreateAdminAndHomeAsync(CompleteSetupRequest request, CancellationToken cancellationToken)
+    private async Task<Result<AppUser>> CreateAdminAndHomeAsync(Guid adminId, CompleteSetupRequest request, CancellationToken cancellationToken)
     {
         // Re-checked under the lock: a concurrent completion may have finished while this one waited.
         if (await IsCompletedAsync(cancellationToken))
@@ -95,7 +102,7 @@ public sealed class SetupService(
         var now = timeProvider.GetUtcNow();
         var admin = new AppUser
         {
-            Id = Guid.CreateVersion7(),
+            Id = adminId,
             UserName = request.Admin.UserName,
             DisplayName = request.Admin.DisplayName.Trim(),
             Locale = request.Home.Locale,

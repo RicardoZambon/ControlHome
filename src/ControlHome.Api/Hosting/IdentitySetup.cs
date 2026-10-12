@@ -12,7 +12,7 @@ namespace ControlHome.Api.Hosting;
 /// <summary>Authorization policy names (role based).</summary>
 public static class AuthorizationPolicies
 {
-    /// <summary>Role Admin.</summary>
+    /// <summary>Role Admin, confirmed in the database on every request (<see cref="ActiveAdminRequirement"/>).</summary>
     public const string Admin = "Admin";
 
     /// <summary>Role Admin or Member.</summary>
@@ -71,9 +71,14 @@ public static class IdentitySetup
         // Disabled users and role changes (both update the security stamp) take effect within a minute.
         services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = SecurityStampValidationInterval);
 
+        // Admin decisions are re-checked against the database on every request (ActiveAdminRequirement), not only the
+        // cookie's possibly minute-old role claim; the other policies follow the cookie (and its stamp interval).
+        services.AddScoped<IAuthorizationHandler, ActiveAdminHandler>();
         services.AddAuthorizationBuilder()
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())
-            .AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireRole(Roles.Admin))
+            .AddPolicy(
+                AuthorizationPolicies.Admin,
+                policy => policy.RequireRole(Roles.Admin).AddRequirements(new ActiveAdminRequirement()))
             .AddPolicy(AuthorizationPolicies.Member, policy => policy.RequireRole(Roles.Admin, Roles.Member))
             .AddPolicy(AuthorizationPolicies.Viewer, policy => policy.RequireRole(Roles.All));
 
