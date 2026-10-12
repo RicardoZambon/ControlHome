@@ -5,6 +5,7 @@ using ControlHome.TestSupport;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 
 namespace ControlHome.Infrastructure.Tests;
 
@@ -145,6 +146,36 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
         {
             await initializer.StopAsync(ct);
         }
+    }
+
+    [Fact]
+    public async Task Unexpected_exception_fails_with_connection_failed_instead_of_crashing_the_host()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var connections = Substitute.For<IDatabaseConnectionProvider>();
+        connections.GetConnectionString().Returns(
+            _ => "Server=tcp:127.0.0.1,1;Database=ControlHome_Test_unexpected;Encrypt=False",
+            _ => throw new InvalidOperationException("unexpected failure while reading the connection"));
+        await using var services = InfrastructureHost.Build(
+            new Dictionary<string, string?>(),
+            s => s.AddSingleton(connections));
+        var readiness = services.GetRequiredService<DatabaseReadiness>();
+        var initializer = services.GetRequiredService<DatabaseInitializer>();
+
+        await initializer.StartAsync(ct);
+        try
+        {
+            // A faulted ExecuteTask would stop the host (BackgroundServiceExceptionBehavior.StopHost).
+            await initializer.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(30), ct);
+        }
+        finally
+        {
+            await initializer.StopAsync(ct);
+        }
+
+        initializer.ExecuteTask.IsCompletedSuccessfully.ShouldBeTrue();
+        readiness.State.ShouldBe(DatabaseState.Failed);
+        readiness.LastError.ShouldBe("db.connection_failed");
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using ControlHome.Infrastructure.Persistence;
+using ControlHome.Infrastructure.Setup;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace ControlHome.Api.Features.Testing;
@@ -27,10 +28,15 @@ public static class TestingEndpoints
     /// <summary>Always fails: proves unhandled exceptions become a bare 500 <c>internal.error</c> outside Development.</summary>
     private static IResult Throw() => throw new InvalidOperationException(ExceptionMarker);
 
-    /// <summary>Deletes all app and Identity rows (roles re-seeded), returning to the post-initialization state.</summary>
-    private static async Task<NoContent> ResetAsync(DatabaseReset reset, CancellationToken cancellationToken)
+    /// <summary>
+    /// Deletes all app and Identity rows (roles re-seeded) and puts the setup code back to its startup value (the configured
+    /// <c>Setup:Code</c>, or a fresh random one, with no failed attempts), returning to the post-initialization state.
+    /// Sign-in lockouts live in the user rows, so they go with them.
+    /// </summary>
+    private static async Task<NoContent> ResetAsync(DatabaseReset reset, SetupCodeProvider setupCode, CancellationToken cancellationToken)
     {
         await reset.ResetAsync(cancellationToken);
+        setupCode.Reset();
         return TypedResults.NoContent();
     }
 }

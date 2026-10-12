@@ -1,3 +1,4 @@
+using System.Globalization;
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
 using ControlHome.Application.Users;
@@ -5,7 +6,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace ControlHome.Api.Features.Users;
 
-/// <summary>Household accounts (Admin only). Implemented by Task 0.2-D.</summary>
+/// <summary>Household accounts (Admin only).</summary>
 public static class UserEndpoints
 {
     public static IEndpointRouteBuilder MapUserEndpoints(this IEndpointRouteBuilder app)
@@ -48,26 +49,42 @@ public static class UserEndpoints
         return app;
     }
 
-    private static Task<Ok<UserDto[]>> ListAsync(CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+    private static async Task<Ok<UserDto[]>> ListAsync(UserAdminService users, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await users.ListAsync(cancellationToken));
 
-    private static Task<Results<Created<UserDto>, ProblemHttpResult>> CreateAsync(
+    private static async Task<Results<Created<UserDto>, ProblemHttpResult>> CreateAsync(
         CreateUserRequest request,
-        CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+        UserAdminService users,
+        CancellationToken cancellationToken)
+    {
+        var result = await users.CreateAsync(request, cancellationToken);
+        if (result.IsFailure)
+        {
+            return Problems.From(result.Error);
+        }
 
-    private static Task<Results<Ok<UserDto>, ProblemHttpResult>> UpdateAsync(
+        return TypedResults.Created(
+            string.Create(CultureInfo.InvariantCulture, $"/api/users/{result.Value.Id}"),
+            result.Value);
+    }
+
+    private static async Task<Results<Ok<UserDto>, ProblemHttpResult>> UpdateAsync(
         Guid id,
         UpdateUserRequest request,
+        UserAdminService users,
         CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+        (await users.UpdateAsync(id, request, cancellationToken)).ToHttpResult();
 
-    private static Task<Results<NoContent, ProblemHttpResult>> ResetPasswordAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult>> ResetPasswordAsync(
         Guid id,
         ResetPasswordRequest request,
+        UserAdminService users,
         CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+        (await users.ResetPasswordAsync(id, request, cancellationToken)).ToHttpResult();
 
-    private static Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(Guid id, CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+    private static async Task<Results<NoContent, ProblemHttpResult>> DeleteAsync(
+        Guid id,
+        UserAdminService users,
+        CancellationToken cancellationToken) =>
+        (await users.DeleteAsync(id, cancellationToken)).ToHttpResult();
 }

@@ -1,8 +1,9 @@
+using ControlHome.Api.Features.Auth;
 using ControlHome.Api.Http;
+using ControlHome.Application.Auth;
 using ControlHome.Application.Common;
-using ControlHome.Application.Identity;
 using ControlHome.Domain.Security;
-using ControlHome.Infrastructure.Persistence;
+using ControlHome.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 
@@ -22,12 +23,17 @@ public static class AuthorizationPolicies
 }
 
 /// <summary>
-/// ASP.NET Core Identity with a cookie session (<c>ControlHome.Session</c>). Foundation wiring from Task 0.2-A/E;
-/// Task 0.2-D refines password/lockout behaviour and adds the auth endpoints.
+/// ASP.NET Core Identity with a cookie session (<c>ControlHome.Session</c>, scheme <see cref="IdentityConstants.ApplicationScheme"/>).
+/// The user/role model and password/lockout options come from <see cref="IdentityCoreSetup"/> (shared with the
+/// <c>reset-admin</c> command); this adds the sign-in manager, the cookie and the authorization policies.
 /// </summary>
 public static class IdentitySetup
 {
     public const string SessionCookieName = "ControlHome.Session";
+    public const string TwoFactorRememberMeCookieName = "ControlHome.TwoFactorRememberMe";
+
+    /// <summary>How often a session's security stamp is re-checked (disabled users and role changes take effect).</summary>
+    public static readonly TimeSpan SecurityStampValidationInterval = TimeSpan.FromMinutes(1);
 
     public static IServiceCollection AddControlHomeIdentity(this IServiceCollection services)
     {
@@ -48,30 +54,22 @@ public static class IdentitySetup
                     Problems.From(AppError.Forbidden(ErrorCodes.AuthForbidden, "You are not allowed to do this."))
                         .ExecuteAsync(context.HttpContext);
                 options.Events.OnValidatePrincipal = SecurityStampValidator.ValidatePrincipalAsync;
+            })
+            // Never issued (there is no two-factor sign-in yet), but SecurityStampValidator signs this scheme out whenever it
+            // rejects a session (disabled user, changed role or password); without it that request would fail with a 500.
+            .AddCookie(IdentityConstants.TwoFactorRememberMeScheme, options =>
+            {
+                options.Cookie.Name = TwoFactorRememberMeCookieName;
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Strict;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
             });
 
-        services.AddIdentityCore<AppUser>(options =>
-            {
-                options.Password.RequiredLength = ValidationRules.PasswordMinLength;
-                options.Password.RequireDigit = false;
-                options.Password.RequireLowercase = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequiredUniqueChars = 1;
-                options.User.RequireUniqueEmail = false;
-                options.User.AllowedUserNameCharacters =
-                    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._@-";
-                options.Lockout.AllowedForNewUsers = true;
-                options.Lockout.MaxFailedAccessAttempts = 5;
-                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-            })
-            .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<ControlHomeDbContext>()
-            .AddSignInManager()
-            .AddDefaultTokenProviders();
+        services.AddControlHomeIdentityCore().AddSignInManager();
+        services.AddScoped<ISessionSignIn, SessionSignIn>();
 
-        // Disabled users and role changes take effect within a minute.
-        services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.FromMinutes(1));
+        // Disabled users and role changes (both update the security stamp) take effect within a minute.
+        services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = SecurityStampValidationInterval);
 
         services.AddAuthorizationBuilder()
             .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build())

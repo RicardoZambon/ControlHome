@@ -1,18 +1,145 @@
+using System.Globalization;
 using ControlHome.Application.Abstractions;
+using ControlHome.Application.Auditing;
+using ControlHome.Application.Auth;
 using ControlHome.Application.Common;
+using ControlHome.Application.Identity;
+using ControlHome.Domain.Homes;
+using ControlHome.Domain.Security;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace ControlHome.Application.Setup;
 
-/// <summary>First-run setup lifecycle. 0.2-A/E: status only; completion lands with Task 0.2-C.</summary>
-public sealed class SetupService(IControlHomeDb db, IDatabaseStatus databaseStatus)
+/// <summary>
+/// First-run setup lifecycle. Completion is one transaction under the application lock <see cref="LockName"/>, gated by
+/// the one-way <see cref="Home.SetupCompletedAtUtc"/> flag: exactly one first Admin is ever created, however many
+/// completions race; the others get 409 <c>setup.already_completed</c>.
+/// </summary>
+public sealed class SetupService(
+    IControlHomeDb db,
+    IDatabaseStatus databaseStatus,
+    ISetupCodeProvider setupCode,
+    IExclusiveTransaction exclusive,
+    UserManager<AppUser> userManager,
+    RoleManager<IdentityRole<Guid>> roleManager,
+    ISessionSignIn session,
+    IAuditLog auditLog,
+    TimeProvider timeProvider)
 {
+    public const string LockName = "ControlHome.Setup";
+
     /// <summary>Answers even while the database is not ready (then setup counts as not completed).</summary>
     public async Task<SetupStatusDto> GetStatusAsync(CancellationToken cancellationToken)
     {
-        var completed = databaseStatus.IsReady
-            && await db.Homes.AsNoTracking().AnyAsync(h => h.SetupCompletedAtUtc != null, cancellationToken);
-
+        var completed = databaseStatus.IsReady && await IsCompletedAsync(cancellationToken);
         return new SetupStatusDto(completed, databaseStatus.State, databaseStatus.IsConfigured, AppVersion.Informational);
+    }
+
+    /// <summary>
+    /// Creates the first Admin and the home, marks setup completed and signs the admin in.
+    /// 409 <c>setup.already_completed</c> once done; 400 <c>setup.invalid_code</c> for a wrong code.
+    /// </summary>
+    public async Task<Result<MeDto>> CompleteAsync(CompleteSetupRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (await IsCompletedAsync(cancellationToken))
+        {
+            return AlreadyCompleted();
+        }
+
+        if (!setupCode.Verify(request.SetupCode))
+        {
+            return AppError.Validation(ErrorCodes.SetupInvalidCode, "The setup code is not valid.");
+        }
+
+        var created = await exclusive.RunAsync(LockName, token => CreateAdminAndHomeAsync(request, token), cancellationToken);
+        if (created.IsFailure)
+        {
+            return created.Error;
+        }
+
+        setupCode.OnSetupCompleted();
+        await session.SignInAsync(created.Value, persistent: false);
+        return await userManager.ToMeDtoAsync(created.Value);
+    }
+
+    private static AppError AlreadyCompleted() =>
+        AppError.Conflict(ErrorCodes.SetupAlreadyCompleted, "Setup has already been completed.");
+
+    private Task<bool> IsCompletedAsync(CancellationToken cancellationToken) =>
+        db.Homes.AsNoTracking().AnyAsync(h => h.SetupCompletedAtUtc != null, cancellationToken);
+
+    /// <summary>Runs inside the setup lock and transaction.</summary>
+    private async Task<Result<AppUser>> CreateAdminAndHomeAsync(CompleteSetupRequest request, CancellationToken cancellationToken)
+    {
+        // Re-checked under the lock: a concurrent completion may have finished while this one waited.
+        if (await IsCompletedAsync(cancellationToken))
+        {
+            return AlreadyCompleted();
+        }
+
+        foreach (var role in Roles.All)
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                var roleResult = await roleManager.CreateAsync(new IdentityRole<Guid>(role) { Id = Guid.CreateVersion7() });
+                if (!roleResult.Succeeded)
+                {
+                    return roleResult.ToAppError("admin.role");
+                }
+            }
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var admin = new AppUser
+        {
+            Id = Guid.CreateVersion7(),
+            UserName = request.Admin.UserName,
+            DisplayName = request.Admin.DisplayName.Trim(),
+            Locale = request.Home.Locale,
+            Theme = Themes.System,
+            CreatedAtUtc = now,
+        };
+
+        var result = await userManager.CreateAsync(admin, request.Admin.Password);
+        if (!result.Succeeded)
+        {
+            return result.ToAppError("admin.password");
+        }
+
+        result = await userManager.AddToRoleAsync(admin, Roles.Admin);
+        if (!result.Succeeded)
+        {
+            return result.ToAppError("admin.userName");
+        }
+
+        var home = await db.Homes.SingleOrDefaultAsync(cancellationToken);
+        if (home is null)
+        {
+            home = new Home { Id = Home.SingletonId, CreatedAtUtc = now };
+            db.Homes.Add(home);
+        }
+
+        home.Name = request.Home.Name.Trim();
+        home.TimeZoneId = request.Home.TimeZoneId;
+        home.Latitude = request.Home.Latitude;
+        home.Longitude = request.Home.Longitude;
+        home.Locale = request.Home.Locale;
+        home.Currency = request.Home.Currency;
+        home.Tariff = new Tariff { Kind = Tariff.FlatKind, PricePerKwh = request.Home.PricePerKwh };
+        home.SetupCompletedAtUtc = now;
+
+        // Saves the home together with the audit entry.
+        await auditLog.WriteAsync(
+            new AuditEvent(
+                AuditActions.SetupCompleted,
+                AuthService.UserTarget,
+                admin.Id.ToString("D", CultureInfo.InvariantCulture),
+                new { AdminUserName = admin.UserName, HomeName = home.Name }),
+            cancellationToken);
+
+        return admin;
     }
 }

@@ -31,8 +31,9 @@ public static class SetupEndpoints
     private static async Task<Ok<SetupStatusDto>> GetStatusAsync(SetupService setup, CancellationToken cancellationToken) =>
         TypedResults.Ok(await setup.GetStatusAsync(cancellationToken));
 
-    private static Task<Results<Ok<MeDto>, ProblemHttpResult>> CompleteAsync(
+    private static async Task<Results<Ok<MeDto>, ProblemHttpResult>> CompleteAsync(
         CompleteSetupRequest request,
+        SetupService setup,
         CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-C");
+        (await setup.CompleteAsync(request, cancellationToken)).ToHttpResult();
 }
