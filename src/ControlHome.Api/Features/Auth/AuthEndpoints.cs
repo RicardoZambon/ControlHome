@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace ControlHome.Api.Features.Auth;
 
-/// <summary>Login, logout, the signed-in user's profile and password. Implemented by Task 0.2-D.</summary>
+/// <summary>Login, logout, the signed-in user's profile and password, and the reset-admin token redemption.</summary>
 public static class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
@@ -55,27 +55,35 @@ public static class AuthEndpoints
         return app;
     }
 
-    private static Task<Results<Ok<MeDto>, ProblemHttpResult>> LoginAsync(LoginRequest request, CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+    private static async Task<Results<Ok<MeDto>, ProblemHttpResult>> LoginAsync(
+        LoginRequest request,
+        AuthService auth,
+        CancellationToken cancellationToken) =>
+        (await auth.LoginAsync(request, cancellationToken)).ToHttpResult();
 
-    private static Task<NoContent> LogoutAsync(CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+    private static async Task<NoContent> LogoutAsync(AuthService auth, CancellationToken cancellationToken)
+    {
+        await auth.LogoutAsync(cancellationToken);
+        return TypedResults.NoContent();
+    }
 
-    private static Task<Results<NoContent, ProblemHttpResult>> ResetPasswordWithTokenAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult>> ResetPasswordWithTokenAsync(
         ResetPasswordWithTokenRequest request,
+        AuthService auth,
         CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+        (await auth.ResetPasswordWithTokenAsync(request, cancellationToken)).ToHttpResult();
 
-    private static Task<Results<Ok<MeDto>, ProblemHttpResult>> GetMeAsync(CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+    private static async Task<Results<Ok<MeDto>, ProblemHttpResult>> GetMeAsync(AuthService auth) =>
+        (await auth.GetMeAsync()).ToHttpResult();
 
-    private static Task<Results<Ok<MeDto>, ProblemHttpResult>> UpdateProfileAsync(
+    private static async Task<Results<Ok<MeDto>, ProblemHttpResult>> UpdateProfileAsync(
         UpdateProfileRequest request,
-        CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+        AuthService auth) =>
+        (await auth.UpdateProfileAsync(request)).ToHttpResult();
 
-    private static Task<Results<NoContent, ProblemHttpResult>> ChangePasswordAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult>> ChangePasswordAsync(
         ChangePasswordRequest request,
+        AuthService auth,
         CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+        (await auth.ChangePasswordAsync(request, cancellationToken)).ToHttpResult();
 }

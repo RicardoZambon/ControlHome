@@ -34,28 +34,55 @@ public sealed partial class DatabaseInitializer(
     /// <summary>Publishes the initial state synchronously (ExecuteAsync runs on a background task since .NET 10).</summary>
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        readiness.SetState(connections.GetConnectionString() is null ? DatabaseState.NotConfigured : DatabaseState.Connecting);
+        DatabaseState initial;
+        try
+        {
+            initial = connections.GetConnectionString() is null ? DatabaseState.NotConfigured : DatabaseState.Connecting;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // ExecuteAsync reads it again and reports the failure; starting the host must never fail because of it.
+            initial = DatabaseState.Connecting;
+        }
+
+        readiness.SetState(initial);
         return base.StartAsync(cancellationToken);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var connectionString = connections.GetConnectionString();
-        if (connectionString is null)
-        {
-            readiness.SetState(DatabaseState.NotConfigured);
-            LogNotConfigured();
-            return;
-        }
-
-        readiness.SetState(DatabaseState.Connecting);
         try
         {
+            var connectionString = connections.GetConnectionString();
+            if (connectionString is null)
+            {
+                readiness.SetState(DatabaseState.NotConfigured);
+                LogNotConfigured();
+                return;
+            }
+
+            readiness.SetState(DatabaseState.Connecting);
             await InitializeAsync(connectionString, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // Host shutting down.
+        }
+        catch (Exception ex)
+        {
+            // Last line of defence: a faulted BackgroundService would stop the whole host, but the API must keep answering
+            // (503 db.unavailable, /api/setup/status). Parser-style exceptions may quote the (secret) connection string,
+            // so only their type is logged.
+            if (ex is ArgumentException or FormatException)
+            {
+                LogUnexpectedFailureType(ex.GetType().FullName ?? ex.GetType().Name);
+            }
+            else
+            {
+                LogUnexpectedFailure(ex);
+            }
+
+            Fail(ErrorCodes.DbConnectionFailed, "unexpected error while initializing the database");
         }
     }
 
@@ -258,4 +285,10 @@ public sealed partial class DatabaseInitializer(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Database {DatabaseName} is ready")]
     private partial void LogReady(string databaseName);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unexpected error while initializing the database")]
+    private partial void LogUnexpectedFailure(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unexpected error while initializing the database ({ExceptionType}); check the connection string")]
+    private partial void LogUnexpectedFailureType(string exceptionType);
 }

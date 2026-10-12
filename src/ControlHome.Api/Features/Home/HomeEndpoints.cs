@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace ControlHome.Api.Features.Home;
 
-/// <summary>The home's settings. Implemented by Task 0.2-D.</summary>
+/// <summary>The home's settings.</summary>
 public static class HomeEndpoints
 {
     public static IEndpointRouteBuilder MapHomeEndpoints(this IEndpointRouteBuilder app)
@@ -31,11 +31,12 @@ public static class HomeEndpoints
         return app;
     }
 
-    private static Task<Results<Ok<HomeDto>, ProblemHttpResult>> GetAsync(CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+    private static async Task<Results<Ok<HomeDto>, ProblemHttpResult>> GetAsync(HomeService homes, CancellationToken cancellationToken) =>
+        (await homes.GetAsync(cancellationToken)).ToHttpResult();
 
-    private static Task<Results<Ok<HomeDto>, ProblemHttpResult>> UpdateAsync(
+    private static async Task<Results<Ok<HomeDto>, ProblemHttpResult>> UpdateAsync(
         UpdateHomeRequest request,
+        HomeService homes,
         CancellationToken cancellationToken) =>
-        throw new NotImplementedException("0.2-D");
+        (await homes.UpdateAsync(request, cancellationToken)).ToHttpResult();
 }

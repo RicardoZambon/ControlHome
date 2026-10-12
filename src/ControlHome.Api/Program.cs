@@ -7,11 +7,22 @@ using ControlHome.Api.Features.Users;
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
 using ControlHome.Application.Abstractions;
+using ControlHome.Application.Auditing;
+using ControlHome.Application.Auth;
+using ControlHome.Application.Homes;
 using ControlHome.Application.Setup;
+using ControlHome.Application.Users;
 using ControlHome.Infrastructure;
 using ControlHome.Infrastructure.Security;
+using ControlHome.Infrastructure.Setup;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
+
+// CLI commands run a minimal host of their own and exit before the web server is ever built.
+if (ResetAdminCommand.Matches(args))
+{
+    return await ResetAdminCommand.RunAsync(args, Console.Out, Console.Error);
+}
 
 // Nothing before builder.Build() may open a database or network connection or touch the data folder: `dotnet build` runs
 // this file to generate the OpenAPI document, and `dotnet ef` runs it to find the DbContext.
@@ -23,10 +34,12 @@ try
     builder.AddControlHomeLogging();
 
     builder.Services.AddControlHomeInfrastructure();
+    builder.Services.AddSetupInfrastructure();
     if (!BuildContext.IsOpenApiGeneration)
     {
         builder.Services.AddDatabaseInitializer();
         builder.Services.AddControlHomeDataProtection();
+        builder.Services.AddSetupCodeAnnouncer();
     }
 
     builder.Services.AddControlHomeJson();
@@ -42,6 +55,10 @@ try
 
     // Features (one line each).
     builder.Services.AddSetup();
+    builder.Services.AddAuth();
+    builder.Services.AddUsers();
+    builder.Services.AddHomes();
+    builder.Services.AddAuditing();
 
     var app = builder.Build();
 
@@ -91,5 +108,7 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+return 0;
 
 public partial class Program;
