@@ -104,25 +104,23 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
     }
 
     [Fact]
-    public async Task Missing_database_with_a_disallowed_name_is_not_created()
+    public async Task Missing_database_is_created_under_the_name_the_operator_chose()
     {
-        // Only ever against the throwaway container: the point is that the guard refuses, so never risk a shared server.
+        // The name is outside DatabaseNameGuard's tooling pattern, so the fixture could not drop it again: only ever against
+        // the throwaway container, never a shared server.
         Assert.SkipWhen(sql.UsesSharedServer, "Runs only against the Testcontainers SQL Server.");
         var ct = TestContext.Current.CancellationToken;
         await sql.EnsureStartedAsync();
-        const string DisallowedName = "ControlHome_NotAllowed";
-        var connectionString = new SqlConnectionStringBuilder(sql.MasterConnectionString) { InitialCatalog = DisallowedName }.ConnectionString;
+        const string ChosenName = "HomeAutomation_Main";
+        var connectionString = new SqlConnectionStringBuilder(sql.MasterConnectionString) { InitialCatalog = ChosenName }.ConnectionString;
         await using var services = InfrastructureHost.Build(Settings(connectionString));
 
         var readiness = await RunInitializerAsync(services, ct);
 
-        readiness.State.ShouldBe(DatabaseState.Failed);
-        readiness.LastError.ShouldBe("db.create_denied");
-        await using var connection = new SqlConnection(sql.MasterConnectionString);
-        await connection.OpenAsync(ct);
-        await using var command = new SqlCommand("SELECT DB_ID(@name)", connection);
-        command.Parameters.AddWithValue("@name", DisallowedName);
-        (await command.ExecuteScalarAsync(ct)).ShouldBe(DBNull.Value);
+        readiness.State.ShouldBe(DatabaseState.Ready, readiness.LastError);
+        var (compatibility, recovery) = await DatabaseSettingsAsync(ChosenName, ct);
+        compatibility.ShouldBe(170);
+        recovery.ShouldBe("SIMPLE");
     }
 
     [Fact]
@@ -165,8 +163,11 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
         await initializer.StartAsync(ct);
         try
         {
-            // A faulted ExecuteTask would stop the host (BackgroundServiceExceptionBehavior.StopHost).
-            await initializer.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(30), ct);
+            await WaitForStateAsync(readiness, DatabaseState.Failed, TimeSpan.FromSeconds(30), ct);
+
+            // A faulted ExecuteTask would stop the host (BackgroundServiceExceptionBehavior.StopHost): it keeps retrying instead.
+            initializer.ExecuteTask!.IsFaulted.ShouldBeFalse();
+            readiness.LastError.ShouldBe("db.connection_failed");
         }
         finally
         {
@@ -174,19 +175,177 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
         }
 
         initializer.ExecuteTask.IsCompletedSuccessfully.ShouldBeTrue();
-        readiness.State.ShouldBe(DatabaseState.Failed);
-        readiness.LastError.ShouldBe("db.connection_failed");
     }
 
     [Fact]
-    public async Task Without_a_connection_string_the_state_is_NotConfigured()
+    public async Task Without_a_connection_string_it_waits_in_NotConfigured_until_one_is_saved()
     {
         var ct = TestContext.Current.CancellationToken;
-        await using var services = InfrastructureHost.Build(new Dictionary<string, string?>());
+        const string ConnectionString = "Server=tcp:127.0.0.1,1;Database=ControlHome_Test_waiting;Encrypt=False";
+        var connections = new FakeConnectionProvider();
+        var probe = Substitute.For<ISqlServerProbe>();
+        probe.ProbeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<SqlServerFacts>(new InvalidOperationException("server down")));
+        var time = new RecordingTimeProvider();
+        await using var services = InfrastructureHost.Build(
+            new Dictionary<string, string?>(),
+            s => s.AddSingleton<IDatabaseConnectionProvider>(connections).AddSingleton(probe).AddSingleton<TimeProvider>(time));
+        var readiness = services.GetRequiredService<DatabaseReadiness>();
+        var initializer = services.GetRequiredService<DatabaseInitializer>();
 
-        var readiness = await RunInitializerAsync(services, ct);
+        await initializer.StartAsync(ct);
+        try
+        {
+            readiness.State.ShouldBe(DatabaseState.NotConfigured);
+            await Task.Delay(200, ct);
+            initializer.ExecuteTask!.IsCompleted.ShouldBeFalse();
+            await probe.DidNotReceive().ProbeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
 
-        readiness.State.ShouldBe(DatabaseState.NotConfigured);
+            connections.Set(ConnectionString);
+
+            // The first attempt ran (and failed): the initializer now waits one second before the next one.
+            (await time.NextTimerAsync()).ShouldBe(TimeSpan.FromSeconds(1));
+            readiness.State.ShouldBe(DatabaseState.Connecting);
+            await probe.Received(1).ProbeAsync(ConnectionString, "ControlHome_Test_waiting", Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            await initializer.StopAsync(ct);
+        }
+    }
+
+    [Fact]
+    public async Task After_the_startup_timeout_it_stays_Failed_and_retries_every_minute()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var serverAnswers = false;
+        var probe = Substitute.For<ISqlServerProbe>();
+        probe.ProbeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(_ => serverAnswers
+            ? Task.FromResult(new SqlServerFacts(MajorVersion: 16, DatabaseExists: true, CompatibilityLevel: 160, CanCreateDatabase: false, HasDatabaseAccess: true))
+            : Task.FromException<SqlServerFacts>(new InvalidOperationException("server down")));
+        var time = new RecordingTimeProvider();
+        var settings = Settings("Server=tcp:127.0.0.1,1;Database=ControlHome_Test_retry;Encrypt=False");
+        settings["Database:StartupTimeout"] = "00:00:02";
+        await using var services = InfrastructureHost.Build(settings, s => s.AddSingleton(probe).AddSingleton<TimeProvider>(time));
+        var readiness = services.GetRequiredService<DatabaseReadiness>();
+        var initializer = services.GetRequiredService<DatabaseInitializer>();
+
+        await initializer.StartAsync(ct);
+        try
+        {
+            // Start-up: attempt, wait 1 s, attempt, give up (the next wait would pass the 2 s timeout).
+            (await time.NextTimerAsync()).ShouldBe(TimeSpan.FromSeconds(1));
+            readiness.State.ShouldBe(DatabaseState.Connecting);
+            time.Advance(TimeSpan.FromSeconds(1));
+            (await time.NextTimerAsync()).ShouldBe(TimeSpan.FromSeconds(60));
+            readiness.State.ShouldBe(DatabaseState.Failed);
+            readiness.LastError.ShouldBe("db.connection_failed");
+            await probe.Received(2).ProbeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+            // Nothing happens before the minute is up ...
+            time.Advance(TimeSpan.FromSeconds(59));
+            await Task.Delay(200, ct);
+            await probe.Received(2).ProbeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+            // ... then one attempt per minute, and the state stays Failed (not back to Connecting) while it fails.
+            time.Advance(TimeSpan.FromSeconds(1));
+            (await time.NextTimerAsync()).ShouldBe(TimeSpan.FromSeconds(60));
+            await probe.Received(3).ProbeAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            readiness.State.ShouldBe(DatabaseState.Failed);
+            readiness.LastError.ShouldBe("db.connection_failed");
+
+            // A retry runs the whole initialization: the server now answers, but it is too old.
+            serverAnswers = true;
+            time.Advance(TimeSpan.FromSeconds(60));
+            (await time.NextTimerAsync()).ShouldBe(TimeSpan.FromSeconds(60));
+            readiness.State.ShouldBe(DatabaseState.Failed);
+            readiness.LastError.ShouldBe("sql.version_unsupported");
+        }
+        finally
+        {
+            await initializer.StopAsync(ct);
+        }
+
+        initializer.ExecuteTask!.IsCompletedSuccessfully.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Saved_connection_is_initialized_after_waiting_in_NotConfigured()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await sql.EnsureStartedAsync();
+        var suffix = NewSuffix();
+        var connections = new FakeConnectionProvider();
+        await using var services = InfrastructureHost.Build(
+            new Dictionary<string, string?>(),
+            s => s.AddSingleton<IDatabaseConnectionProvider>(connections));
+        var readiness = services.GetRequiredService<DatabaseReadiness>();
+        var initializer = services.GetRequiredService<DatabaseInitializer>();
+        try
+        {
+            await initializer.StartAsync(ct);
+            try
+            {
+                readiness.State.ShouldBe(DatabaseState.NotConfigured);
+
+                connections.Set(sql.CreateDatabaseConnectionString(suffix));
+
+                await WaitForStateAsync(readiness, DatabaseState.Ready, _readyTimeout, ct);
+            }
+            finally
+            {
+                await initializer.StopAsync(ct);
+            }
+
+            await using var scope = services.CreateAsyncScope();
+            (await scope.ServiceProvider.GetRequiredService<ControlHomeDbContext>().Roles.CountAsync(ct)).ShouldBe(Roles.All.Count);
+        }
+        finally
+        {
+            await sql.DropDatabaseAsync(sql.DatabaseName(suffix));
+        }
+    }
+
+    [Fact]
+    public async Task Database_that_answers_only_after_the_startup_timeout_recovers_without_a_restart()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await sql.EnsureStartedAsync();
+        var suffix = NewSuffix();
+        var probe = new SwitchableProbe(new SqlServerProbe()) { Down = true };
+        var time = new RecordingTimeProvider();
+        var settings = Settings(sql.CreateDatabaseConnectionString(suffix));
+        settings["Database:StartupTimeout"] = "00:00:02";
+        await using var services = InfrastructureHost.Build(
+            settings,
+            s => s.AddSingleton<ISqlServerProbe>(probe).AddSingleton<TimeProvider>(time));
+        var readiness = services.GetRequiredService<DatabaseReadiness>();
+        var initializer = services.GetRequiredService<DatabaseInitializer>();
+        try
+        {
+            await initializer.StartAsync(ct);
+            try
+            {
+                (await time.NextTimerAsync()).ShouldBe(TimeSpan.FromSeconds(1));
+                time.Advance(TimeSpan.FromSeconds(1));
+                (await time.NextTimerAsync()).ShouldBe(TimeSpan.FromSeconds(60));
+                readiness.State.ShouldBe(DatabaseState.Failed);
+
+                probe.Down = false;
+                time.Advance(TimeSpan.FromSeconds(60));
+
+                await WaitForStateAsync(readiness, DatabaseState.Ready, _readyTimeout, ct);
+                readiness.LastError.ShouldBeNull();
+            }
+            finally
+            {
+                await initializer.StopAsync(ct);
+            }
+        }
+        finally
+        {
+            await sql.DropDatabaseAsync(sql.DatabaseName(suffix));
+        }
     }
 
     private static Dictionary<string, string?> Settings(string connectionString) => new()
@@ -196,7 +355,7 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
 
     private static string NewSuffix() => RandomNumberGenerator.GetHexString(8, lowercase: true);
 
-    /// <summary>Starts the initializer and waits until it settles (Ready, Failed or NotConfigured).</summary>
+    /// <summary>Starts the initializer and waits until it settles (Ready or Failed), then stops it.</summary>
     private static async Task<DatabaseReadiness> RunInitializerAsync(ServiceProvider services, CancellationToken ct)
     {
         var readiness = services.GetRequiredService<DatabaseReadiness>();
@@ -204,7 +363,12 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
         await initializer.StartAsync(ct);
         try
         {
-            await initializer.ExecuteTask!.WaitAsync(_readyTimeout, ct);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(_readyTimeout);
+            while (readiness.State is not (DatabaseState.Ready or DatabaseState.Failed))
+            {
+                await Task.Delay(50, timeout.Token);
+            }
         }
         finally
         {

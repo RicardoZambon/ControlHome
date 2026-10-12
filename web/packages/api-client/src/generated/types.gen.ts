@@ -63,6 +63,30 @@ export type CreateUserRequest = {
 };
 
 /**
+ * Pre-database setup: the SQL Server connection to test and save. Accepted only while no connection is configured.
+ * The connection always uses TLS (`Encrypt=True`); TrustServerCertificate accepts the server's
+ * own (usually self-signed) certificate.
+ */
+export type DatabaseSetupRequest = {
+    /**
+     * The one-time setup code (as for `POST /api/setup/complete`).
+     */
+    setupCode: string;
+    /**
+     * Host name or IP address of the SQL Server, as the ControlHome server (container) resolves it.
+     */
+    host: string;
+    port: number;
+    /**
+     * The application database; created by ControlHome when the login may create databases.
+     */
+    database: string;
+    userName: string;
+    password: string;
+    trustServerCertificate: boolean;
+};
+
+/**
  * The home's settings.
  */
 export type HomeDto = {
@@ -211,9 +235,18 @@ export type SetupStatusDto = {
      */
     databaseState: string;
     /**
-     * Whether a database connection string is configured.
+     * Whether a database connection is configured (either source).
      */
     databaseConfigured: boolean;
+    /**
+     * Where the connection comes from: `environment` (`ConnectionStrings__ControlHome`), `file` (saved by the
+     * setup wizard) or `none` (pre-database setup mode: `POST /api/setup/database`).
+     */
+    databaseSource: string;
+    /**
+     * While DatabaseState is `Failed`: the error code, e.g. `db.connection_failed`.
+     */
+    databaseError: null | string;
     /**
      * The application's informational version.
      */
@@ -279,6 +312,39 @@ export type GetSetupStatusResponses = {
 };
 
 export type GetSetupStatusResponse = GetSetupStatusResponses[keyof GetSetupStatusResponses];
+
+export type ConfigureDatabaseData = {
+    body: DatabaseSetupRequest;
+    path?: never;
+    query?: never;
+    url: '/api/setup/database';
+};
+
+export type ConfigureDatabaseErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+};
+
+export type ConfigureDatabaseError = ConfigureDatabaseErrors[keyof ConfigureDatabaseErrors];
+
+export type ConfigureDatabaseResponses = {
+    /**
+     * Accepted
+     */
+    202: SetupStatusDto;
+};
+
+export type ConfigureDatabaseResponse = ConfigureDatabaseResponses[keyof ConfigureDatabaseResponses];
 
 export type CompleteSetupData = {
     body: CompleteSetupRequest;

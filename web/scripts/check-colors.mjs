@@ -6,6 +6,8 @@
 //   - hex colors (#fff, #ffffff80) in CSS, <style>, template attributes and script strings
 //   - color functions: rgb(), rgba(), hsl(), hsla(), hwb(), lab(), lch(), oklab(), oklch(), color-mix(), color(<space> ...)
 //   - CSS named colors (red, white, ...) in color declarations, style objects and SVG paint attributes
+//   - Tailwind black/white utilities (text-white, bg-black/80, hover:border-white, ...): they bypass the
+//     semantic pairs (use text-primary-foreground, bg-overlay, bg-background, ...)
 // A line that contains the marker `color-ok` (e.g. `/* color-ok */`) is skipped.
 //
 // Usage: node scripts/check-colors.mjs            (exit 1 and file:line list on violations)
@@ -62,6 +64,17 @@ const PAINT_ATTRIBUTE =
   /(?<![\w:@.-])(?:fill|stroke|stop-color|flood-color|lighting-color|color)\s*=\s*"([^"]*)"/g
 // Template attributes whose `#...` value is a URL fragment, not a color.
 const FRAGMENT_ATTRIBUTE = /(?:href|xlink:href|to)\s*=\s*["']$/
+// Tailwind utilities that take a color, used with black/white and an optional opacity (`bg-black/80`,
+// `text-white/[0.9]`). Variant prefixes (`hover:`, `dark:`, `data-[x]:`) are added to the report below.
+const COLOR_UTILITY =
+  'bg|text|border(?:-[xytrblse])?|outline|ring|ring-offset|inset-ring|divide|fill|stroke|accent|caret|' +
+  'decoration|placeholder|shadow|inset-shadow|drop-shadow|text-shadow|from|via|to'
+const BLACK_WHITE_UTILITY = new RegExp(
+  `(?<![\\w-])!?(?:${COLOR_UTILITY})-(?:black|white)(?:\\/(?:\\d+(?:\\.\\d+)?|\\[[^\\]\\s]+\\]|\\([^)\\s]+\\)))?!?(?![\\w-])`,
+  'g',
+)
+// Characters that can belong to a class token, used to extend a match back over its variant prefixes.
+const CLASS_TOKEN_CHAR = /[^\s'"`(),{};]/
 
 function namedColorIn(value) {
   const words = value
@@ -122,6 +135,11 @@ export function findColorLiterals(fileName, text) {
         report(match[0])
       }
       for (const match of line.matchAll(COLOR_FUNCTION)) report(match[0])
+      for (const match of line.matchAll(BLACK_WHITE_UTILITY)) {
+        let start = match.index
+        while (start > 0 && CLASS_TOKEN_CHAR.test(line[start - 1])) start -= 1
+        report(line.slice(start, match.index + match[0].length))
+      }
       for (const match of line.matchAll(COLOR_DECLARATION)) {
         if (region.kind === 'script' && !match[1]) continue
         const named = namedColorIn(match[2])

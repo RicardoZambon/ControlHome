@@ -58,8 +58,91 @@
   --color-state-info: var(--state-info);
   --color-state-info-foreground: var(--state-info-foreground);
 
+  --color-room-1: var(--room-1);
+  --color-room-1-foreground: var(--room-1-foreground);
+  --color-room-2: var(--room-2);
+  --color-room-2-foreground: var(--room-2-foreground);
+  --color-room-3: var(--room-3);
+  --color-room-3-foreground: var(--room-3-foreground);
+  --color-room-4: var(--room-4);
+  --color-room-4-foreground: var(--room-4-foreground);
+  --color-room-5: var(--room-5);
+  --color-room-5-foreground: var(--room-5-foreground);
+  --color-room-6: var(--room-6);
+  --color-room-6-foreground: var(--room-6-foreground);
+  --color-room-7: var(--room-7);
+  --color-room-7-foreground: var(--room-7-foreground);
+  --color-room-8: var(--room-8);
+  --color-room-8-foreground: var(--room-8-foreground);
+
+  /* Modal scrim behind dialogs and sheets (`bg-overlay`). */
+  --color-overlay: var(--overlay);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Control sizes (sizes.css): `h-control`, `size-control-sm`, `pr-control`, ... */
+  --spacing-control-sm: var(--control-h-sm);
+  --spacing-control: var(--control-h);
+  --spacing-control-lg: var(--control-h-lg);
+}
+
+/*
+ * Shadows: Tailwind's scales hard-code black (`rgb(0 0 0 / 0.1)`). They are replaced with the same geometry
+ * colored by the shadow tokens, so shadows follow the theme (stronger on dark surfaces). Tailwind still wraps
+ * each color as `var(--tw-shadow-color, var(--shadow-color))`, so `shadow-primary` and `shadow-md/50` work.
+ */
+@theme inline {
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+
+  --shadow-2xs: 0 1px var(--shadow-color-subtle);
+  --shadow-xs: 0 1px 2px 0 var(--shadow-color-subtle);
+  /*
+   * From sm up, raised surfaces (cards, menus, dialogs, sheets) also get a 1 px top highlight. It is invisible on the
+   * light theme (white on white) and shows the elevation on dark surfaces, where shadows barely read.
+   */
+  --shadow-sm:
+    inset 0 1px 0 0 var(--shadow-highlight), 0 1px 3px 0 var(--shadow-color),
+    0 1px 2px -1px var(--shadow-color);
+  --shadow-md:
+    inset 0 1px 0 0 var(--shadow-highlight), 0 4px 6px -1px var(--shadow-color),
+    0 2px 4px -2px var(--shadow-color);
+  --shadow-lg:
+    inset 0 1px 0 0 var(--shadow-highlight), 0 10px 15px -3px var(--shadow-color),
+    0 4px 6px -4px var(--shadow-color);
+  --shadow-xl:
+    inset 0 1px 0 0 var(--shadow-highlight), 0 20px 25px -5px var(--shadow-color),
+    0 8px 10px -6px var(--shadow-color);
+  --shadow-2xl: inset 0 1px 0 0 var(--shadow-highlight), 0 25px 50px -12px var(--shadow-color-strong);
+
+  --inset-shadow-2xs: inset 0 1px var(--shadow-color-subtle);
+  --inset-shadow-xs: inset 0 1px 1px var(--shadow-color-subtle);
+  --inset-shadow-sm: inset 0 2px 4px var(--shadow-color-subtle);
+
+  --drop-shadow-xs: 0 1px 1px var(--shadow-color-subtle);
+  --drop-shadow-sm: 0 1px 2px var(--shadow-color);
+  --drop-shadow-md: 0 3px 3px var(--shadow-color);
+  --drop-shadow-lg: 0 4px 4px var(--shadow-color);
+  --drop-shadow-xl: 0 9px 7px var(--shadow-color);
+  --drop-shadow-2xl: 0 25px 25px var(--shadow-color-strong);
+
+  --text-shadow-2xs: 0px 1px 0px var(--shadow-color);
+  --text-shadow-xs: 0px 1px 1px var(--shadow-color);
+  --text-shadow-sm:
+    0px 1px 0px var(--shadow-color-subtle), 0px 1px 1px var(--shadow-color-subtle),
+    0px 2px 2px var(--shadow-color-subtle);
+  --text-shadow-md:
+    0px 1px 1px var(--shadow-color), 0px 1px 2px var(--shadow-color), 0px 2px 4px var(--shadow-color);
+  --text-shadow-lg:
+    0px 1px 2px var(--shadow-color), 0px 3px 2px var(--shadow-color), 0px 4px 8px var(--shadow-color);
+
+  /* Deprecated bare utilities (`shadow`, `shadow-inner`, `drop-shadow`), kept consistent with the scales. */
+  --shadow: 0 1px 3px 0 var(--shadow-color), 0 1px 2px -1px var(--shadow-color);
+  --shadow-inner: inset 0 2px 4px 0 var(--shadow-color-subtle);
+  --drop-shadow: 0 1px 2px var(--shadow-color), 0 1px 1px var(--shadow-color-subtle);
 }

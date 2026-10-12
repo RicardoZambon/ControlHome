@@ -1,0 +1,44 @@
+{
+  "title": "Início",
+  "nav": "Início",
+  "greeting": {
+    "morning": "Bom dia, {name}",
+    "afternoon": "Boa tarde, {name}",
+    "evening": "Boa noite, {name}",
+    "night": "Boa noite, {name}"
+  },
+  "welcome": "{home} está configurada e pronta para o que vem a seguir.",
+  "localTime": "Hora local na casa",
+  "planTeaser": "A planta da sua casa vai ficar aqui",
+  "planTeaserDetail": "Desenhe andares e cômodos na próxima atualização e depois posicione seus dispositivos neles.",
+  "start": {
+    "heading": "Deixe do seu jeito",
+    "profileTitle": "Seu perfil",
+    "profileDescription": "Seu nome, idioma, tema e senha.",
+    "usersTitle": "Usuários",
+    "usersDescription": "Adicione quem mora aqui e escolha o que cada pessoa pode fazer.",
+    "open": "Abrir"
+  },
+  "details": {
+    "heading": "Dados da casa",
+    "timeZone": "Fuso horário",
+    "location": "Localização",
+    "language": "Idioma",
+    "currency": "Moeda",
+    "price": "Preço da energia",
+    "perKwh": "{price} por kWh",
+    "loadFailed": "Não foi possível carregar os dados da casa."
+  },
+  "next": {
+    "heading": "Em breve",
+    "badge": "Próximo",
+    "planned": "Planejado",
+    "floorsTitle": "Andares e cômodos",
+    "floorsDescription": "Desenhe cada andar, contorne os cômodos e dê uma cor a cada espaço.",
+    "devicesTitle": "Dispositivos e integrações",
+    "devicesDescription": "Conecte luzes, tomadas e sensores e controle tudo ao vivo de qualquer tela.",
+    "energyTitle": "Energia e histórico",
+    "energyDescription": "Veja quanto cada dispositivo consome e quanto custa pelo preço da sua energia."
+  },
+  "planBanner": "As plantas da casa chegam na próxima atualização."
+}

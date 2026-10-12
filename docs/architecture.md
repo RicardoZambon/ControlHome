@@ -539,12 +539,18 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   - Data path `/data` (`ControlHome:DataPath`): keys, logs, setup code, uploads, `config/`, backups.
 - **Database connection**
   - The connection string comes from env `ConnectionStrings__ControlHome`, then from `/data/config/database.json`
-    (encrypted with a bootstrap Data Protection key ring protected by the certificate).
-  - If neither is present, the app starts in **pre-DB setup mode**: a wizard step, gated by the setup code, asks for
-    host, port, DB, login, password and "trust server certificate", tests the connection and saves it.
-  - The app creates the DB if the login is allowed to; otherwise it shows the T-SQL to run (`db.create_denied`).
+    (`setup/status` reports `databaseSource`: `environment`, `file` or `none`). The file holds the string encrypted
+    with a bootstrap Data Protection key ring (`/data/keys/bootstrap`, application name `ControlHome.Bootstrap`)
+    protected by the same certificate as the main key ring; it is written atomically, owner-only.
+  - If neither is present, the app starts in **pre-DB setup mode**: the wizard's Database step (after the setup code)
+    asks for host, port, DB, login, password and "trust server certificate"; `POST /api/setup/database` (setup code,
+    rate limit `setup`, only while nothing is configured) tests the connection (always TLS) and saves it, and the
+    initializer starts without a restart. Errors never echo the password or the connection string.
+  - The app creates the DB if the login is allowed to (any name the operator chose; it never drops a database);
+    otherwise it shows the T-SQL to run (`db.create_denied`: the DB plus a `ControlHome_App` login owning only it).
   - Inside containers, address the DB by IP (`127.0.0.1:1433` on Umbrel), never `*.local`.
-  - At startup the app retries the DB for up to 10 min, showing a "waiting for database" page.
+  - At startup the app retries the DB for up to 10 min, showing a "waiting for database" page; after that the state
+    stays `Failed` and the whole initialization is retried every 60 s, so a late database recovers without a restart.
 - **DB operations**
   - On a DB the app created: recovery model SIMPLE and fixed autogrowth.
   - Migrations: refuse to downgrade, write a pre-migration config export, and `Database:AutoMigrate=false` together

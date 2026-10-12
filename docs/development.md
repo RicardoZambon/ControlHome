@@ -143,11 +143,27 @@ npm run gen:api       # regenerate @controlhome/api-client from packages/api-cli
 
 ### End-to-end tests (from milestone 0.3)
 
-`scripts/e2e.ps1` builds the web app, creates `ControlHome_Test_e2e`, runs the API with
-`ASPNETCORE_ENVIRONMENT=Testing` (enables `/api/_test/*`) and `Setup__Code=E2E-SETUP-CODE-1`, waits for
-`/health/ready`, runs Playwright (desktop 1440×900 and mobile 375×812 projects), then stops the API and drops the
-database. `npm run screenshots` captures every main route at 1440/375 px × light/dark × en/pt-BR into
-`web/tests/e2e/screenshots/` (gitignored).
+```powershell
+cd web; npx playwright install chromium; cd ..   # once
+./scripts/e2e.ps1                                # the specs (desktop 1440×900 and mobile 375×812 projects)
+./scripts/e2e.ps1 -Screenshots                   # npm run screenshots instead
+./scripts/e2e.ps1 -NoBuild --project desktop --grep "last admin"   # reuse the image; extra args go to Playwright
+```
+
+`scripts/e2e.ps1` builds the image from `deploy/Dockerfile` (`controlhome:e2e`; the API runs in Docker, so Smart App
+Control is not involved), points it at the dev SQL Server from user-secrets with the database `ControlHome_Test_E2e`
+(the connection string goes through a temporary `--env-file`, never the command line or the console), runs it with
+`ASPNETCORE_ENVIRONMENT=Testing` (enables `/api/_test/*`), `Setup__Code=E2E-SETUP-CODE-1`, raised rate limits and a
+tmpfs `/data` on <http://localhost:18711>, waits for `/health/ready`, runs Playwright, then removes the container and
+drops the database (guarded name, via `sqlcmd`). Against an app you started yourself:
+`E2E_BASE_URL=http://localhost:8080 npm run e2e` (CI uses the compose files plus `deploy/docker-compose.e2e.yml`).
+
+Every test starts with `POST /api/_test/reset`, and every page passes the global gates in `web/tests/e2e/fixtures.ts`:
+no console errors or uncaught exceptions (4xx answers from `/api/*` are part of the flows), no missing i18n keys (the
+app warns `[i18n] Missing key …`), no axe-core violation of impact serious or critical, and no horizontal scrolling at
+375 px (`gates.spec.ts` shows each gate failing a page that breaks it). `npm run screenshots` captures `/setup`, `/login`, `/`, `/users`, `/profile` and `/dev/ui-kit` at 1440/375 px
+× light/dark × en/pt-BR into `web/tests/e2e/screenshots/` (gitignored), running the same gates on each. Reports:
+`web/tests/e2e/playwright-report/{e2e,screenshots}` (`npx playwright show-report <folder>`).
 
 ## Secret scanning
 

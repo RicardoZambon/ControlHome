@@ -24,17 +24,17 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
   - Web: npm workspace with design tokens plus 3 primitives (button, card, input) in `@controlhome/ui`.
   - Tooling: `ci.yml` (build / lint / test / secret scan), `.claude/launch.json` (api on 5080, web on 5173 with proxy),
     the dev scripts, README quickstart, `development.md`, `architecture.md`, ADR 0001.
-- [ ] **0.2 Data and auth API** *(in progress)*
+- [x] **0.2 Data and auth API** — [#2](https://github.com/RicardoZambon/ControlHome/pull/2)
   - DbContext, Identity, initial migration, SQL Server 2025 check, database readiness (503 `db.unavailable` until ready).
   - Setup lifecycle and setup code; login / logout / me; request-edge protections; rate limits; roles; users API.
   - ProblemDetails with `code`, Serilog (redaction lands with the first secret-bearing connector in 1.2), Data
     Protection with a certificate.
   - Committed `openapi.json` + generated client + drift check; test-environment endpoints. Integration tests.
-- [ ] **0.3 Shell and auth UI**
+- [x] **0.3 Shell and auth UI** — [#3](https://github.com/RicardoZambon/ControlHome/pull/3)
   - App shell, theme (light / dark / system), i18n (pt-BR + en), setup wizard, login, users admin, profile,
     `/dev/ui-kit`.
   - Specs: `setup`, `login`, `users-admin`, `theme-i18n`; screenshot runner.
-- [ ] **0.4 Packaging**
+- [x] **0.4 Packaging** — [#3](https://github.com/RicardoZambon/ControlHome/pull/3)
   - Dockerfile (multi-arch, chiseled, digest-pinned), prod and dev compose, pre-DB setup mode, CI compose smoke,
     `release.yml` (`edge`), CodeQL, Dependabot.
   - **Exit:** in CI, the prod compose with `bundled-db` passes the setup → login spec, the image completes DB setup

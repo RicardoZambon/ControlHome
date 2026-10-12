@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using ControlHome.Infrastructure.Persistence;
 using ControlHome.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,6 +50,7 @@ public sealed class DatabaseNotConfiguredTests(NoDatabaseApiFactory factory) : I
         status.GetProperty("setupCompleted").GetBoolean().ShouldBeFalse();
         status.GetProperty("databaseState").GetString().ShouldBe(nameof(DatabaseState.NotConfigured));
         status.GetProperty("databaseConfigured").GetBoolean().ShouldBeFalse();
+        status.GetProperty("databaseSource").GetString().ShouldBe("none");
         status.GetProperty("version").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
@@ -117,6 +119,24 @@ public sealed class DatabaseUnreachableTests(UnreachableDatabaseApiFactory facto
         }
 
         readiness.LastError.ShouldBe("db.connection_failed");
+
+        using (var failed = await client.GetAsync("/api/setup/status", TestContext.Current.CancellationToken))
+        {
+            var status = await failed.ReadJsonAsync(TestContext.Current.CancellationToken);
+            status.GetProperty("databaseState").GetString().ShouldBe(nameof(DatabaseState.Failed));
+            status.GetProperty("databaseError").GetString().ShouldBe("db.connection_failed");
+            status.GetProperty("databaseSource").GetString().ShouldBe("environment");
+        }
+
+        // The wizard's database step is only for a server without a configured connection.
+        using (var configure = await client.PostAsJsonAsync(
+            "/api/setup/database",
+            new { setupCode = ControlHomeApiFactory.SetupCode, host = "127.0.0.1", port = 1, database = "ControlHome_Test_x", userName = "sa", password = "x", trustServerCertificate = true },
+            TestContext.Current.CancellationToken))
+        {
+            configure.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+            (await configure.ReadProblemCodeAsync(TestContext.Current.CancellationToken)).ShouldBe("db.already_configured");
+        }
 
         using var gated = await client.GetAsync("/api/anything", TestContext.Current.CancellationToken);
         gated.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);

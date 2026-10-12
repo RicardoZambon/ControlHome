@@ -21,6 +21,7 @@ public static class ErrorCodes
 
     // Database
     public const string DbUnavailable = "db.unavailable";
+    public const string DbAlreadyConfigured = "db.already_configured";
     public const string DbConnectionFailed = "db.connection_failed";
     public const string DbCreateDenied = "db.create_denied";
     public const string DbMigrationFailed = "db.migration_failed";

@@ -41,6 +41,31 @@ describe('findColorLiterals', () => {
     expect(literals(file, text)).toEqual([])
   })
 
+  // `black`/`white` utilities bypass the semantic pairs (text-white on a fill, bg-black/80 scrims, ...).
+  it.each([
+    ['a.vue', '<template><div class="bg-black/80 fixed inset-0" /></template>', 'bg-black/80'],
+    ['a.vue', '<template><span class="bg-destructive text-white" /></template>', 'text-white'],
+    ['a.vue', '<template><i class="hover:bg-white" /></template>', 'hover:bg-white'],
+    ['a.vue', '<template><i :class="cn(\'dark:border-black/40\', x)" /></template>', 'dark:border-black/40'],
+    ['a.vue', '<template><i class="border-t-white ring-black" /></template>', 'border-t-white'],
+    ['a.vue', '<template><i class="text-black/[0.4]" /></template>', 'text-black/[0.4]'],
+    ['a.ts', "const v = cva('bg-white text-foreground')", 'bg-white'],
+    ['a.ts', 'const v = `focus:!text-black`', 'focus:!text-black'],
+    ['a.css', '.x { @apply bg-black/50; }', 'bg-black/50'],
+  ])('flags black/white utilities in %s: %s', (file, text, expected) => {
+    expect(literals(file, text)).toContain(expected)
+  })
+
+  it.each([
+    ['a.vue', '<template><div class="bg-overlay bg-background text-primary-foreground" /></template>'],
+    ['a.vue', '<template><div class="whitespace-nowrap text-white-ish" /></template>'],
+    ['a.css', '.x { --color-white: var(--white); --color-black: var(--black); }'],
+    ['a.ts', '// bg-white in a comment\nconst a = 1'],
+    ['a.vue', '<template><div class="bg-white" /><!-- color-ok --></template>'],
+  ])('ignores %s: %s', (file, text) => {
+    expect(literals(file, text)).toEqual([])
+  })
+
   it('reports 1-based line numbers inside single-file components', () => {
     const sfc = [
       '<script setup lang="ts">',

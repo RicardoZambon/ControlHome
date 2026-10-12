@@ -27,6 +27,68 @@
         }
       }
     },
+    "/api/setup/database": {
+      "post": {
+        "tags": [
+          "Setup"
+        ],
+        "summary": "Pre-database setup: tests the SQL Server connection, saves it (encrypted) and starts the database initialization.",
+        "description": "Only while no database connection is configured (else 409 db.already_configured); answers even while the database is not ready. 400: validation.failed, setup.invalid_code, db.connection_failed (extension reason), sql.version_unsupported or sql.compatibility_unsupported; 409: db.create_denied (extension script: T-SQL for an administrator) or db.already_configured. 202: saved; poll GET /api/setup/status until databaseState is Ready.",
+        "operationId": "configureDatabase",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatusDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/setup/complete": {
       "post": {
         "tags": [
@@ -1049,6 +1111,46 @@
           }
         }
       },
+      "DatabaseSetupRequest": {
+        "required": [
+          "setupCode",
+          "host",
+          "port",
+          "database",
+          "userName",
+          "password",
+          "trustServerCertificate"
+        ],
+        "type": "object",
+        "properties": {
+          "setupCode": {
+            "type": "string",
+            "description": "The one-time setup code (as for `POST /api/setup/complete`)."
+          },
+          "host": {
+            "type": "string",
+            "description": "Host name or IP address of the SQL Server, as the ControlHome server (container) resolves it."
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "database": {
+            "type": "string",
+            "description": "The application database; created by ControlHome when the login may create databases."
+          },
+          "userName": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "trustServerCertificate": {
+            "type": "boolean"
+          }
+        },
+        "description": "Pre-database setup: the SQL Server connection to test and save. Accepted only while no connection is configured.\nThe connection always uses TLS (`Encrypt=True`); TrustServerCertificate accepts the server's\nown (usually self-signed) certificate."
+      },
       "HomeDto": {
         "required": [
           "id",
@@ -1392,6 +1494,8 @@
           "setupCompleted",
           "databaseState",
           "databaseConfigured",
+          "databaseSource",
+          "databaseError",
           "version"
         ],
         "type": "object",
@@ -1405,7 +1509,18 @@
           },
           "databaseConfigured": {
             "type": "boolean",
-            "description": "Whether a database connection string is configured."
+            "description": "Whether a database connection is configured (either source)."
+          },
+          "databaseSource": {
+            "type": "string",
+            "description": "Where the connection comes from: `environment` (`ConnectionStrings__ControlHome`), `file` (saved by the\nsetup wizard) or `none` (pre-database setup mode: `POST /api/setup/database`)."
+          },
+          "databaseError": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "While DatabaseState is `Failed`: the error code, e.g. `db.connection_failed`."
           },
           "version": {
             "type": "string",

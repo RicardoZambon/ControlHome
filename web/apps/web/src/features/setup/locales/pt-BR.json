@@ -1,0 +1,152 @@
+{
+  "title": "Configurar o ControlHome",
+  "eyebrow": "Configuração inicial",
+  "heading": "Bem-vindo à sua casa",
+  "intro": "Alguns detalhes e sua casa fica pronta. Leva uns dois minutos.",
+  "progress": "Etapas da configuração",
+  "stepOf": "Etapa {current} de {total}",
+  "completed": "concluída",
+  "current": "etapa atual",
+  "steps": {
+    "code": {
+      "label": "Código",
+      "title": "Confirme que o servidor é seu",
+      "description": "Digite o código de uso único que o ControlHome mostrou ao iniciar. Só quem tem acesso ao servidor consegue vê-lo."
+    },
+    "database": {
+      "label": "Banco de dados",
+      "title": "Conecte o banco de dados",
+      "description": "O ControlHome guarda sua casa no SQL Server 2025. Informe qual servidor usar; a conexão é testada antes de qualquer coisa ser salva."
+    },
+    "admin": {
+      "label": "Sua conta",
+      "title": "Crie o administrador",
+      "description": "Esta conta gerencia a casa. Depois você pode adicionar o resto da família."
+    },
+    "home": {
+      "label": "Sua casa",
+      "title": "Conte ao ControlHome sobre a sua casa",
+      "description": "Usado em horários, nascer e pôr do sol e custos de energia."
+    },
+    "review": {
+      "label": "Revisão",
+      "title": "Está tudo certo?",
+      "description": "Confira os dados abaixo. Quase tudo pode ser alterado depois."
+    }
+  },
+  "code": {
+    "label": "Código de configuração",
+    "placeholder": "XXXX-XXXX-XXXX",
+    "help": "Ele está no log do servidor (procure por “First-run setup code”) e no setup-code.txt da pasta de dados. Hífens e espaços não importam."
+  },
+  "admin": {
+    "displayName": "Seu nome",
+    "displayNameHelp": "Como o ControlHome vai cumprimentar você.",
+    "userName": "Nome de usuário",
+    "userNameHelp": "Usado para entrar, por exemplo ana ou ana.souza.",
+    "password": "Senha",
+    "passwordHelp": "Pelo menos 10 caracteres. Uma frase curta é fácil de lembrar e difícil de adivinhar.",
+    "confirmPassword": "Confirme a senha"
+  },
+  "home": {
+    "name": "Nome da casa",
+    "namePlaceholder": "Nossa casa",
+    "timeZone": "Fuso horário",
+    "timeZoneSearch": "Buscar fusos horários",
+    "timeZoneEmpty": "Nenhum fuso horário encontrado.",
+    "useBrowserTimeZone": "Usar o fuso deste dispositivo ({zone})",
+    "location": "Localização",
+    "locationHelp": "Opcional. Usada para o nascer e o pôr do sol; nunca sai do seu servidor.",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "useMyLocation": "Usar minha localização",
+    "locating": "Localizando…",
+    "locationInsecure": "Os navegadores só compartilham a localização via HTTPS ou neste computador. Digite as coordenadas.",
+    "locationUnavailable": "Este navegador não compartilha a localização. Digite as coordenadas.",
+    "locationDenied": "O acesso à localização foi negado. Digite as coordenadas.",
+    "locationFailed": "Não foi possível obter sua localização. Digite as coordenadas.",
+    "locationFound": "Localização preenchida.",
+    "language": "Idioma",
+    "languageHelp": "Da sua conta e das mensagens da casa.",
+    "currency": "Moeda",
+    "currencySearch": "Buscar moedas",
+    "currencyEmpty": "Nenhuma moeda encontrada.",
+    "price": "Preço da energia por kWh",
+    "priceHelp": "Opcional. Permite estimar quanto seus dispositivos custam."
+  },
+  "review": {
+    "code": "Código de configuração",
+    "account": "Administrador",
+    "home": "Casa",
+    "name": "Nome",
+    "userName": "Nome de usuário",
+    "password": "Senha",
+    "passwordSet": "Definida",
+    "timeZone": "Fuso horário",
+    "location": "Localização",
+    "language": "Idioma",
+    "currency": "Moeda",
+    "price": "Preço por kWh",
+    "edit": "Editar",
+    "editSection": "Editar {section}",
+    "finish": "Concluir configuração",
+    "finishing": "Preparando sua casa…"
+  },
+  "database": {
+    "host": "Servidor",
+    "hostHelp": "Nome ou endereço IP, como este servidor do ControlHome o alcança. No Docker, prefira o endereço IP: nomes .local costumam não funcionar lá.",
+    "hostInvalid": "Informe um nome de servidor ou um endereço IP.",
+    "port": "Porta",
+    "portInvalid": "Use uma porta de 1 a 65535.",
+    "name": "Banco de dados",
+    "nameHelp": "O ControlHome o cria se o login tiver permissão.",
+    "nameInvalid": "Comece com uma letra e use só letras, números e _.",
+    "userName": "Login",
+    "password": "Senha",
+    "trust": "Confiar no certificado do servidor",
+    "trustHelp": "A conexão é sempre criptografada. A maioria dos servidores domésticos usa o certificado autoassinado do próprio SQL Server; deixe ligado, a menos que o seu tenha um certificado em que sua rede confia.",
+    "connect": "Conectar",
+    "connectFailed": "Não foi possível conectar ao banco",
+    "testing": "Testando a conexão…",
+    "checkAgain": "Verificar de novo",
+    "checking": "Verificando…",
+    "reasons": {
+      "login_failed": "O SQL Server recusou o login. Confira o login e a senha, e se a autenticação do SQL Server está ativada.",
+      "certificate": "O certificado do servidor não é confiável. Ligue “Confiar no certificado do servidor” ou dê ao SQL Server um certificado em que sua rede confia.",
+      "unreachable": "Nada respondeu nesse endereço. Confira o servidor e a porta, e se o SQL Server aceita conexões TCP deste servidor.",
+      "no_database_access": "O banco de dados existe, mas este login não consegue abri-lo. Use um login com acesso ou dê acesso a este.",
+      "other": "O SQL Server recusou a conexão. O log do ControlHome tem os detalhes."
+    },
+    "createDenied": {
+      "title": "Crie o banco de dados primeiro",
+      "description": "Este login não tem permissão para criar bancos de dados. Peça a um administrador que execute o script abaixo, por exemplo como sa no SQL Server Management Studio ou no sqlcmd, depois de trocar a senha de exemplo. Ele cria o banco e um login, ControlHome_App, que só pode usar este banco.",
+      "next": "Depois informe ControlHome_App e a senha dele acima e verifique de novo.",
+      "script": "Script para criar o banco de dados",
+      "copy": "Copiar script",
+      "copied": "Script copiado."
+    },
+    "progress": {
+      "saved": "Conexão testada e salva",
+      "connecting": "Conectando ao SQL Server",
+      "preparing": "Criando e atualizando o banco de dados",
+      "ready": "Pronto",
+      "hint": "Na primeira vez leva até um minuto. Esta página continua sozinha.",
+      "failedTitle": "Não foi possível preparar o banco de dados",
+      "failedDescription": "A conexão está salva e o ControlHome tenta de novo a cada minuto. Corrija o problema no SQL Server e esta página continua sozinha."
+    },
+    "connected": {
+      "title": "Banco de dados conectado",
+      "description": "O ControlHome está conectado ao banco de dados e pronto para a próxima etapa."
+    },
+    "ready": "O banco de dados está pronto.",
+    "alreadySetUp": "Este banco de dados já tem uma casa configurada. Entre com sua conta."
+  },
+  "waiting": {
+    "title": "Preparando o banco de dados",
+    "description": "O ControlHome está conectando ao banco de dados e preparando-o. Esta página continua sozinha.",
+    "state": "Banco de dados: {state}",
+    "failedTitle": "Não foi possível preparar o banco de dados",
+    "failedDescription": "O ControlHome tenta de novo a cada minuto. Confira o servidor de banco de dados e o log do ControlHome; esta página continua sozinha."
+  },
+  "done": "Bem-vindo à sua casa, {name}!"
+}

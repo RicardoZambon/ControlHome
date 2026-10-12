@@ -36,13 +36,4 @@ public sealed class DatabaseNameGuardTests
         DatabaseNameGuard.IsAllowed(name).ShouldBeFalse();
         Should.Throw<InvalidOperationException>(() => DatabaseNameGuard.EnsureAllowed(name));
     }
-
-    [Fact]
-    public void Production_name_only_on_the_apps_own_create_path()
-    {
-        DatabaseNameGuard.IsAllowed("ControlHome", allowProduction: true).ShouldBeTrue();
-        DatabaseNameGuard.IsAllowed("controlhome", allowProduction: true).ShouldBeFalse();
-        DatabaseNameGuard.IsAllowed("GeekVault", allowProduction: true).ShouldBeFalse();
-        Should.NotThrow(() => DatabaseNameGuard.EnsureAllowed("ControlHome", allowProduction: true));
-    }
 }

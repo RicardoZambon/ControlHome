@@ -1,0 +1,155 @@
+{
+  "app": {
+    "name": "ControlHome",
+    "tagline": "Sua casa, sob controle e em paz.",
+    "taglineDetail": "Luzes, energia e cada cômodo da sua casa num só lugar tranquilo, rodando na sua própria rede.",
+    "version": "Versão {version}",
+    "loading": "Abrindo o ControlHome…"
+  },
+  "common": {
+    "actions": "Ações",
+    "back": "Voltar",
+    "cancel": "Cancelar",
+    "close": "Fechar",
+    "continue": "Continuar",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "loading": "Carregando…",
+    "noResults": "Nada corresponde à sua busca.",
+    "notSet": "Não definido",
+    "optional": "Opcional",
+    "retry": "Tentar novamente",
+    "save": "Salvar alterações",
+    "saving": "Salvando…",
+    "search": "Buscar",
+    "you": "Você",
+    "showPassword": "Mostrar senha",
+    "hidePassword": "Ocultar senha",
+    "justNow": "Agora mesmo"
+  },
+  "locales": {
+    "en": "English",
+    "ptBR": "Português (Brasil)"
+  },
+  "theme": {
+    "label": "Tema",
+    "light": "Claro",
+    "dark": "Escuro",
+    "system": "Sistema"
+  },
+  "roles": {
+    "Admin": "Administrador",
+    "Member": "Membro",
+    "Viewer": "Observador",
+    "AdminDescription": "Gerencia a casa, as configurações e as pessoas que a usam.",
+    "MemberDescription": "Controla dispositivos, cenas e automações.",
+    "ViewerDescription": "Vê tudo, não altera nada."
+  },
+  "shell": {
+    "skipToContent": "Pular para o conteúdo",
+    "primaryNavigation": "Navegação principal",
+    "breadcrumb": "Você está aqui",
+    "toggleSidebar": "Mostrar ou ocultar a barra lateral",
+    "menuTitle": "Menu",
+    "menuDescription": "Páginas do ControlHome.",
+    "userMenu": "Menu da conta de {name}",
+    "profile": "Perfil",
+    "developer": "Desenvolvedor",
+    "uiKit": "Kit de interface",
+    "logout": "Sair",
+    "loggedOut": "Você saiu da sua conta.",
+    "sessionExpired": "Sua sessão terminou. Entre novamente para continuar.",
+    "notifications": "Notificações",
+    "language": "Idioma",
+    "chooseLanguage": "Mudar idioma",
+    "chooseTheme": "Mudar tema",
+    "preferencesNotSaved": "Aplicado aqui, mas não foi salvo no seu perfil.",
+    "systemReady": "Tudo funcionando",
+    "systemDatabase": "Banco de dados: {state}",
+    "nav": {
+      "groups": {
+        "settings": "Configurações"
+      }
+    },
+    "openNavigation": "Abrir navegação",
+    "tabNavigation": "Seções",
+    "themeCurrent": "Tema: {theme}"
+  },
+  "databaseStates": {
+    "NotConfigured": "não configurado",
+    "Connecting": "conectando",
+    "Migrating": "atualizando",
+    "Ready": "pronto",
+    "Failed": "com falha"
+  },
+  "validation": {
+    "required": "Este campo é obrigatório.",
+    "invalid": "Este valor não é válido.",
+    "maxLength": "Use no máximo {max} caracteres.",
+    "userName": "Use de 3 a 64 letras, números, pontos, sublinhados, hífens ou arrobas.",
+    "passwordLength": "Use pelo menos {min} caracteres. Uma frase curta funciona bem.",
+    "passwordMismatch": "As senhas não conferem.",
+    "number": "Digite um número.",
+    "latitude": "A latitude vai de -90 a 90.",
+    "longitude": "A longitude vai de -180 a 180.",
+    "coordinatesPair": "Informe latitude e longitude, ou nenhuma das duas.",
+    "nonNegative": "Digite zero ou mais.",
+    "currency": "Escolha uma moeda.",
+    "timeZone": "Escolha um fuso horário."
+  },
+  "errors": {
+    "unknown": "Algo deu errado. Tente novamente.",
+    "network": "Não foi possível acessar o ControlHome. Verifique se o servidor está rodando e se você está na rede de casa.",
+    "retryInSeconds": "Tente novamente em {seconds} s.",
+    "retryInMinutes": "Tente novamente em {minutes} min.",
+    "request": {
+      "not_found": "Essa página ou item não existe.",
+      "invalid": "A requisição não é válida. Recarregue a página e tente novamente.",
+      "method_not_allowed": "Essa ação não está disponível aqui.",
+      "rate_limited": "Muitas tentativas. Aguarde um pouco antes de tentar de novo.",
+      "cross_origin": "A requisição foi bloqueada porque não veio do próprio ControlHome. Recarregue a página.",
+      "missing_header": "A requisição foi bloqueada por uma verificação de segurança. Recarregue a página.",
+      "network_denied": "O ControlHome só aceita conexões da sua rede doméstica.",
+      "host_denied": "Este endereço não é permitido. Abra o ControlHome pelo IP ou pelo nome local, ou adicione este nome à lista de permitidos.",
+      "conflict": "Outra pessoa alterou isto ao mesmo tempo. Recarregue e tente novamente."
+    },
+    "validation": {
+      "failed": "Alguns campos precisam de atenção."
+    },
+    "internal": {
+      "error": "O ControlHome encontrou um erro inesperado. Tente novamente em instantes."
+    },
+    "db": {
+      "unavailable": "O banco de dados não está disponível agora. O ControlHome continua tentando sozinho.",
+      "already_configured": "Já há um banco de dados conectado. Recarregue a página para continuar.",
+      "connection_failed": "Não foi possível conectar ao banco de dados. Verifique o endereço do servidor e as credenciais.",
+      "create_denied": "O login do banco não tem permissão para criar o banco de dados. Crie-o com o script.",
+      "migration_failed": "A atualização do banco de dados falhou. O log do servidor tem os detalhes.",
+      "migrations_pending": "O banco de dados está sendo atualizado. Tente novamente em instantes."
+    },
+    "sql": {
+      "version_unsupported": "O ControlHome precisa do SQL Server 2025 ou mais recente.",
+      "compatibility_unsupported": "O banco de dados precisa usar o nível de compatibilidade 170 (SQL Server 2025)."
+    },
+    "setup": {
+      "invalid_code": "Esse código de configuração não está correto. Copie-o de novo do log do servidor ou do setup-code.txt.",
+      "already_completed": "Esta casa já foi configurada. Entre com sua conta.",
+      "not_completed": "Conclua primeiro a configuração inicial."
+    },
+    "auth": {
+      "required": "Entre para continuar.",
+      "forbidden": "Você não tem permissão para fazer isso.",
+      "invalid_credentials": "Usuário ou senha incorretos.",
+      "locked_out": "Esta conta está bloqueada por um tempo após muitas tentativas sem sucesso.",
+      "disabled": "Esta conta está desativada. Peça a um administrador para ativá-la.",
+      "password_incorrect": "Sua senha atual não está correta.",
+      "reset_invalid": "Este link de redefinição é inválido, já foi usado ou expirou. Rode o reset-admin de novo para gerar outro."
+    },
+    "users": {
+      "not_found": "Essa pessoa não tem mais uma conta.",
+      "last_admin": "A casa precisa de pelo menos um administrador ativo. Promova outra pessoa primeiro.",
+      "cannot_delete_self": "Você não pode excluir a sua própria conta.",
+      "duplicate_username": "Esse nome de usuário já está em uso."
+    }
+  }
+}

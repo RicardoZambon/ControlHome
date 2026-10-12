@@ -19,6 +19,12 @@ using ControlHome.Infrastructure.Setup;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 
+// `--healthcheck` (the container HEALTHCHECK): probe /health/live on loopback and exit 0/1 without building a host.
+if (HealthcheckCommand.IsRequested(args))
+{
+    return await HealthcheckCommand.RunAsync(args);
+}
+
 // CLI commands run a minimal host of their own and exit before the web server is ever built.
 if (ResetAdminCommand.Matches(args))
 {

@@ -33,7 +33,21 @@ public sealed class SetupService(
     public async Task<SetupStatusDto> GetStatusAsync(CancellationToken cancellationToken)
     {
         var completed = databaseStatus.IsReady && await IsCompletedAsync(cancellationToken);
-        return new SetupStatusDto(completed, databaseStatus.State, databaseStatus.IsConfigured, AppVersion.Informational);
+        return CreateStatus(databaseStatus, completed);
+    }
+
+    /// <summary>The status DTO for the current database state (<paramref name="setupCompleted"/> as determined by the caller).</summary>
+    public static SetupStatusDto CreateStatus(IDatabaseStatus databaseStatus, bool setupCompleted)
+    {
+        ArgumentNullException.ThrowIfNull(databaseStatus);
+        var state = databaseStatus.State;
+        return new SetupStatusDto(
+            setupCompleted,
+            state,
+            databaseStatus.IsConfigured,
+            databaseStatus.Source,
+            state == "Failed" ? databaseStatus.LastError : null,
+            AppVersion.Informational);
     }
 
     /// <summary>

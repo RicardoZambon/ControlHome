@@ -1,0 +1,30 @@
+# ControlHome — development override: local image build, bridge network, published port, bundled SQL Server.
+#
+#   cd deploy
+#   cp .env.example .env    # set MSSQL_SA_PASSWORD and the CONTROLHOME_DB_CONNECTION development value
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile bundled-db up -d --build
+#   # -> http://localhost:8080 (health: /health/live, /health/ready)
+#
+# The app reaches the database by service name (Server=mssql,1433) on the project network, and uses its own
+# ControlHome_Compose database. Data lives in the named volume controlhome-data (not ./data).
+
+services:
+  controlhome:
+    image: controlhome:dev
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    # Drop host networking: the service joins the project's default bridge network (service-name DNS) instead.
+    network_mode: !reset null
+    ports:
+      - "8080:8711"
+    user: "1654:1654"
+    environment:
+      ASPNETCORE_HTTP_PORTS: "8711"
+      # From .env, e.g. Server=mssql,1433;Database=ControlHome_Compose;User Id=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=True
+      ConnectionStrings__ControlHome: ${CONTROLHOME_DB_CONNECTION:-}
+    volumes: !override
+      - controlhome-data:/data
+
+volumes:
+  controlhome-data:

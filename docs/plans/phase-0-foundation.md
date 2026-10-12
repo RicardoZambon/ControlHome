@@ -435,6 +435,12 @@ fc00::/7, fe80::/10`; `TrustedProxyNetworks` default empty).
 - SPA: setup wizard Step 0 "Database" shown when `status.databaseConfigured === false`; polls status until `databaseState == Ready`.
 - Tests: integration (no connection string → status NotConfigured; post with real test server → Ready); E2E `db-setup.spec.ts`
   (compose without connection string).
+- As built: the provider exposes a change token that wakes the `DatabaseInitializer` (it waits in `NotConfigured` instead of
+  ending); after the start-up timeout the state stays `Failed` and the initialization is retried every 60 s
+  (`Database:RetryInterval`). `SetupStatusDto` gains `DatabaseSource` (`environment` | `file` | `none`) and `DatabaseError`.
+  The app's create-if-missing path creates whatever name the operator configured (never drops); `DatabaseNameGuard` is for
+  tooling and tests only. Wizard order: Code → Database (only if needed) → Admin → Home → Review; the setup code is typed once.
+  `scripts/e2e.ps1 -PreDb` runs `db-setup.spec.ts` against a container without a connection string (E2E_DB_* env only).
 
 ### Task 0.4-C: Compose files + CI e2e + release + CodeQL + Dependabot
 - `deploy/docker-compose.yml` (prod): service `controlhome` — `image: ghcr.io/ricardozambon/controlhome:${CONTROLHOME_VERSION:-edge}`,

@@ -28,6 +28,8 @@ public static class ResetAdminCommand
     /// <summary>The command waits at most this long for the database (instead of the app's 10-minute startup timeout).</summary>
     public static readonly TimeSpan MaxDatabaseWait = TimeSpan.FromMinutes(1);
 
+    private static readonly TimeSpan _settlePollInterval = TimeSpan.FromMilliseconds(100);
+
     public static bool Matches(IReadOnlyList<string> args) =>
         args is { Count: > 0 } && string.Equals(args[0], Name, StringComparison.Ordinal);
 
@@ -59,7 +61,7 @@ public static class ResetAdminCommand
         {
             await error.WriteLineAsync(string.Create(
                 CultureInfo.InvariantCulture,
-                $"The database is not available (state {readiness.State}, {readiness.LastError ?? "no error code"}); check ConnectionStrings:ControlHome."));
+                $"The database is not available (state {readiness.State}, {readiness.LastError ?? "no error code"}); check ConnectionStrings:ControlHome or the database saved by the setup wizard."));
             return ExitFailure;
         }
 
@@ -110,16 +112,22 @@ public static class ResetAdminCommand
         return builder.Build();
     }
 
-    /// <summary>Connects, migrates if needed and seeds, exactly like the app's startup (so the key ring is reachable).</summary>
+    /// <summary>
+    /// Connects, migrates if needed and seeds, exactly like the app's startup (so the key ring is reachable). The initializer
+    /// keeps running while the database is not configured or failed (it waits for one / retries), so this waits for the
+    /// first settled state instead: Ready, Failed (after the capped start-up timeout) or NotConfigured.
+    /// </summary>
     private static async Task InitializeDatabaseAsync(IServiceProvider services, CancellationToken cancellationToken)
     {
         var initializer = services.GetRequiredService<DatabaseInitializer>();
+        var readiness = services.GetRequiredService<DatabaseReadiness>();
         await initializer.StartAsync(cancellationToken);
         try
         {
-            if (initializer.ExecuteTask is { } execution)
+            while (readiness.State is not (DatabaseState.Ready or DatabaseState.Failed or DatabaseState.NotConfigured)
+                && initializer.ExecuteTask is not { IsCompleted: true })
             {
-                await execution.WaitAsync(cancellationToken);
+                await Task.Delay(_settlePollInterval, cancellationToken);
             }
         }
         finally

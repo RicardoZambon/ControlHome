@@ -1,0 +1,155 @@
+{
+  "app": {
+    "name": "ControlHome",
+    "tagline": "Your home, calmly in control.",
+    "taglineDetail": "Lights, energy and every room of your home in one quiet place, running on your own network.",
+    "version": "Version {version}",
+    "loading": "Opening ControlHome…"
+  },
+  "common": {
+    "actions": "Actions",
+    "back": "Back",
+    "cancel": "Cancel",
+    "close": "Close",
+    "continue": "Continue",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading…",
+    "noResults": "Nothing matches your search.",
+    "notSet": "Not set",
+    "optional": "Optional",
+    "retry": "Try again",
+    "save": "Save changes",
+    "saving": "Saving…",
+    "search": "Search",
+    "you": "You",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "justNow": "Just now"
+  },
+  "locales": {
+    "en": "English",
+    "ptBR": "Português (Brasil)"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "roles": {
+    "Admin": "Admin",
+    "Member": "Member",
+    "Viewer": "Viewer",
+    "AdminDescription": "Manages the home, its settings and the people who use it.",
+    "MemberDescription": "Controls devices, scenes and automations.",
+    "ViewerDescription": "Sees everything, changes nothing."
+  },
+  "shell": {
+    "skipToContent": "Skip to content",
+    "primaryNavigation": "Main navigation",
+    "breadcrumb": "You are here",
+    "toggleSidebar": "Toggle sidebar",
+    "menuTitle": "Menu",
+    "menuDescription": "Pages of ControlHome.",
+    "userMenu": "Account menu for {name}",
+    "profile": "Profile",
+    "developer": "Developer",
+    "uiKit": "UI kit",
+    "logout": "Sign out",
+    "loggedOut": "You're signed out.",
+    "sessionExpired": "Your session ended. Sign in again to continue.",
+    "notifications": "Notifications",
+    "language": "Language",
+    "chooseLanguage": "Change language",
+    "chooseTheme": "Change theme",
+    "preferencesNotSaved": "Applied here, but not saved to your profile.",
+    "systemReady": "All systems normal",
+    "systemDatabase": "Database: {state}",
+    "nav": {
+      "groups": {
+        "settings": "Settings"
+      }
+    },
+    "openNavigation": "Open navigation",
+    "tabNavigation": "Sections",
+    "themeCurrent": "Theme: {theme}"
+  },
+  "databaseStates": {
+    "NotConfigured": "not configured",
+    "Connecting": "connecting",
+    "Migrating": "updating",
+    "Ready": "ready",
+    "Failed": "failed"
+  },
+  "validation": {
+    "required": "This field is required.",
+    "invalid": "This value isn't valid.",
+    "maxLength": "Use at most {max} characters.",
+    "userName": "Use 3 to 64 letters, digits, dots, underscores, hyphens or at signs.",
+    "passwordLength": "Use at least {min} characters. A short sentence works well.",
+    "passwordMismatch": "The passwords don't match.",
+    "number": "Enter a number.",
+    "latitude": "Latitude goes from -90 to 90.",
+    "longitude": "Longitude goes from -180 to 180.",
+    "coordinatesPair": "Enter both latitude and longitude, or neither.",
+    "nonNegative": "Enter zero or more.",
+    "currency": "Choose a currency.",
+    "timeZone": "Choose a time zone."
+  },
+  "errors": {
+    "unknown": "Something went wrong. Please try again.",
+    "network": "Can't reach ControlHome. Check that the server is running and you're on your home network.",
+    "retryInSeconds": "Try again in {seconds} s.",
+    "retryInMinutes": "Try again in {minutes} min.",
+    "request": {
+      "not_found": "That page or item doesn't exist.",
+      "invalid": "The request wasn't valid. Reload the page and try again.",
+      "method_not_allowed": "That action isn't available here.",
+      "rate_limited": "Too many attempts. Wait a moment before trying again.",
+      "cross_origin": "The request was blocked because it didn't come from ControlHome itself. Reload the page.",
+      "missing_header": "The request was blocked by a security check. Reload the page.",
+      "network_denied": "ControlHome only accepts connections from your home network.",
+      "host_denied": "This address isn't allowed. Open ControlHome by its IP address or local name, or add this host name to the allowed list.",
+      "conflict": "Someone else changed this at the same time. Reload and try again."
+    },
+    "validation": {
+      "failed": "Some fields need your attention."
+    },
+    "internal": {
+      "error": "ControlHome hit an unexpected error. Try again in a moment."
+    },
+    "db": {
+      "unavailable": "The database isn't available right now. ControlHome keeps retrying on its own.",
+      "already_configured": "A database is already connected. Reload the page to continue.",
+      "connection_failed": "Couldn't connect to the database. Check the server address and the credentials.",
+      "create_denied": "The database login isn't allowed to create the database. Create it with the script instead.",
+      "migration_failed": "Updating the database failed. The server log has the details.",
+      "migrations_pending": "The database is being updated. Try again in a moment."
+    },
+    "sql": {
+      "version_unsupported": "ControlHome needs SQL Server 2025 or later.",
+      "compatibility_unsupported": "The database must use compatibility level 170 (SQL Server 2025)."
+    },
+    "setup": {
+      "invalid_code": "That setup code isn't right. Copy it again from the server log or setup-code.txt.",
+      "already_completed": "This home is already set up. Sign in instead.",
+      "not_completed": "Finish the first-run setup first."
+    },
+    "auth": {
+      "required": "Sign in to continue.",
+      "forbidden": "You don't have permission to do that.",
+      "invalid_credentials": "Wrong user name or password.",
+      "locked_out": "This account is locked for a while after too many failed attempts.",
+      "disabled": "This account is disabled. Ask an administrator to enable it.",
+      "password_incorrect": "Your current password isn't right.",
+      "reset_invalid": "This reset link is invalid, already used or expired. Run reset-admin again for a new one."
+    },
+    "users": {
+      "not_found": "That person no longer has an account.",
+      "last_admin": "The home needs at least one active administrator. Promote someone else first.",
+      "cannot_delete_self": "You can't delete your own account.",
+      "duplicate_username": "That user name is already taken."
+    }
+  }
+}

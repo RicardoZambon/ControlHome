@@ -1,0 +1,23 @@
+/*
+ * Control sizes: the height of buttons, inputs and select triggers, and the side of icon buttons
+ * (`h-control-sm` / `h-control` / `h-control-lg`, `size-control`, ...; mapped in theme.css).
+ *
+ * - `--control-h` is the default everywhere, so forms look the same on every page. Use `-lg` only on purpose (the
+ *   setup code and its Continue button) and `-sm` for dense rows.
+ * - On touch screens and phones every step grows, so tap targets reach 44 px (WCAG 2.5.5): `-sm` 36 px,
+ *   default 44 px, `-lg` 48 px.
+ */
+
+:root {
+  --control-h-sm: 2rem;
+  --control-h: 2.5rem;
+  --control-h-lg: 3rem;
+}
+
+@media (pointer: coarse), (width < 48rem) {
+  :root {
+    --control-h-sm: 2.25rem;
+    --control-h: 2.75rem;
+    --control-h-lg: 3rem;
+  }
+}

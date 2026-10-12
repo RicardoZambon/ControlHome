@@ -1,0 +1,31 @@
+# Build context for deploy/Dockerfile (context = repository root). Keep host build output, dependencies, local data and
+# secrets out of the context: the image is built from sources only.
+
+# .NET build output and test results
+**/bin
+**/obj
+**/TestResults
+
+# Web dependencies and build output (the image runs its own `npm ci` and `npm run build`)
+**/node_modules
+**/dist
+web/tests/e2e/screenshots
+**/playwright-report
+**/test-results
+
+# Local runtime data (keys, logs, setup code) and compose data folders
+.data
+deploy/data
+
+# Secrets: compose .env files and user files never enter the context
+**/.env
+**/.env.*
+**/*.env
+**/*.user
+
+# VCS, editor and agent folders (agent worktrees are full copies of the repository)
+.git
+.vs
+.vscode
+.idea
+.claude

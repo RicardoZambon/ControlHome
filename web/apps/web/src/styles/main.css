@@ -2,3 +2,37 @@
 
 /* Let Tailwind see the classes used by the design-system package (it lives outside this app). */
 @source '../../../../packages/ui/src';
+
+/*
+ * Typography: Onest (interface text, calm and legible with clear figures) and Fraunces (soft optical-size serif for
+ * page titles and greetings). Both are self-hosted (fontsource, imported in main.ts), so the CSP stays `'self'`.
+ * Only the families change: the class names stay Tailwind's own (`font-sans`, `font-serif`).
+ */
+@theme {
+  --font-sans: 'Onest Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Fraunces Variable', ui-serif, Georgia, serif;
+  --font-serif--font-variation-settings: 'SOFT' 60, 'WONK' 0;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tabular figures wherever numbers line up (clock, tables, coordinates). */
+  time,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Draws an SVG stroke (`pathLength="1"` + `[stroke-dasharray:1]`), used by the floor-plan illustration. */
+@keyframes ch-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}

@@ -11,7 +11,16 @@ const colorUtilities =
 export default defineConfigWithVueTs(
   {
     name: 'controlhome/ignores',
-    ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**', '**/src/generated/**'],
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      '**/node_modules/**',
+      '**/src/generated/**',
+      // Playwright output (HTML report with the trace viewer, traces, screenshots)
+      '**/playwright-report/**',
+      '**/test-results/**',
+      'tests/e2e/screenshots/**',
+    ],
   },
   pluginVue.configs['flat/recommended'],
   vueTsConfigs.recommended,

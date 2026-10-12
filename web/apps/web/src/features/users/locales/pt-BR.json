@@ -1,0 +1,80 @@
+{
+  "title": "Usuários",
+  "nav": "Usuários",
+  "eyebrow": "Configurações",
+  "description": "Todos que podem abrir esta casa e o que cada pessoa pode fazer.",
+  "add": "Adicionar usuário",
+  "listLabel": "Usuários",
+  "you": "(você)",
+  "never": "Nunca entrou",
+  "lastLogin": "Última entrada",
+  "created": "Adicionado em",
+  "role": "Papel",
+  "status": "Situação",
+  "user": "Usuário",
+  "active": "Ativo",
+  "loadFailed": "Não foi possível carregar os usuários.",
+  "actions": {
+    "menu": "Ações para {name}",
+    "edit": "Editar",
+    "resetPassword": "Redefinir senha",
+    "deactivate": "Desativar conta",
+    "reactivate": "Reativar conta",
+    "delete": "Excluir"
+  },
+  "form": {
+    "createTitle": "Adicionar usuário",
+    "createDescription": "A pessoa entra com este nome de usuário e senha. Entregue a senha pessoalmente.",
+    "editTitle": "Editar {name}",
+    "editDescription": "Altere como a pessoa aparece e o que ela pode fazer.",
+    "displayName": "Nome",
+    "userName": "Nome de usuário",
+    "userNameHelp": "Usado para entrar. Não pode ser alterado depois.",
+    "role": "Papel",
+    "password": "Senha",
+    "passwordHelp": "Pelo menos 10 caracteres.",
+    "disabled": "Desativar esta conta",
+    "disabledHelp": "Uma conta desativada não consegue entrar, e as sessões abertas terminam em até um minuto.",
+    "create": "Adicionar usuário",
+    "creating": "Adicionando…",
+    "save": "Salvar alterações",
+    "saving": "Salvando…",
+    "selfDisabledHelp": "Você não pode desativar a sua própria conta. Outro administrador pode."
+  },
+  "reset": {
+    "title": "Nova senha para {name}",
+    "description": "Defina uma nova senha e entregue-a pessoalmente.",
+    "newPassword": "Nova senha",
+    "confirmPassword": "Confirme a nova senha",
+    "submit": "Definir senha",
+    "submitting": "Salvando…"
+  },
+  "delete": {
+    "title": "Excluir {name}?",
+    "description": "A conta é removida e a pessoa não consegue mais entrar. Isso não pode ser desfeito.",
+    "confirm": "Excluir usuário",
+    "busy": "Excluindo…"
+  },
+  "toast": {
+    "created": "{name} foi adicionado.",
+    "updated": "Alterações de {name} salvas.",
+    "passwordReset": "Nova senha definida para {name}.",
+    "deleted": "{name} foi excluído.",
+    "disabled": "{name} não consegue mais entrar.",
+    "enabled": "{name} pode entrar novamente."
+  },
+  "inactive": "Inativo",
+  "selfDeactivate": "Você não pode desativar a sua própria conta.",
+  "deactivate": {
+    "title": "Desativar {name}?",
+    "description": "A pessoa não consegue mais entrar, e as sessões abertas terminam em até um minuto. Você pode reativar a conta depois.",
+    "confirm": "Desativar",
+    "busy": "Desativando…"
+  },
+  "reactivate": {
+    "title": "Reativar {name}?",
+    "description": "A pessoa pode entrar de novo com a senha atual.",
+    "confirm": "Reativar",
+    "busy": "Reativando…"
+  }
+}

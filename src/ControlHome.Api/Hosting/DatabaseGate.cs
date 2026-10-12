@@ -1,4 +1,5 @@
 using System.Globalization;
+using ControlHome.Api.Features.Setup;
 using ControlHome.Api.Http;
 using ControlHome.Application.Common;
 using ControlHome.Infrastructure.Persistence;
@@ -8,7 +9,8 @@ namespace ControlHome.Api.Hosting;
 
 /// <summary>
 /// While the database is not <see cref="DatabaseState.Ready"/>, every <c>/api/*</c> request except
-/// <c>/api/setup/status</c> gets 503 ProblemDetails <c>db.unavailable</c> (with <c>state</c>) instead of an exception.
+/// <c>/api/setup/status</c> and <c>/api/setup/database</c> (pre-database setup) gets 503 ProblemDetails
+/// <c>db.unavailable</c> (with <c>state</c>) instead of an exception.
 /// </summary>
 internal sealed class DatabaseGateMiddleware(RequestDelegate next, DatabaseReadiness readiness)
 {
@@ -31,7 +33,8 @@ internal sealed class DatabaseGateMiddleware(RequestDelegate next, DatabaseReadi
 
     private static bool IsGated(PathString path) =>
         path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
-        && !path.StartsWithSegments("/api/setup/status", StringComparison.OrdinalIgnoreCase);
+        && !path.StartsWithSegments(SetupEndpoints.StatusPath, StringComparison.OrdinalIgnoreCase)
+        && !path.StartsWithSegments(SetupEndpoints.DatabasePath, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary><c>/health/ready</c>: healthy only when the database is <see cref="DatabaseState.Ready"/>.</summary>

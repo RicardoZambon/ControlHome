@@ -16,7 +16,8 @@ public sealed record AppError(
 
     public static AppError NotFound(string code, string message) => new(code, message, AppErrorKind.NotFound);
 
-    public static AppError Conflict(string code, string message) => new(code, message, AppErrorKind.Conflict);
+    public static AppError Conflict(string code, string message, IReadOnlyDictionary<string, object?>? extensions = null) =>
+        new(code, message, AppErrorKind.Conflict, extensions);
 
     public static AppError Forbidden(string code, string message) => new(code, message, AppErrorKind.Forbidden);
 
