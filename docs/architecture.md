@@ -366,23 +366,38 @@ can't be removed, demoted or disabled (`users.last_admin`), and an admin can't d
 
 ### Cross-origin protection (global middleware)
 
-- Every mutation (any method other than GET/HEAD/OPTIONS) **and** every WebSocket/SignalR upgrade must carry an
-  `Origin` equal to the app's own origin (`{scheme}://{host}` after forwarded headers); a missing or foreign Origin gets
-  **403 `request.cross_origin`**.
+- `UseControlHomeRequestEdge()` (`Api/Security`) runs right after the exception handler and before static files and
+  routing: forwarded headers → security headers → network allowlist → origin checks.
+- Every mutation (any method other than GET/HEAD/OPTIONS) **and** every WebSocket/SignalR upgrade (HTTP/1.1
+  `Upgrade: websocket`, or HTTP/2 extended CONNECT) must carry an `Origin` equal to the app's own origin
+  (`{scheme}://{host}` after forwarded headers; host case-insensitive, default ports implied, exactly one serialized
+  origin with no path); a missing, `null` or foreign Origin gets **403 `request.cross_origin`**.
 - Non-WebSocket mutations also need the header **`X-ControlHome: 1`** (403 `request.missing_header`). `/api/hooks/*`
   is exempt.
 - Hubs are server → client only. **No CORS policy is ever registered.**
-- Every response carries `Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; media-src 'self'
-  blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; object-src
-  'none'; base-uri 'self'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and
-  `X-Frame-Options: DENY`.
+- Every response (errors and exception responses included) carries `Content-Security-Policy: default-src 'self';
+  img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src
+  'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: same-origin` and `X-Frame-Options: DENY`. They are added when the response starts unless an
+  endpoint set that header itself. In Development only, `/scalar*` gets a CSP that also allows Scalar's inline
+  bootstrap script and its fonts from `fonts.scalar.com`.
 
 ### Network edge
 
-- Forwarded headers are trusted only from the app_proxy subnet (`Network:TrustedProxyNetworks`, empty by default).
+- Forwarded headers (`X-Forwarded-For`, `-Proto`, `-Host`; one hop) are applied only from trusted proxies. With
+  `Network:TrustedProxyNetworks` empty (default) that is the framework default, loopback proxies only; when set (the
+  app_proxy subnet on Umbrel), exactly those networks replace it. Behind a proxy that is not trusted, every client looks
+  like the proxy.
 - `Network:AllowedClientNetworks` defaults to loopback, RFC 1918, CGNAT, ULA and link-local (`127.0.0.0/8, ::1/128,
   10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, fc00::/7, fe80::/10`); anything else gets **403
-  `request.network_denied`** and an audit entry.
+  `request.network_denied`** and an audit entry (`security.network_denied`). Loopback is always allowed (the container
+  healthcheck), and a request without a remote address (Unix socket, TestServer) passes.
+- Both lists are a comma-separated string (`Network__AllowedClientNetworks=192.168.1.0/24, fd00::/8` replaces the whole
+  list) or an array; entries are addresses or CIDR networks (canonical IPv4 only). An invalid entry stops startup with
+  an error naming the setting and the entry.
+- Denied requests are logged and audited **at most once per source per 10 minutes** (a source is an IPv4 address or an
+  IPv6 /64), with at most 1024 sources tracked per window, so a flood cannot fill the audit log. While the database is
+  not ready the denial is only logged.
 
 ### Login protection
 
