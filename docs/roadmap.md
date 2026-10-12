@@ -43,7 +43,7 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
 
 ## Phase 1 — Home model, devices core, floor plans → tag `v0.1`
 
-- [ ] **1.1 Floors, rooms and the floor-plan editor** (no devices yet). Spec: `floorplan-edit`.
+- [ ] **1.1 Floors, rooms and the floor-plan editor** *(in review)* (no devices yet). Spec: `floorplan-edit`.
 - [ ] **1.2 Devices core**
   - Capability catalogue, connector SDK, integration supervisor, Simulated connector (5 types).
   - StateProcessor + SignalR, single-runtime lock.

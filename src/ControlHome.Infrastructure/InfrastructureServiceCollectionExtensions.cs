@@ -1,7 +1,9 @@
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
+using ControlHome.Application.Files;
 using ControlHome.Infrastructure.Auditing;
 using ControlHome.Infrastructure.Configuration;
+using ControlHome.Infrastructure.Files;
 using ControlHome.Infrastructure.Persistence;
 using ControlHome.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +17,8 @@ public static class InfrastructureServiceCollectionExtensions
 {
     /// <summary>
     /// Options, data directory, the database connection (configuration, then the setup wizard's encrypted
-    /// <c>config/database.json</c>), DbContext (+ <see cref="IControlHomeDb"/>), database readiness and the audit log.
+    /// <c>config/database.json</c>), DbContext (+ <see cref="IControlHomeDb"/>), database readiness, the audit log and the
+    /// image processor.
     /// Everything is resolved lazily: registering opens no connection and reads no file.
     /// The <see cref="DatabaseInitializer"/> is added separately by <see cref="AddDatabaseInitializer"/>.
     /// </summary>
@@ -38,6 +41,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IControlHomeDb>(sp => sp.GetRequiredService<ControlHomeDbContext>());
         services.AddScoped<IAuditLog, AuditLog>();
         services.AddScoped<DatabaseReset>();
+        services.TryAddSingleton<IImageProcessor, SkiaImageProcessor>();
 
         return services;
     }

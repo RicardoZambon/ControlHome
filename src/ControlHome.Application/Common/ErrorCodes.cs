@@ -16,6 +16,7 @@ public static class ErrorCodes
     public const string RequestNetworkDenied = "request.network_denied";
     public const string RequestHostDenied = "request.host_denied";
     public const string RequestConflict = "request.conflict";
+    public const string RequestTooLarge = "request.too_large";
     public const string ValidationFailed = "validation.failed";
     public const string InternalError = "internal.error";
 
@@ -48,4 +49,22 @@ public static class ErrorCodes
     public const string UsersLastAdmin = "users.last_admin";
     public const string UsersCannotDeleteSelf = "users.cannot_delete_self";
     public const string UsersDuplicateUserName = "users.duplicate_username";
+
+    // Floors and rooms
+    public const string FloorsNotFound = "floors.not_found";
+    public const string FloorsConcurrency = "floors.concurrency";
+    public const string RoomsNotFound = "rooms.not_found";
+
+    // Floor-plan geometry: field errors (e.g. errors["rooms[2].polygon"]) of a validation.failed problem
+    public const string GeometryTooFewPoints = "geometry.too_few_points";
+    public const string GeometryTooManyPoints = "geometry.too_many_points";
+    public const string GeometrySelfIntersecting = "geometry.self_intersecting";
+    public const string GeometryOutOfBounds = "geometry.out_of_bounds";
+    public const string GeometryZeroArea = "geometry.zero_area";
+
+    // Uploaded files
+    public const string FilesNotFound = "files.not_found";
+    public const string FilesUnsupportedType = "files.unsupported_type";
+    public const string FilesTooLarge = "files.too_large";
+    public const string FilesInvalidImage = "files.invalid_image";
 }

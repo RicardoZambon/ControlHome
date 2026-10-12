@@ -31,6 +31,14 @@
     "en": "English",
     "ptBR": "Português (Brasil)"
   },
+  "floorplan": {
+    "planLabel": "Floor plan of {name}",
+    "planLabelUnnamed": "Floor plan",
+    "roomLabel": "{name}, {area}",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to screen"
+  },
   "theme": {
     "label": "Theme",
     "light": "Light",
@@ -111,7 +119,8 @@
       "missing_header": "The request was blocked by a security check. Reload the page.",
       "network_denied": "ControlHome only accepts connections from your home network.",
       "host_denied": "This address isn't allowed. Open ControlHome by its IP address or local name, or add this host name to the allowed list.",
-      "conflict": "Someone else changed this at the same time. Reload and try again."
+      "conflict": "Someone else changed this at the same time. Reload and try again.",
+      "too_large": "That's more data than ControlHome accepts in one request."
     },
     "validation": {
       "failed": "Some fields need your attention."
@@ -150,6 +159,26 @@
       "last_admin": "The home needs at least one active administrator. Promote someone else first.",
       "cannot_delete_self": "You can't delete your own account.",
       "duplicate_username": "That user name is already taken."
+    },
+    "floors": {
+      "not_found": "That floor no longer exists.",
+      "concurrency": "Someone else changed this floor while you were editing. Reload it to see their changes."
+    },
+    "rooms": {
+      "not_found": "That room is no longer on this floor. Reload the floor and try again."
+    },
+    "geometry": {
+      "too_few_points": "A room needs at least 3 corners.",
+      "too_many_points": "This room has too many corners. Simplify its outline.",
+      "self_intersecting": "The room's walls cross or touch each other. Move the corners so the outline doesn't overlap itself.",
+      "out_of_bounds": "Part of the room is outside the floor. Move it inside or make the floor bigger.",
+      "zero_area": "The room has no area. Spread its corners apart."
+    },
+    "files": {
+      "not_found": "That image no longer exists. Upload it again.",
+      "unsupported_type": "Use a PNG, JPEG or WebP image.",
+      "too_large": "The image is too big. Use one of at most 10 MB and 40 megapixels.",
+      "invalid_image": "The image couldn't be read. It may be damaged; try exporting it again."
     }
   }
 }

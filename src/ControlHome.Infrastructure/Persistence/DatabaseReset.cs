@@ -24,6 +24,9 @@ public sealed class DatabaseReset(ControlHomeDbContext db)
             await db.Users.ExecuteDeleteAsync(ct);
             await db.Roles.ExecuteDeleteAsync(ct);
             await db.AuditLog.ExecuteDeleteAsync(ct);
+            await db.Rooms.ExecuteDeleteAsync(ct);
+            await db.Floors.ExecuteDeleteAsync(ct);
+            await db.StoredFiles.ExecuteDeleteAsync(ct);
             await db.Homes.ExecuteDeleteAsync(ct);
 
             await RoleSeeder.SeedAsync(db, ct);

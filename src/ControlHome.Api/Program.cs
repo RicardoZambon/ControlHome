@@ -1,5 +1,7 @@
 using ControlHome.Api.Features.Audit;
 using ControlHome.Api.Features.Auth;
+using ControlHome.Api.Features.Files;
+using ControlHome.Api.Features.Floors;
 using ControlHome.Api.Features.Home;
 using ControlHome.Api.Features.Setup;
 using ControlHome.Api.Features.Testing;
@@ -10,6 +12,8 @@ using ControlHome.Api.Security;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Auth;
+using ControlHome.Application.Files;
+using ControlHome.Application.Floors;
 using ControlHome.Application.Homes;
 using ControlHome.Application.Setup;
 using ControlHome.Application.Users;
@@ -67,6 +71,8 @@ try
     builder.Services.AddUsers();
     builder.Services.AddHomes();
     builder.Services.AddAuditing();
+    builder.Services.AddFloors();
+    builder.Services.AddFiles();
 
     var app = builder.Build();
 
@@ -98,6 +104,8 @@ try
     app.MapUserEndpoints();
     app.MapHomeEndpoints();
     app.MapAuditEndpoints();
+    app.MapFloorEndpoints();
+    app.MapFileEndpoints();
     if (app.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
     {
         app.MapTestingEndpoints();

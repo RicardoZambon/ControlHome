@@ -14,5 +14,9 @@ declare module 'vue-router' {
     layout?: AppLayout
     /** i18n key of the page title (document title and top bar). */
     titleKey?: string
+    /** Shell pages only: use the full width of the content area (editors), not the centred reading column. */
+    fullWidth?: boolean
+    /** Shell pages only: a focused task (the floor-plan editor), so phones get no bottom tab bar. */
+    focused?: boolean
   }
 }
