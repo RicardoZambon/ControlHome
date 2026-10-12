@@ -26,11 +26,19 @@ npm run gen:api                    # regenerate @controlhome/api-client from web
   `Map<Feature>Endpoints(this IEndpointRouteBuilder)`; return `TypedResults`; validation via `ValidationFilter<T>` (FluentValidation).
 - Services registered per feature (`services.Add<Feature>()`), so shared files only get one-line additions.
 - Errors: ProblemDetails with extension `code` (dotted, stable, e.g. `users.last_admin`). Never leak exception text outside Development.
+  Application services return `Result`/`Result<T>` carrying an `AppError(Code, Message, AppErrorKind)`; codes are constants in
+  `Application/Common/ErrorCodes.cs`; endpoints convert with `result.ToHttpResult()` / `Problems.From(error)`.
+- EF uses `EnableRetryOnFailure`: wrap explicit transactions (e.g. `sp_getapplock`) in
+  `db.Database.CreateExecutionStrategy().ExecuteAsync(...)`.
 - Nothing before `builder.Build()` may open a DB or network connection (build-time OpenAPI generation runs Program.cs).
 - Time: inject `TimeProvider` (never `DateTime.Now`/`UtcNow` in logic). Store UTC (`DateTimeOffset`/`datetime2`).
 - Logging: structured Serilog templates, no secrets, no PII beyond user names. Never log connection strings or tokens.
-- Tests: xunit.v3 + Shouldly + NSubstitute. Integration tests use `WebApplicationFactory<Program>` + the shared SQL fixture
-  (Testcontainers `mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04`, or `CONTROLHOME_TEST_SQLSERVER` fallback).
+- Tests: xunit.v3 + Shouldly + NSubstitute. Integration tests use `ControlHomeApiFactory` + `CreateApiClient()` from
+  `tests/ControlHome.TestSupport` (Testcontainers `mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04`, or the
+  `CONTROLHOME_TEST_SQLSERVER` fallback; each factory gets its own `ControlHome_Test_*` database).
+- **Windows Smart App Control** on the dev machine can block freshly built DLLs ("An Application Control policy has blocked
+  this file"). Never change that setting. Run tests with `pwsh scripts/test-docker.ps1 [-Filter …] [-UseDevServer]` and build
+  with `dotnet build -p:OpenApiGenerateDocumentsOnBuild=false` if the build-time OpenAPI step is blocked.
 - EF migrations are created **only by the integrator** (`dotnet ef migrations add <Name> -p src/ControlHome.Infrastructure -s src/ControlHome.Api -o Persistence/Migrations`).
   Implementers change entities/configurations and say a migration is needed.
 - Package versions live only in `Directory.Packages.props` (and `web/package-lock.json`); implementers list new packages in
