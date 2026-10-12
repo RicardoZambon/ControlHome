@@ -1,0 +1,239 @@
+{
+  "title": "Floors",
+  "nav": "Floors",
+  "eyebrow": "Your home",
+  "description": "Every storey of your home, drawn to scale, with its rooms.",
+  "add": "Add floor",
+  "listLabel": "Floors",
+  "loadFailed": "Couldn't load the floors.",
+  "roomCount": "No rooms | 1 room | {n} rooms",
+  "editPlan": "Edit plan",
+  "actions": "Actions for {name}",
+  "level": {
+    "ground": "Ground floor",
+    "above": "Floor {n}",
+    "below": "Basement {n}",
+    "number": "Level {n}"
+  },
+  "empty": {
+    "title": "Draw your first floor",
+    "description": "Start with the ground floor: give it a size, then trace its rooms on a grid or over a picture of your plan.",
+    "member": "No floors have been drawn yet. An admin can add them.",
+    "cta": "Add a floor"
+  },
+  "delete": {
+    "title": "Delete {name}?",
+    "description": "The floor is deleted. This can't be undone. | The floor and its room are deleted. This can't be undone. | The floor and its {n} rooms are deleted. This can't be undone.",
+    "confirm": "Delete floor",
+    "busy": "Deleting…"
+  },
+  "toast": {
+    "created": "{name} added. Draw its rooms now.",
+    "deleted": "{name} deleted.",
+    "saved": "Floor plan saved."
+  },
+  "validation": {
+    "range": "Use a number from {min} to {max}."
+  },
+  "form": {
+    "createTitle": "Add a floor",
+    "createDescription": "Name it and give it a size. You can change both later.",
+    "name": "Name",
+    "namePlaceholder": "Ground floor",
+    "level": "Level",
+    "levelHelp": "0 is the ground floor, 1 the floor above it, -1 a basement.",
+    "width": "Width (m)",
+    "height": "Depth (m)",
+    "sizeHelp": "The outside size of the floor; rooms are drawn inside it.",
+    "create": "Create and draw",
+    "creating": "Creating…"
+  },
+  "view": {
+    "title": "Floor plan",
+    "back": "All floors",
+    "rooms": "Rooms",
+    "switchFloor": "Floors",
+    "noRoomsTitle": "No rooms yet",
+    "noRooms": "An admin can draw the rooms of this floor.",
+    "noRoomsAdmin": "Open the editor to draw the rooms of this floor.",
+    "noRoomsShort": "No rooms on this floor yet.",
+    "drawRooms": "Draw rooms"
+  },
+  "editor": {
+    "title": "Edit floor plan",
+    "heading": "Editing {name}",
+    "back": "Back to {name}",
+    "unsaved": "Unsaved changes",
+    "saved": "All changes saved",
+    "save": "Save",
+    "saving": "Saving…",
+    "saveFailed": "Couldn't save the floor plan.",
+    "nothingToSave": "Nothing to save: the plan is as you left it.",
+    "fixProblems": "Some rooms need your attention before saving.",
+    "problems": "Fix this before saving | Fix this before saving | Fix these {count} problems before saving",
+    "roomBase": "Room",
+    "properties": "Properties",
+    "propertiesDescription": "Rooms, floor and background image.",
+    "undo": "Undo",
+    "redo": "Redo",
+    "undoAction": "Undo: {action}",
+    "redoAction": "Redo: {action}",
+    "coordinates": "x {x} m · y {y} m",
+    "tools": {
+      "label": "Editing tools",
+      "select": "Select and move",
+      "draw": "Draw room",
+      "calibrate": "Calibrate scale",
+      "background": "Background image"
+    },
+    "hints": {
+      "select": "Click a room to select it and drag to move it. Drag a corner to reshape it, or a wall's middle dot to add one.",
+      "selectShort": "Tap a room to select it.",
+      "draw": "Click to place corners; finish on the first corner or with Enter. Or drag to draw a rectangle. Alt places freely.",
+      "drawShort": "Tap to place corners; tap the first corner to finish.",
+      "drawNextShort": "{count} corners placed. Tap the first corner to finish; Undo takes one back.",
+      "drawNext": "{count} corners placed. Finish on the first corner or with Enter; Backspace takes one back, Esc cancels.",
+      "calibrate": "Click a point on the image whose distance to another point you know.",
+      "calibrateSecond": "Now click the second point.",
+      "background": "Drag to move the image under the plan.",
+      "noBackground": "Upload a plan image in the Background panel first."
+    },
+    "history": {
+      "addRoom": "Add room",
+      "deleteRoom": "Delete room",
+      "moveRoom": "Move room",
+      "nudge": "Move room",
+      "moveCorner": "Move corner",
+      "addCorner": "Add corner",
+      "placeCorner": "Place corner",
+      "removeCorner": "Remove corner",
+      "rename": "Rename room",
+      "color": "Change color",
+      "icon": "Change icon",
+      "floor": "Change floor",
+      "background": "Add background",
+      "removeBackground": "Remove background",
+      "moveBackground": "Move background",
+      "opacity": "Change opacity",
+      "calibrate": "Calibrate scale"
+    },
+    "tabs": {
+      "rooms": "Rooms",
+      "floor": "Floor",
+      "background": "Background"
+    },
+    "empty": {
+      "title": "Draw your first room",
+      "description": "Pick Draw room and click its corners, or drag a rectangle. Rooms snap to the grid and to each other.",
+      "start": "Start drawing",
+      "trace": "Trace a plan image"
+    },
+    "rooms": {
+      "empty": "Draw the rooms of this floor; each gets a name, a color and an icon.",
+      "draw": "Draw a room",
+      "invalid": "Needs attention"
+    },
+    "room": {
+      "title": "Room",
+      "back": "All rooms",
+      "untitled": "Untitled room",
+      "name": "Name",
+      "presets": "Quick names",
+      "color": "Color",
+      "icon": "Icon",
+      "corners": "{count} corners",
+      "cornerSelected": "Corner {n} selected",
+      "removeCorner": "Remove corner",
+      "minCorners": "A room needs at least 3 corners.",
+      "delete": "Delete room"
+    },
+    "presets": {
+      "living": "Living room",
+      "kitchen": "Kitchen",
+      "bedroom": "Bedroom",
+      "bathroom": "Bathroom",
+      "office": "Office",
+      "dining": "Dining room",
+      "laundry": "Laundry",
+      "hall": "Hall",
+      "garage": "Garage",
+      "garden": "Garden"
+    },
+    "colors": {
+      "room-1": "Blue",
+      "room-2": "Sand",
+      "room-3": "Sage",
+      "room-4": "Rose",
+      "room-5": "Teal",
+      "room-6": "Coral",
+      "room-7": "Olive",
+      "room-8": "Violet"
+    },
+    "icons": {
+      "house": "Home",
+      "sofa": "Sofa",
+      "tv": "TV",
+      "cooking-pot": "Cooking",
+      "utensils": "Dining",
+      "bed-double": "Double bed",
+      "bed-single": "Single bed",
+      "baby": "Nursery",
+      "bath": "Bath",
+      "shower-head": "Shower",
+      "toilet": "Toilet",
+      "briefcase": "Work",
+      "laptop": "Computer",
+      "washing-machine": "Laundry",
+      "shirt": "Wardrobe",
+      "package": "Storage",
+      "dumbbell": "Gym",
+      "door-open": "Entrance",
+      "car": "Garage",
+      "trees": "Garden",
+      "sun": "Terrace"
+    },
+    "floor": {
+      "grid": "Grid (cm)",
+      "gridHelp": "Corners snap to this grid. Hold Alt while dragging to place freely."
+    },
+    "background": {
+      "title": "Background image",
+      "description": "Trace your rooms over a scan or a photo of the floor plan. It shows faintly under the rooms.",
+      "upload": "Upload a plan image",
+      "replace": "Replace image",
+      "uploading": "Uploading…",
+      "formats": "PNG, JPEG or WebP, up to 10 MB.",
+      "opacity": "Opacity",
+      "size": "{width} × {height} px",
+      "scaleValue": "1 px = {length}",
+      "calibrate": "Calibrate the scale",
+      "calibrateHelp": "Click two points whose real distance you know, such as the ends of a wall.",
+      "move": "Move the image",
+      "remove": "Remove image"
+    },
+    "calibration": {
+      "title": "How far apart are they?",
+      "description": "The two points are {measured} apart on the plan now. Enter their real distance and the image is scaled to match.",
+      "distance": "Real distance",
+      "unit": "Unit",
+      "meters": "m",
+      "centimeters": "cm",
+      "apply": "Apply scale",
+      "invalid": "Enter a distance greater than zero.",
+      "outOfRange": "That makes the image too large or too small. Check the distance and the unit.",
+      "done": "Scale set: {scale}."
+    },
+    "conflict": {
+      "title": "Someone else changed this floor",
+      "description": "This floor was saved by someone else while you were editing. Reload it to see their version; your unsaved changes will be lost.",
+      "reload": "Reload floor",
+      "keep": "Keep my draft"
+    },
+    "leave": {
+      "title": "Leave without saving?",
+      "description": "Your changes to this floor plan haven't been saved and will be lost.",
+      "stay": "Keep editing",
+      "discard": "Discard changes"
+    }
+  }
+}

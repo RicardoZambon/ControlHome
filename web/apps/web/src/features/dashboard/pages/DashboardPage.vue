@@ -15,10 +15,15 @@ import {
   UsersRound,
   Zap,
 } from '@lucide/vue'
+import { getFloor, listFloors, type FloorDto } from '@controlhome/api-client'
 import { useNow } from '@vueuse/core'
-import { computed, onMounted, type Component } from 'vue'
+import { computed, onMounted, ref, shallowRef, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FloorPreview from '../../../components/floorplan/FloorPreview.vue'
+import { floorEyebrow, primaryFloor, totalAreaM2 } from '../../../components/floorplan/floors'
+import { formatArea } from '../../../components/floorplan/measure'
 import { dayPartOf, timeZoneDisplayName, timeZoneOffset } from '../../../lib/format'
+import { unwrap } from '../../../lib/problem'
 import { useHomeStore } from '../../../stores/home'
 import { useSessionStore } from '../../../stores/session'
 
@@ -109,8 +114,40 @@ const details = computed<DetailRow[]>(() => {
   ]
 })
 
+// --- The floor plan in the hero: the primary floor once one exists, else where it will be ---------------------------------
+const planFloor = shallowRef<FloorDto | null>(null)
+const planLoading = ref(true)
+
+async function loadPlan(): Promise<void> {
+  try {
+    const primary = primaryFloor(unwrap(await listFloors()))
+    planFloor.value = primary ? unwrap(await getFloor({ path: { id: primary.id } })) : null
+  } catch {
+    // The placeholder stays: the dashboard is not the place to report this.
+    planFloor.value = null
+  } finally {
+    planLoading.value = false
+  }
+}
+onMounted(() => void loadPlan())
+
+const planSummary = computed(() => {
+  const floor = planFloor.value
+  if (!floor) return ''
+  const rooms = t('floors.roomCount', floor.rooms.length)
+  return floor.rooms.length > 0 ? `${rooms} · ${formatArea(totalAreaM2(floor), locale.value)}` : rooms
+})
+
 const startCards = computed(() =>
   [
+    {
+      to: { name: 'floors' },
+      icon: Layers,
+      title: t('dashboard.start.floorsTitle'),
+      description: t('dashboard.start.floorsDescription'),
+      tone: 'bg-room-3 text-room-3-foreground',
+      visible: true,
+    },
     {
       to: { name: 'profile' },
       icon: UserRound,
@@ -132,17 +169,10 @@ const startCards = computed(() =>
 
 const comingNext = computed(() => [
   {
-    icon: Layers,
-    title: t('dashboard.next.floorsTitle'),
-    description: t('dashboard.next.floorsDescription'),
-    badge: t('dashboard.next.badge'),
-    tone: 'bg-room-3/15 text-foreground',
-  },
-  {
     icon: PlugZap,
     title: t('dashboard.next.devicesTitle'),
     description: t('dashboard.next.devicesDescription'),
-    badge: t('dashboard.next.planned'),
+    badge: t('dashboard.next.badge'),
     tone: 'bg-room-1/15 text-foreground',
   },
   {
@@ -166,7 +196,14 @@ const comingNext = computed(() => [
         class="pointer-events-none absolute inset-0 bg-radial-[at_100%_0%] from-accent via-transparent to-transparent"
       />
       <div
-        class="relative grid gap-6 p-6 sm:gap-8 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-center lg:p-10"
+        :class="
+          cn(
+            'relative grid gap-6 p-6 sm:gap-8 sm:p-8 lg:items-center lg:p-10',
+            planFloor
+              ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]'
+              : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]',
+          )
+        "
       >
         <div class="space-y-4">
           <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
@@ -187,20 +224,54 @@ const comingNext = computed(() => [
             {{ t('dashboard.welcome', { home: home.name }) }}
           </p>
         </div>
-        <!-- Where the floor plan will be: one dashed frame (a one-line note on phones). -->
-        <div
-          class="hidden min-h-48 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed bg-background/60 p-6 text-center sm:flex"
+        <!-- The home's floor plan (the ground floor), linking to it. -->
+        <RouterLink
+          v-if="planFloor"
+          :to="{ name: 'floor', params: { id: planFloor.id } }"
+          class="group block overflow-hidden rounded-xl border bg-background shadow-xs transition-[border-color,box-shadow] outline-none hover:border-ring/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <Layers class="size-6 text-muted-foreground" aria-hidden="true" />
-          <p class="max-w-64 font-serif text-lg leading-snug font-medium">{{ t('dashboard.planTeaser') }}</p>
-          <p class="max-w-64 text-sm text-muted-foreground">{{ t('dashboard.planTeaserDetail') }}</p>
-        </div>
-        <p
-          class="flex items-center gap-2.5 rounded-lg border border-dashed bg-background/60 px-3 py-2.5 text-sm text-muted-foreground sm:hidden"
-        >
-          <Layers class="size-4 shrink-0" aria-hidden="true" />
-          {{ t('dashboard.planBanner') }}
-        </p>
+          <FloorPreview :floor="planFloor" />
+          <span class="flex items-center gap-3 border-t px-4 py-3">
+            <span class="grid min-w-0 flex-1 gap-0.5">
+              <span class="eyebrow">{{ floorEyebrow(planFloor, t) }}</span>
+              <span class="truncate font-medium">{{ planFloor.name }}</span>
+              <span class="text-xs text-muted-foreground tabular-nums">{{ planSummary }}</span>
+            </span>
+            <span class="flex shrink-0 items-center gap-1 text-sm font-medium text-primary">
+              {{ t('dashboard.plan.open') }}
+              <ChevronRight
+                class="size-4 transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </span>
+          </span>
+        </RouterLink>
+        <Skeleton v-else-if="planLoading" class="hidden min-h-48 rounded-xl sm:block" />
+        <template v-else>
+          <!-- Where the floor plan will be: one dashed frame (a one-line note on phones). -->
+          <div
+            class="hidden min-h-48 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed bg-background/60 p-6 text-center sm:flex"
+          >
+            <Layers class="size-6 text-muted-foreground" aria-hidden="true" />
+            <p class="max-w-64 font-serif text-lg leading-snug font-medium">
+              {{ t('dashboard.planTeaser') }}
+            </p>
+            <p class="max-w-64 text-sm text-muted-foreground">{{ t('dashboard.planTeaserDetail') }}</p>
+            <Button as-child variant="outline" size="sm" class="mt-2">
+              <RouterLink :to="{ name: 'floors' }">
+                {{ session.isAdmin ? t('dashboard.plan.draw') : t('dashboard.plan.openFloors') }}
+              </RouterLink>
+            </Button>
+          </div>
+          <RouterLink
+            :to="{ name: 'floors' }"
+            class="flex items-center gap-2.5 rounded-lg border border-dashed bg-background/60 px-3 py-2.5 text-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring sm:hidden"
+          >
+            <Layers class="size-4 shrink-0" aria-hidden="true" />
+            <span class="flex-1">{{ t('dashboard.planBanner') }}</span>
+            <ChevronRight class="size-4 shrink-0" aria-hidden="true" />
+          </RouterLink>
+        </template>
       </div>
     </section>
 

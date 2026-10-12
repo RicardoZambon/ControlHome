@@ -31,6 +31,14 @@
     "en": "English",
     "ptBR": "Português (Brasil)"
   },
+  "floorplan": {
+    "planLabel": "Floor plan of {name}",
+    "planLabelUnnamed": "Floor plan",
+    "roomLabel": "{name}, {area}",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "fit": "Fit to screen"
+  },
   "theme": {
     "label": "Theme",
     "light": "Light",

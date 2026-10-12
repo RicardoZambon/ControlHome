@@ -31,6 +31,14 @@
     "en": "English",
     "ptBR": "Português (Brasil)"
   },
+  "floorplan": {
+    "planLabel": "Planta de {name}",
+    "planLabelUnnamed": "Planta",
+    "roomLabel": "{name}, {area}",
+    "zoomIn": "Aproximar",
+    "zoomOut": "Afastar",
+    "fit": "Ajustar à tela"
+  },
   "theme": {
     "label": "Tema",
     "light": "Claro",

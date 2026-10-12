@@ -89,9 +89,13 @@ onMounted(() => void homeStore.load())
       <div
         id="main-content"
         tabindex="-1"
-        class="flex-1 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] outline-none sm:px-6 md:px-10 md:pt-10 md:pb-16"
+        :class="
+          route.meta.fullWidth
+            ? 'flex-1 px-3 pt-3 pb-[calc(4.25rem+env(safe-area-inset-bottom))] outline-none sm:px-4 md:px-5 md:pt-4 md:pb-5'
+            : 'flex-1 px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] outline-none sm:px-6 md:px-10 md:pt-10 md:pb-16'
+        "
       >
-        <div class="mx-auto w-full max-w-6xl">
+        <div :class="route.meta.fullWidth ? 'w-full' : 'mx-auto w-full max-w-6xl'">
           <slot />
         </div>
       </div>

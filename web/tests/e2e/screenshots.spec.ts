@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import type { Locator, Page } from '@playwright/test'
+import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import {
   SETUP_CODE,
   completeSetup,
   createUser,
+  dismissToasts,
   expect,
+  mutationHeaders,
   resetApp,
   savePreferences,
   signIn,
@@ -107,6 +110,102 @@ const signedInRoutes: Route[] = [
     ready: (page, locale) => page.getByRole('heading', { level: 1, name: tr(locale, 'system.uiKit.title') }),
   },
 ]
+
+const PLAN_PNG = readFileSync(new URL('./fixtures/plan.png', import.meta.url))
+
+/**
+ * A floor traced over fixtures/plan.png (800 × 600 px at 2.5 cm/px = the 2000 × 1500 cm floor, walls at 100 cm from
+ * its edges) with three rooms named in `locale`, so the floor pages and the dashboard have something to show.
+ */
+async function seedFloor(request: APIRequestContext, locale: Locale): Promise<{ id: number; name: string }> {
+  const name = tr(locale, 'floors.level.ground')
+  const created = await request.post('/api/floors', {
+    headers: mutationHeaders(),
+    data: { name, level: 0, widthCm: 2000, heightCm: 1500 },
+  })
+  expect(created.status(), await created.text()).toBe(201)
+  let floor = (await created.json()) as { id: number; rowVersion: string }
+
+  const upload = await request.post('/api/files', {
+    headers: mutationHeaders(),
+    multipart: {
+      file: { name: 'plan.png', mimeType: 'image/png', buffer: PLAN_PNG },
+      purpose: 'floor-background',
+    },
+  })
+  expect(upload.status(), await upload.text()).toBe(201)
+  const file = (await upload.json()) as { id: string }
+  const updated = await request.put(`/api/floors/${floor.id}`, {
+    headers: mutationHeaders(),
+    data: {
+      name,
+      level: 0,
+      widthCm: 2000,
+      heightCm: 1500,
+      gridCm: 50,
+      background: { fileId: file.id, opacity: 0.35, offsetXCm: 0, offsetYCm: 0, cmPerPx: 2.5 },
+      rowVersion: floor.rowVersion,
+    },
+  })
+  expect(updated.status(), await updated.text()).toBe(200)
+  floor = (await updated.json()) as { id: number; rowVersion: string }
+
+  const rect = (x0: number, y0: number, x1: number, y1: number) => [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ]
+  const layout = await request.put(`/api/floors/${floor.id}/layout`, {
+    headers: mutationHeaders(),
+    data: {
+      rowVersion: floor.rowVersion,
+      rooms: [
+        {
+          id: null,
+          name: tr(locale, 'floors.editor.presets.living'),
+          icon: 'sofa',
+          colorToken: 'room-1',
+          polygon: rect(100, 100, 1000, 750),
+        },
+        {
+          id: null,
+          name: tr(locale, 'floors.editor.presets.kitchen'),
+          icon: 'cooking-pot',
+          colorToken: 'room-2',
+          polygon: rect(1000, 100, 1900, 900),
+        },
+        {
+          id: null,
+          name: tr(locale, 'floors.editor.presets.bedroom'),
+          icon: 'bed-double',
+          colorToken: 'room-3',
+          polygon: rect(100, 750, 1000, 1400),
+        },
+      ],
+    },
+  })
+  expect(layout.status(), await layout.text()).toBe(200)
+  return { id: floor.id, name }
+}
+
+/** The floor pages of the seeded floor. */
+function floorRoutes(floor: { id: number; name: string }): Route[] {
+  const room = (page: Page, locale: Locale) =>
+    page
+      .locator('[data-slot="floor-plan"] svg text')
+      .filter({ hasText: tr(locale, 'floors.editor.presets.kitchen') })
+      .first()
+  return [
+    {
+      path: '/floors',
+      name: 'floors',
+      ready: (page) => page.getByRole('link', { name: floor.name, exact: true }),
+    },
+    { path: `/floors/${floor.id}`, name: 'floor-view', ready: room },
+    { path: `/floors/${floor.id}/edit`, name: 'floor-edit', ready: room },
+  ]
+}
 
 // Interaction states (English, both widths and themes) into ./screenshots/state-<name>-<width>-<theme>.png: field errors,
 // keyboard focus, hover, a busy button, open dialogs, menus and sheets, and a toast. The gates check each one too.
@@ -275,7 +374,7 @@ for (const width of WIDTHS) {
           const navigation = page.getByRole('navigation', { name: t('shell.primaryNavigation') })
           await navigation.getByRole('link', { name: t('dashboard.nav'), exact: true }).focus()
           await page.keyboard.press('Tab')
-          await expect(navigation.getByRole('link', { name: t('users.nav'), exact: true })).toBeFocused()
+          await expect(navigation.getByRole('link', { name: t('floors.nav'), exact: true })).toBeFocused()
           await capture('focus-sidebar')
         }
 
@@ -316,6 +415,43 @@ for (const width of WIDTHS) {
           page.getByText(t('users.toast.disabled', { name: testData.member.displayName })),
         ).toBeVisible()
         await capture('toast')
+
+        // Floor-plan editor: a selected room (handles, wall lengths), then a room being drawn.
+        const floor = await seedFloor(page.request, 'en')
+        await page.goto(`/floors/${floor.id}/edit`)
+        const kitchen = page
+          .locator('[data-slot="floor-plan"] svg text')
+          .filter({ hasText: t('floors.editor.presets.kitchen') })
+          .first()
+        await expect(kitchen).toBeVisible()
+        await dismissToasts(page)
+        const at = async (x: number, y: number) => {
+          const svg = page.locator('[data-slot="floor-plan"] svg').first()
+          const box = (await svg.boundingBox())!
+          const [vx, vy, vw] = (await svg.getAttribute('viewBox'))!.split(' ').map(Number) as [
+            number,
+            number,
+            number,
+          ]
+          const scale = box.width / vw
+          return { x: box.x + (x - vx) * scale, y: box.y + (y - vy) * scale }
+        }
+        const kitchenCentre = await at(1450, 500)
+        await page.mouse.click(kitchenCentre.x, kitchenCentre.y)
+        await capture('editor-room-selected')
+        await page.keyboard.press('Escape')
+        await page.keyboard.press('r')
+        for (const [x, y] of [
+          [1050, 950],
+          [1850, 950],
+          [1850, 1350],
+        ] as const) {
+          const point = await at(x, y)
+          await page.mouse.click(point.x, point.y)
+        }
+        const cursor = await at(1300, 1250)
+        await page.mouse.move(cursor.x, cursor.y)
+        await capture('editor-drawing')
       })
     })
   }
@@ -375,7 +511,9 @@ for (const width of WIDTHS) {
             { userName: 'linus', displayName: 'Linus Torvalds', password: 'just for fun, really' },
             'Viewer',
           )
-          for (const route of signedInRoutes) await capture(route)
+          // A floor with rooms over a traced plan: the dashboard shows it, and the floor pages get captured too.
+          const floor = await seedFloor(page.request, locale)
+          for (const route of [...signedInRoutes, ...floorRoutes(floor)]) await capture(route)
         })
       })
     }

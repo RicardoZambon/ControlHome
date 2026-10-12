@@ -10,9 +10,11 @@
   "welcome": "{home} is set up and ready for what comes next.",
   "localTime": "Local time at home",
   "planTeaser": "Your floor plan will live here",
-  "planTeaserDetail": "Draw floors and rooms in the next update, then place your devices on them.",
+  "planTeaserDetail": "Draw your floors and rooms, then place your devices on them.",
   "start": {
     "heading": "Make it yours",
+    "floorsTitle": "Floors and rooms",
+    "floorsDescription": "Draw each floor, trace the rooms and give every space its color.",
     "profileTitle": "Your profile",
     "profileDescription": "Your name, language, theme and password.",
     "usersTitle": "Users",
@@ -33,12 +35,15 @@
     "heading": "Coming next",
     "badge": "Next",
     "planned": "Planned",
-    "floorsTitle": "Floors and rooms",
-    "floorsDescription": "Draw each floor, trace the rooms and give every space its color.",
     "devicesTitle": "Devices and integrations",
     "devicesDescription": "Connect your lights, plugs and sensors and control them live from any screen.",
     "energyTitle": "Energy and history",
     "energyDescription": "See what each device uses and what it costs at your electricity price."
   },
-  "planBanner": "Floor plans arrive in the next update."
+  "planBanner": "Draw your floor plan in Floors.",
+  "plan": {
+    "open": "Open plan",
+    "draw": "Draw a floor",
+    "openFloors": "Open Floors"
+  }
 }

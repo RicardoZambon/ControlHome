@@ -506,9 +506,17 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   Vue Router 5, VueUse, vue-i18n 11 (pt-BR and en; **a missing key throws in tests**), @microsoft/signalr, ECharts
   through vue-echarts, @lucide/vue plus mdi device icons.
 - **`/dev/ui-kit`** (Admin only) renders every token and component for visual review.
-- **Floor-plan editor (SVG)**
-  - Pan/zoom; snapping to the grid, own vertices, and other rooms' vertices and edges.
-  - Polygon validation and undo/redo on a draft, which is saved or cancelled explicitly.
+- **Floor-plan editor (SVG)** (1.1: `components/floorplan/*` shared, `features/floors/*`)
+  - One `FloorPlanCanvas` for view and edit: viewBox in cm, pan (drag, middle mouse, one finger), zoom (wheel, pinch,
+    buttons), fit; rooms filled with their room token at reduced opacity and outlined in the solid token, labelled
+    with name and area; dashboard previews use it non-interactive (`FloorPreview`).
+  - Snapping (12 screen px) to the grid, own vertices, and other rooms' vertices and edges; closest wins, Alt disables.
+  - Tools: Select (move room, drag corner, wall midpoint or double-click adds a corner, Delete), Draw room (clicks or
+    a dragged rectangle), Calibrate, Background. Pure tool functions in `features/floors/editor/tools/*`.
+  - Polygon validation (`geometry.ts` mirrors `PolygonMath` and `RoomPolygonRules` with the same tests) and
+    undo/redo (`useCommandStack`, immutable snapshots) on a draft, which is saved or cancelled explicitly (leave guard).
+    A save is `PUT /api/floors/{id}` (properties, background) and/or `PUT …/layout`, ordered so rooms fit both the old
+    and the new size; 409 `floors.concurrency` offers to reload.
   - Two-point calibration.
   - Uploads: PNG/JPEG/WebP only, checked by magic bytes, max 10 MB and 40 megapixels (checked before decoding),
     re-encoded server-side with SkiaSharp 3 (`SkiaSharp.NativeAssets.Linux.NoDependencies` in the chiseled image) to
