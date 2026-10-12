@@ -1,0 +1,12 @@
+# ControlHome — end-to-end test override (Playwright), layered on docker-compose.yml + docker-compose.dev.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.e2e.yml --profile bundled-db up -d --build
+#
+# Testing environment: enables the /api/_test/* endpoints (never mapped in Production) and uses the fixed, non-secret
+# setup code that the Playwright specs type into the setup wizard.
+
+services:
+  controlhome:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Testing
+      Setup__Code: E2E-SETUP-CODE-1

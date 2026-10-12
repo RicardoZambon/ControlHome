@@ -1,0 +1,60 @@
+# Dependabot: weekly, after a 7-day cooldown (new releases must age a week), minor and patch updates grouped into one PR
+# per ecosystem, at most 2 open PRs per ecosystem. Only green patch/minor PRs are merged (docs/architecture.md, CI/CD).
+version: 2
+
+updates:
+  # Directory.Packages.props (central package management) + ControlHome.slnx
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # web/ npm workspace (package-lock.json)
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # Workflow actions (pinned by commit SHA with the version in a comment)
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # deploy/Dockerfile base images (pinned by tag and digest)
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

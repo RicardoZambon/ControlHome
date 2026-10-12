@@ -13,6 +13,12 @@ using ControlHome.Infrastructure.Security;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
 
+// `--healthcheck` (the container HEALTHCHECK): probe /health/live on loopback and exit 0/1 without building a host.
+if (HealthcheckCommand.IsRequested(args))
+{
+    return await HealthcheckCommand.RunAsync(args);
+}
+
 // Nothing before builder.Build() may open a database or network connection or touch the data folder: `dotnet build` runs
 // this file to generate the OpenAPI document, and `dotnet ef` runs it to find the DbContext.
 Log.Logger = LoggingSetup.CreateBootstrapLogger();
@@ -91,5 +97,7 @@ finally
 {
     await Log.CloseAndFlushAsync();
 }
+
+return 0;
 
 public partial class Program;
