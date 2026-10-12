@@ -22,6 +22,9 @@
 param(
     [string] $Filter,
     [switch] $UseDevServer,
+    # Run test assemblies in parallel (default: one at a time, so SQL Server test containers do not compete for the
+    # small Docker Desktop VM memory).
+    [switch] $ParallelModules,
     [string] $SdkImage = 'mcr.microsoft.com/dotnet/sdk:10.0.302-noble'
 )
 
@@ -66,6 +69,7 @@ try {
     }
 
     $testCmd = 'dotnet test -c Release'
+    if (-not $ParallelModules) { $testCmd += ' --max-parallel-test-modules 1' }
     if ($Filter) { $testCmd += " --filter `"$Filter`"" }
     $dockerArgs += @('-w', '/src', $SdkImage, 'bash', '-c', "mkdir -p /src && tar -x -C /src && cd /src && $testCmd")
 
