@@ -28,6 +28,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ControlHome.Infrastructure\ControlHome.Infrastructure.csproj" />
+    <!-- Connectors are registered statically (AddConnector<T>()), never loaded as plugins. -->
+    <ProjectReference Include="..\ControlHome.Connectors.Simulated\ControlHome.Connectors.Simulated.csproj" />
   </ItemGroup>
 
   <ItemGroup>

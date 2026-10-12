@@ -1,13 +1,18 @@
 using ControlHome.Api.Features.Audit;
 using ControlHome.Api.Features.Auth;
+using ControlHome.Api.Features.Capabilities;
+using ControlHome.Api.Features.Devices;
 using ControlHome.Api.Features.Files;
 using ControlHome.Api.Features.Floors;
 using ControlHome.Api.Features.Home;
+using ControlHome.Api.Features.Integrations;
 using ControlHome.Api.Features.Setup;
+using ControlHome.Api.Features.SystemStatus;
 using ControlHome.Api.Features.Testing;
 using ControlHome.Api.Features.Users;
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
+using ControlHome.Api.Realtime;
 using ControlHome.Api.Security;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
@@ -16,9 +21,12 @@ using ControlHome.Application.Devices;
 using ControlHome.Application.Files;
 using ControlHome.Application.Floors;
 using ControlHome.Application.Homes;
+using ControlHome.Application.Integrations;
+using ControlHome.Application.Security;
 using ControlHome.Application.Setup;
 using ControlHome.Application.Users;
 using ControlHome.Infrastructure;
+using ControlHome.Infrastructure.Devices;
 using ControlHome.Infrastructure.Security;
 using ControlHome.Infrastructure.Setup;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -47,11 +55,20 @@ try
 
     builder.Services.AddControlHomeInfrastructure();
     builder.Services.AddSetupInfrastructure();
+    builder.Services.AddDeviceRuntime();
+    builder.Services.AddControlHomeConnectors();
+    builder.Services.AddControlHomeRealtime();
     if (!BuildContext.IsOpenApiGeneration)
     {
         builder.Services.AddDatabaseInitializer();
         builder.Services.AddControlHomeDataProtection();
         builder.Services.AddSetupCodeAnnouncer();
+        builder.Services.AddDeviceRuntimeHost();
+    }
+
+    if (builder.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
+    {
+        builder.Services.AddTestingServices();
     }
 
     builder.Services.AddControlHomeJson();
@@ -75,6 +92,8 @@ try
     builder.Services.AddFloors();
     builder.Services.AddFiles();
     builder.Services.AddDevices();
+    builder.Services.AddIntegrations();
+    builder.Services.AddSafety();
 
     var app = builder.Build();
 
@@ -108,6 +127,11 @@ try
     app.MapAuditEndpoints();
     app.MapFloorEndpoints();
     app.MapFileEndpoints();
+    app.MapCapabilityEndpoints();
+    app.MapDeviceEndpoints();
+    app.MapIntegrationEndpoints();
+    app.MapSystemEndpoints();
+    app.MapHomeHub();
     if (app.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
     {
         app.MapTestingEndpoints();

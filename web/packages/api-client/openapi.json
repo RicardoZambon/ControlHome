@@ -289,6 +289,71 @@
         }
       }
     },
+    "/api/auth/step-up": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Confirms the safety PIN: allows one safety-critical command (unlock, open the gate, disarm) within 60 s.",
+        "description": "409 safety.pin_not_set; 400 safety.pin_incorrect; 423 safety.locked (retryAfterSeconds) after 5 wrong PINs within 15 minutes, which also blocks safety-critical commands for 15 minutes.",
+        "operationId": "stepUp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/me": {
       "get": {
         "tags": [
@@ -408,6 +473,90 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me/pin": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Whether the signed-in user has a safety PIN, and any lockout.",
+        "operationId": "getSafetyPin",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SafetyPinStatusDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Sets the safety PIN (4–8 digits) for safety-critical commands, or changes it (currentPin required).",
+        "description": "400 validation.failed or safety.pin_incorrect (wrong currentPin; counts as a failed attempt); 423 safety.locked (retryAfterSeconds) after 5 wrong PINs within 15 minutes.",
+        "operationId": "setSafetyPin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPinRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -1539,6 +1688,840 @@
           }
         }
       }
+    },
+    "/api/capabilities": {
+      "get": {
+        "tags": [
+          "Capabilities"
+        ],
+        "summary": "Every capability definition: attributes (schemas, units, state classes) and commands (arguments, safety flags).",
+        "operationId": "listCapabilities",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CapabilityDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Devices with their endpoints, capabilities, attribute ids and current values, by name.",
+        "description": "Filters (all optional, combined): roomId, integrationId, capability (e.g. switch), q (name, manufacturer or model).",
+        "operationId": "listDevices",
+        "parameters": [
+          {
+            "name": "RoomId",
+            "in": "query",
+            "description": "Devices with at least one endpoint in the room (an endpoint's own room, else the device's).",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "IntegrationId",
+            "in": "query",
+            "description": "Devices of one integration.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Capability",
+            "in": "query",
+            "description": "Devices with an endpoint that has this (non-retired) capability, e.g. `switch`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Q",
+            "in": "query",
+            "description": "Text contained in the name, manufacturer or model.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceSummaryDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "A device with its vendor details, endpoints and child devices.",
+        "operationId": "getDevice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDetailDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Renames a device and sets its icon and room.",
+        "description": "400 validation.failed (errors.roomId = rooms.not_found for an unknown room); 404 devices.not_found.",
+        "operationId": "updateDevice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/endpoints/{id}": {
+      "put": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Changes an endpoint's name, icon, room and hidden flag.",
+        "description": "400 validation.failed (errors.roomId = rooms.not_found for an unknown room); 404 endpoints.not_found.",
+        "operationId": "updateEndpoint",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEndpointRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/endpoints/{id}/favorite": {
+      "put": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Adds the endpoint to the dashboard's favorites, or removes it.",
+        "operationId": "setEndpointFavorite",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetFavoriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/endpoints/{id}/commands": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Sends a command to an endpoint; progress arrives as hub CommandStatus messages.",
+        "description": "202 with the command id. 400 commands.unsupported (no such capability or command on this endpoint) or commands.invalid_arguments (errors['arguments.<key>'] = commands.argument_*); 403 safety.step_up_required (safety-critical: POST /api/auth/step-up first, then resend with the same idempotencyKey) or safety.not_allowed; 404 endpoints.not_found; 409 commands.duplicate (idempotency key already used) or commands.gate_closed; 423 safety.locked (retryAfterSeconds); 503 commands.unavailable (integration not running).",
+        "operationId": "sendCommand",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandAcceptedDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/state": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Every attribute's current value (resync after a hub reconnect).",
+        "operationId": "getState",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AttributeStateDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connectors": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "The connectors of this build (descriptors: names, icon, config forms, features).",
+        "operationId": "listConnectors",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectorDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations": {
+      "get": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "All integrations with their status and device count, by name.",
+        "operationId": "listIntegrations",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IntegrationDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Creates an integration from a connector key and its config; its runtime starts right away.",
+        "description": "400 validation.failed (errors.connectorKey = connectors.not_found for an unknown connector) or integrations.invalid_config (errors['config.<key>'] = commands.argument_* codes). Secret config fields are stored encrypted and never returned.",
+        "operationId": "createIntegration",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}": {
+      "delete": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Stops the integration and deletes it with all its devices and their state.",
+        "operationId": "deleteIntegration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/status": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Runtime mode (Starting, Active, Standby), whether history is paused, and the app version.",
+        "operationId": "getSystemStatus",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusDto"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1562,6 +2545,157 @@
           }
         },
         "description": "The first administrator account."
+      },
+      "ArgumentDefinitionDto": {
+        "required": [
+          "key",
+          "schema",
+          "required",
+          "attribute"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "schema": {
+            "$ref": "#/components/schemas/ValueSchema"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "attribute": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The attribute it sets (its constraints apply), if any."
+          }
+        },
+        "description": "An argument of a command (a member of the command's `arguments` object)."
+      },
+      "AttributeDefinitionDto": {
+        "required": [
+          "key",
+          "schema",
+          "unit",
+          "stateClass",
+          "category",
+          "recorded",
+          "writable"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "schema": {
+            "description": "The value's shape (discriminator `type`: bool, number, enum, string, flags, json, momentary).",
+            "$ref": "#/components/schemas/ValueSchema"
+          },
+          "unit": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Canonical unit (`%`, `W`, `Wh`, `°C`, …), if any."
+          },
+          "stateClass": {
+            "type": "string",
+            "description": "`none`, `measurement`, `total` or `total_increasing`."
+          },
+          "category": {
+            "type": "string",
+            "description": "`primary` or `diagnostic`."
+          },
+          "recorded": {
+            "type": "boolean",
+            "description": "Whether changes are kept in the history."
+          },
+          "writable": {
+            "type": "boolean",
+            "description": "Whether a command of the capability changes it."
+          }
+        },
+        "description": "An attribute of a capability."
+      },
+      "AttributeDto": {
+        "required": [
+          "attributeId",
+          "key",
+          "value",
+          "observedAtUtc",
+          "lastChangedAtUtc",
+          "restored"
+        ],
+        "type": "object",
+        "properties": {
+          "attributeId": {
+            "type": "integer",
+            "description": "The key of every state, history and hub delta for this attribute.",
+            "format": "int32"
+          },
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "description": "The current value; `{kind:'null'}` when none was reported yet.",
+            "$ref": "#/components/schemas/StateValue"
+          },
+          "observedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the value was observed, or `null` when none was reported yet.",
+            "format": "date-time"
+          },
+          "lastChangedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the value last changed, or `null`.",
+            "format": "date-time"
+          },
+          "restored": {
+            "type": "boolean",
+            "description": "Loaded from the database and not yet confirmed by the running connector."
+          }
+        },
+        "description": "One attribute and its current value."
+      },
+      "AttributeStateDto": {
+        "required": [
+          "attributeId",
+          "value",
+          "observedAtUtc",
+          "lastChangedAtUtc",
+          "restored"
+        ],
+        "type": "object",
+        "properties": {
+          "attributeId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "value": {
+            "$ref": "#/components/schemas/StateValue"
+          },
+          "observedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastChangedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "restored": {
+            "type": "boolean",
+            "description": "Loaded from the database and not yet confirmed by the running connector."
+          }
+        },
+        "description": "The current value of one attribute (`GET /api/state` resync, and the source of AttributeDto)."
       },
       "AuditEntryDto": {
         "required": [
@@ -1633,6 +2767,57 @@
         },
         "description": "One audit log entry, newest first in listings."
       },
+      "AvailabilityChangedDto": {
+        "required": [
+          "deviceId",
+          "availability"
+        ],
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "availability": {
+            "type": "string",
+            "description": "`Unknown`, `Online` or `Offline`."
+          }
+        },
+        "description": "A device became reachable or not (hub `AvailabilityChanged`)."
+      },
+      "CapabilityDto": {
+        "required": [
+          "id",
+          "version",
+          "attributes",
+          "commands"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "e.g. `thermostat`."
+          },
+          "version": {
+            "type": "integer",
+            "description": "Catalogue version.",
+            "format": "int32"
+          },
+          "attributes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttributeDefinitionDto"
+            }
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommandDefinitionDto"
+            }
+          }
+        },
+        "description": "A capability definition as served by `GET /api/capabilities` (and inside generic endpoint capabilities)."
+      },
       "ChangePasswordRequest": {
         "required": [
           "currentPassword",
@@ -1647,6 +2832,143 @@
             "type": "string"
           }
         }
+      },
+      "CommandAcceptedDto": {
+        "required": [
+          "commandId"
+        ],
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "description": "The command was accepted; its progress arrives as hub `CommandStatus` messages with this id."
+      },
+      "CommandDefinitionDto": {
+        "required": [
+          "name",
+          "arguments",
+          "confirmation",
+          "timeoutMs",
+          "safetyCritical",
+          "safetyCriticalForDeviceClasses",
+          "failSafe",
+          "gateAttribute"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArgumentDefinitionDto"
+            }
+          },
+          "confirmation": {
+            "type": "string",
+            "description": "`ackIsFinal` or `awaitState`."
+          },
+          "timeoutMs": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "Confirmation timeout; `null` uses the connector's default.",
+            "format": "int32"
+          },
+          "safetyCritical": {
+            "type": "boolean",
+            "description": "Always needs a step-up PIN (unlock, door opener, disarm)."
+          },
+          "safetyCriticalForDeviceClasses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Device classes on which it needs a step-up PIN too (cover open on gate/garage)."
+          },
+          "failSafe": {
+            "type": "boolean",
+            "description": "The safe direction (lock, close): never gated."
+          },
+          "gateAttribute": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "A boolean attribute that must be true for the command to be accepted, if any."
+          }
+        },
+        "description": "A command of a capability."
+      },
+      "CommandRequest": {
+        "required": [
+          "capabilityId",
+          "command",
+          "arguments",
+          "idempotencyKey"
+        ],
+        "type": "object",
+        "properties": {
+          "capabilityId": {
+            "type": "string",
+            "description": "A capability of the endpoint, e.g. `switch`."
+          },
+          "command": {
+            "type": "string",
+            "description": "A command of that capability, e.g. `turnOn` or `setLevel`."
+          },
+          "arguments": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The arguments object (e.g. `{\"level\": 40}`); omit or `null` for none.",
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "idempotencyKey": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Unique per user action (1–128 of `A-Z a-z 0-9 . _ : -`; a UUID is fine). The same key again within 10 minutes is\nrefused with 409 `commands.duplicate` and never reaches the device (at-most-once). Send the same key when retrying\nthe same action (e.g. after a step-up). The server generates one when omitted."
+          }
+        },
+        "description": "A command for one endpoint (`POST /api/endpoints/{endpointId}/commands`)."
+      },
+      "CommandStatusDto": {
+        "required": [
+          "commandId",
+          "status",
+          "code"
+        ],
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "description": "The id from the command's 202 response.",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "description": "`pending` (accepted, not done yet), then one final status: `confirmed`, `failed`, `timed_out` or\n        `superseded` (a later command for the same control replaced it before it was sent)."
+          },
+          "code": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "For `failed` and `timed_out`: an error code (`commands.*`), translated as `errors.&lt;code&gt;`."
+          }
+        },
+        "description": "Progress of a command sent with `POST /api/endpoints/{id}/commands` (hub `CommandStatus`)."
       },
       "CompleteSetupRequest": {
         "required": [
@@ -1668,6 +2990,86 @@
           }
         },
         "description": "Completes the first-run setup: creates the first Admin and the home, then signs the admin in."
+      },
+      "ConnectorDto": {
+        "required": [
+          "key",
+          "displayName",
+          "icon",
+          "category",
+          "configFields",
+          "deviceConfigFields",
+          "features"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Stable id, e.g. `simulated`; used as `connectorKey` when creating an integration."
+          },
+          "displayName": {
+            "$ref": "#/components/schemas/LocalizedTextDto"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon key (lucide name, or a prefixed key such as `mdi:…`)."
+          },
+          "category": {
+            "type": "string",
+            "description": "`vendor`, `protocol` or `virtual`."
+          },
+          "configFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSchemaDto"
+            },
+            "description": "The integration's configuration form (rendered with the shared schema form)."
+          },
+          "deviceConfigFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSchemaDto"
+            },
+            "description": "Per-device settings, usually secret; empty when none."
+          },
+          "features": {
+            "$ref": "#/components/schemas/ConnectorFeaturesDto"
+          }
+        },
+        "description": "A connector in the integrations catalogue (`GET /api/connectors`)."
+      },
+      "ConnectorFeaturesDto": {
+        "required": [
+          "setupFlow",
+          "reauth",
+          "pushInventory",
+          "permitJoin",
+          "cloud",
+          "polling"
+        ],
+        "type": "object",
+        "properties": {
+          "setupFlow": {
+            "type": "boolean",
+            "description": "Setup runs through a flow (milestone 1.3); otherwise integrations are created from the config fields."
+          },
+          "reauth": {
+            "type": "boolean"
+          },
+          "pushInventory": {
+            "type": "boolean"
+          },
+          "permitJoin": {
+            "type": "boolean"
+          },
+          "cloud": {
+            "type": "boolean"
+          },
+          "polling": {
+            "type": "boolean"
+          }
+        },
+        "description": "What a connector supports."
       },
       "CreateFloorRequest": {
         "required": [
@@ -1701,6 +3103,36 @@
           }
         },
         "description": "Creates an empty floor (Admin). Size defaults to 2000 × 1500 cm, grid 50 cm."
+      },
+      "CreateIntegrationRequest": {
+        "required": [
+          "connectorKey",
+          "name",
+          "config"
+        ],
+        "type": "object",
+        "properties": {
+          "connectorKey": {
+            "type": "string",
+            "description": "A key from `GET /api/connectors`."
+          },
+          "name": {
+            "type": "string",
+            "description": "The integration's name (1–128 characters)."
+          },
+          "config": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The config object (members per the connector's config fields); secret fields are stored encrypted and never returned.",
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          }
+        },
+        "description": "Creates an integration from a connector's config fields (`POST /api/integrations`; no setup flow in 1.2)."
       },
       "CreateUserRequest": {
         "required": [
@@ -1765,6 +3197,409 @@
           }
         },
         "description": "Pre-database setup: the SQL Server connection to test and save. Accepted only while no connection is configured.\nThe connection always uses TLS (`Encrypt=True`); TrustServerCertificate accepts the server's\nown (usually self-signed) certificate."
+      },
+      "DeviceChildDto": {
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A child device of a DeviceDetailDto."
+      },
+      "DeviceDetailDto": {
+        "required": [
+          "id",
+          "integrationId",
+          "integrationName",
+          "connectorKey",
+          "externalId",
+          "parentDeviceId",
+          "name",
+          "deviceClass",
+          "manufacturer",
+          "model",
+          "firmware",
+          "connections",
+          "availability",
+          "lastSeenAtUtc",
+          "isOrphaned",
+          "roomId",
+          "icon",
+          "createdAtUtc",
+          "endpoints",
+          "children"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integrationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integrationName": {
+            "type": "string"
+          },
+          "connectorKey": {
+            "type": "string",
+            "description": "The integration's connector, e.g. `simulated`."
+          },
+          "externalId": {
+            "type": "string",
+            "description": "The connector's id for the device."
+          },
+          "parentDeviceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "deviceClass": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "manufacturer": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "firmware": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "connections": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Hardware identifiers (`mac`, `serial`, …)."
+          },
+          "availability": {
+            "type": "string"
+          },
+          "lastSeenAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "isOrphaned": {
+            "type": "boolean"
+          },
+          "roomId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endpoints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EndpointDto"
+            }
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceChildDto"
+            },
+            "description": "Devices reached through this one (e.g. an NVR's cameras), by name."
+          }
+        },
+        "description": "A device with its vendor details (`GET /api/devices/{id}`)."
+      },
+      "DeviceSummaryDto": {
+        "required": [
+          "id",
+          "integrationId",
+          "parentDeviceId",
+          "name",
+          "deviceClass",
+          "icon",
+          "roomId",
+          "availability",
+          "isOrphaned",
+          "lastSeenAtUtc",
+          "endpoints"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integrationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentDeviceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The device it is reached through (an NVR for a camera), if any.",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "deviceClass": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "roomId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "availability": {
+            "type": "string",
+            "description": "`Unknown`, `Online` or `Offline`."
+          },
+          "isOrphaned": {
+            "type": "boolean",
+            "description": "No longer reported by its integration (kept, shown with a badge)."
+          },
+          "lastSeenAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "endpoints": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EndpointDto"
+            },
+            "description": "In display order."
+          }
+        },
+        "description": "A device in the device list, with its endpoints, capabilities, attribute ids and current values."
+      },
+      "EndpointCapabilityDto": {
+        "required": [
+          "id",
+          "capabilityId",
+          "capabilityVersion",
+          "retired",
+          "constraints",
+          "genericDefinition",
+          "attributes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The endpoint capability's id.",
+            "format": "int32"
+          },
+          "capabilityId": {
+            "type": "string",
+            "description": "A catalogue id (definitions: `GET /api/capabilities`)."
+          },
+          "capabilityVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "retired": {
+            "type": "boolean",
+            "description": "No longer reported by the connector: hide its controls (history is kept)."
+          },
+          "constraints": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "The endpoint's narrowing (ranges, enum subsets) as a constraints object, or `null`.",
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "genericDefinition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "For `generic`: the connector-supplied definition; otherwise `null`.",
+                "$ref": "#/components/schemas/CapabilityDto"
+              }
+            ]
+          },
+          "attributes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttributeDto"
+            },
+            "description": "The attributes known so far (ordered by key)."
+          }
+        },
+        "description": "A capability of an endpoint with its constraints and attributes."
+      },
+      "EndpointDto": {
+        "required": [
+          "id",
+          "key",
+          "name",
+          "roomId",
+          "effectiveRoomId",
+          "icon",
+          "hidden",
+          "favorite",
+          "sortOrder",
+          "capabilities"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string",
+            "description": "The connector's key (`main` for single-endpoint devices)."
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The user's name, or `null` to show the device name."
+          },
+          "roomId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The endpoint's own room, or `null` to inherit the device's.",
+            "format": "int32"
+          },
+          "effectiveRoomId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The room the endpoint is in: its own, else the device's.",
+            "format": "int32"
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Left out of dashboards and pickers."
+          },
+          "favorite": {
+            "type": "boolean",
+            "description": "On the dashboard's favorites grid."
+          },
+          "sortOrder": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EndpointCapabilityDto"
+            }
+          }
+        },
+        "description": "A controllable part of a device (commands address endpoints)."
+      },
+      "FieldSchemaDto": {
+        "required": [
+          "key",
+          "label",
+          "schema",
+          "required",
+          "secret",
+          "help"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "camelCase member name of the submitted `config` object."
+          },
+          "label": {
+            "$ref": "#/components/schemas/LocalizedTextDto"
+          },
+          "schema": {
+            "description": "The value's shape (discriminator `type`).",
+            "$ref": "#/components/schemas/ValueSchema"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "secret": {
+            "type": "boolean",
+            "description": "Write-only: stored encrypted, never returned."
+          },
+          "help": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LocalizedTextDto"
+              }
+            ]
+          }
+        },
+        "description": "A form field."
       },
       "FloorBackgroundDto": {
         "required": [
@@ -2074,6 +3909,104 @@
         "type": "string",
         "format": "binary"
       },
+      "IntegrationDto": {
+        "required": [
+          "id",
+          "connectorKey",
+          "name",
+          "status",
+          "statusMessage",
+          "enabled",
+          "deviceCount",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "connectorKey": {
+            "type": "string",
+            "description": "e.g. `simulated`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "`Connecting`, `Ok`, `Degraded`, `NeedsReauth`, `PlanRequired`, `QuotaExceeded`,\n        `Error` or `Stopped`."
+          },
+          "statusMessage": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "A short non-secret explanation of the status, if any."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "deviceCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "An integration in the integrations list."
+      },
+      "IntegrationStatusChangedDto": {
+        "required": [
+          "id",
+          "status",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The integration.",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "description": "An `IntegrationDto.Status` value."
+          },
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "A short non-secret explanation, if any."
+          }
+        },
+        "description": "An integration's status changed (hub `IntegrationStatusChanged`)."
+      },
+      "JsonElement": { },
+      "LocalizedTextDto": {
+        "required": [
+          "en",
+          "ptBr"
+        ],
+        "type": "object",
+        "properties": {
+          "en": {
+            "type": "string"
+          },
+          "ptBr": {
+            "type": "string"
+          }
+        },
+        "description": "A text in both UI languages."
+      },
       "LoginRequest": {
         "required": [
           "userName",
@@ -2361,6 +4294,28 @@
         },
         "description": "A room in the list of all rooms (for pickers)."
       },
+      "SafetyPinStatusDto": {
+        "required": [
+          "isSet",
+          "lockedForSeconds"
+        ],
+        "type": "object",
+        "properties": {
+          "isSet": {
+            "type": "boolean",
+            "description": "Whether the user has a PIN (changing it then needs the current one)."
+          },
+          "lockedForSeconds": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "Seconds left of a lockout after too many wrong PINs, or `null`.",
+            "format": "int32"
+          }
+        },
+        "description": "The signed-in user's safety PIN state (`GET /api/auth/me/pin`)."
+      },
       "SaveFloorLayoutRequest": {
         "required": [
           "rooms",
@@ -2380,6 +4335,39 @@
           }
         },
         "description": "Replaces the floor's rooms atomically (Admin): listed rooms with an `id` are updated, rooms without one are\ncreated, rooms not listed are deleted; the list order becomes the display order."
+      },
+      "SetFavoriteRequest": {
+        "required": [
+          "favorite"
+        ],
+        "type": "object",
+        "properties": {
+          "favorite": {
+            "type": "boolean"
+          }
+        },
+        "description": "Adds an endpoint to (or removes it from) the dashboard's favorites (`PUT /api/endpoints/{id}/favorite`, Member)."
+      },
+      "SetPinRequest": {
+        "required": [
+          "currentPin",
+          "newPin"
+        ],
+        "type": "object",
+        "properties": {
+          "currentPin": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The PIN in use; required when one is set."
+          },
+          "newPin": {
+            "type": "string",
+            "description": "4–8 digits."
+          }
+        },
+        "description": "Sets or changes the signed-in user's safety PIN (`PUT /api/auth/me/pin`)."
       },
       "SetupStatusDto": {
         "required": [
@@ -2421,6 +4409,94 @@
         },
         "description": "First-run state. Answered even while the database is not ready (then SetupCompleted is false)."
       },
+      "StateDelta": {
+        "required": [
+          "attributeId",
+          "value",
+          "observedAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "attributeId": {
+            "type": "integer",
+            "description": "The attribute (see `AttributeDto.AttributeId`).",
+            "format": "int32"
+          },
+          "value": {
+            "$ref": "#/components/schemas/StateValue"
+          },
+          "observedAtUtc": {
+            "type": "string",
+            "description": "When the device observed it.",
+            "format": "date-time"
+          }
+        },
+        "description": "A new current value of one attribute (hub `StateChanged`)."
+      },
+      "StateValue": {
+        "required": [
+          "kind",
+          "b",
+          "n",
+          "s",
+          "j"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/StateValueKind"
+          },
+          "b": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "Set when StateValueKind StateValue.Kind is StateValueKind.Bool."
+          },
+          "n": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "Set (finite) when StateValueKind StateValue.Kind is StateValueKind.Number.",
+            "format": "double"
+          },
+          "s": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Set when StateValueKind StateValue.Kind is StateValueKind.String."
+          },
+          "j": {
+            "description": "A JSON object or array, set when StateValueKind StateValue.Kind is StateValueKind.Json.",
+            "$ref": "#/components/schemas/JsonElement"
+          }
+        },
+        "description": "An attribute value as it travels in DTOs and hub messages: `{ kind: 'bool'|'number'|'string'|'json'|'null', b?, n?,\ns?, j? }` — exactly the member named by StateValueKind StateValue.Kind is set. Create values with the factories\n(StateValue StateValue.Bool(bool value), StateValue StateValue.Number(double value), StateValue StateValue.String(string value), StateValue StateValue.Json(JsonElement value), StateValue StateValue.Null,\nStateValue StateValue.FromJson(JsonElement value)); equality compares JSON values structurally."
+      },
+      "StateValueKind": {
+        "enum": [
+          "null",
+          "bool",
+          "number",
+          "string",
+          "json"
+        ],
+        "description": "Which member of a StateValue holds the value (stored as `tinyint`)."
+      },
+      "StepUpRequest": {
+        "required": [
+          "pin"
+        ],
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string"
+          }
+        },
+        "description": "Proves the PIN before a safety-critical command (`POST /api/auth/step-up`)."
+      },
       "StoredFileDto": {
         "required": [
           "id",
@@ -2458,6 +4534,96 @@
       "Stream": {
         "type": "string",
         "format": "binary"
+      },
+      "SystemStatusDto": {
+        "required": [
+          "runtimeMode",
+          "historyPaused",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "runtimeMode": {
+            "type": "string",
+            "description": "`Starting`, `Active` or `Standby` (show a banner when not Active)."
+          },
+          "historyPaused": {
+            "type": "boolean",
+            "description": "The database could not keep up (or is down) and state history was dropped; current state and control keep working.\nCleared once the backlog is written."
+          },
+          "version": {
+            "type": "string",
+            "description": "The application version."
+          }
+        },
+        "description": "The runtime's health (`GET /api/system/status`, hub `SystemStatusChanged`)."
+      },
+      "UpdateDeviceRequest": {
+        "required": [
+          "name",
+          "icon",
+          "roomId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "1–128 characters."
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "An icon key (lowercase letters, digits, `-` and `:`), or `null` for the class's default."
+          },
+          "roomId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "A room, or `null` for none.",
+            "format": "int32"
+          }
+        },
+        "description": "Renames a device, sets its icon and room (`PUT /api/devices/{id}`, Admin)."
+      },
+      "UpdateEndpointRequest": {
+        "required": [
+          "name",
+          "icon",
+          "roomId",
+          "hidden"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The endpoint's own name, or `null` to show the device's."
+          },
+          "icon": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "roomId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The endpoint's own room, or `null` to inherit the device's.",
+            "format": "int32"
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Leave it out of dashboards and pickers."
+          }
+        },
+        "description": "Changes an endpoint (`PUT /api/endpoints/{id}`, Admin)."
       },
       "UpdateFloorRequest": {
         "required": [
@@ -2637,6 +4803,196 @@
           }
         },
         "description": "A household account as seen by an Admin."
+      },
+      "ValueSchema": {
+        "required": [
+          "type"
+        ],
+        "type": "object",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ValueSchemaBoolSchema"
+          },
+          {
+            "$ref": "#/components/schemas/ValueSchemaNumberSchema"
+          },
+          {
+            "$ref": "#/components/schemas/ValueSchemaEnumSchema"
+          },
+          {
+            "$ref": "#/components/schemas/ValueSchemaStringSchema"
+          },
+          {
+            "$ref": "#/components/schemas/ValueSchemaFlagsSchema"
+          },
+          {
+            "$ref": "#/components/schemas/ValueSchemaJsonValueSchema"
+          },
+          {
+            "$ref": "#/components/schemas/ValueSchemaMomentarySchema"
+          }
+        ],
+        "description": "The shape of one value: an attribute's state, a command argument or a connector configuration field. A closed set of\nrecords serialized polymorphically with the discriminator `type` (`bool`, `number`, `enum`,\n`string`, `flags`, `json`, `momentary`); the web app renders every schema-driven control from it.",
+        "discriminator": {
+          "propertyName": "type",
+          "mapping": {
+            "bool": "#/components/schemas/ValueSchemaBoolSchema",
+            "number": "#/components/schemas/ValueSchemaNumberSchema",
+            "enum": "#/components/schemas/ValueSchemaEnumSchema",
+            "string": "#/components/schemas/ValueSchemaStringSchema",
+            "flags": "#/components/schemas/ValueSchemaFlagsSchema",
+            "json": "#/components/schemas/ValueSchemaJsonValueSchema",
+            "momentary": "#/components/schemas/ValueSchemaMomentarySchema"
+          }
+        }
+      },
+      "ValueSchemaBoolSchema": {
+        "properties": {
+          "type": {
+            "enum": [
+              "bool"
+            ],
+            "type": "string"
+          }
+        },
+        "description": "`true` or `false`."
+      },
+      "ValueSchemaEnumSchema": {
+        "required": [
+          "values"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "enum"
+            ],
+            "type": "string"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The allowed values, in display order; never empty."
+          }
+        },
+        "description": "One of a fixed list of string values (an endpoint's constraints may allow only a subset)."
+      },
+      "ValueSchemaFlagsSchema": {
+        "required": [
+          "flags"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "flags"
+            ],
+            "type": "string"
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The known flags; never empty."
+          }
+        },
+        "description": "A set of named flags (a bitmap), as a JSON array of distinct flag names."
+      },
+      "ValueSchemaJsonValueSchema": {
+        "properties": {
+          "type": {
+            "enum": [
+              "json"
+            ],
+            "type": "string"
+          }
+        },
+        "description": "Any JSON value (read-only data such as a vendor's raw structure)."
+      },
+      "ValueSchemaMomentarySchema": {
+        "properties": {
+          "type": {
+            "enum": [
+              "momentary"
+            ],
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The event names this attribute emits (e.g. `single`, `double`, `long`); empty means any."
+          }
+        },
+        "description": "An event without lasting state (a button press, a doorbell ring). A momentary attribute is updated only through\nconnector events (`IConnectorContext.ReportEvent`): its value is the last event name and its observed time is when\nthat event happened."
+      },
+      "ValueSchemaNumberSchema": {
+        "properties": {
+          "type": {
+            "enum": [
+              "number"
+            ],
+            "type": "string"
+          },
+          "min": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "Inclusive lower bound, if any.",
+            "format": "double"
+          },
+          "max": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "Inclusive upper bound, if any.",
+            "format": "double"
+          },
+          "step": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "Granularity: valid values are `(Min ?? 0) + k × Step`.",
+            "format": "double"
+          },
+          "unit": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Canonical unit (see Units), e.g. `%`, `W`, `°C`."
+          },
+          "integer": {
+            "type": "boolean",
+            "description": "Only whole numbers are valid.",
+            "default": false
+          }
+        },
+        "description": "A finite number."
+      },
+      "ValueSchemaStringSchema": {
+        "properties": {
+          "type": {
+            "enum": [
+              "string"
+            ],
+            "type": "string"
+          },
+          "maxLength": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "Maximum length in UTF-16 code units, if any.",
+            "format": "int32"
+          }
+        },
+        "description": "Free text."
       }
     }
   },
@@ -2664,6 +5020,18 @@
     },
     {
       "name": "Files"
+    },
+    {
+      "name": "Capabilities"
+    },
+    {
+      "name": "Devices"
+    },
+    {
+      "name": "Integrations"
+    },
+    {
+      "name": "System"
     }
   ]
 }

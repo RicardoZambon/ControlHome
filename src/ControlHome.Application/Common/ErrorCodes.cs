@@ -80,4 +80,24 @@ public static class ErrorCodes
     public const string CommandsArgumentNotOnStep = "commands.argument_not_on_step";
     public const string CommandsArgumentNotAllowed = "commands.argument_not_allowed";
     public const string CommandsArgumentTooLong = "commands.argument_too_long";
+
+    // Commands: request failures (ProblemDetails) and CommandStatus failure codes (hub)
+    public const string CommandsUnsupported = "commands.unsupported";
+    public const string CommandsDuplicate = "commands.duplicate";
+    public const string CommandsGateClosed = "commands.gate_closed";
+    public const string CommandsUnavailable = "commands.unavailable";
+    public const string CommandsRefused = "commands.refused";
+    public const string CommandsTimedOut = "commands.timed_out";
+    public const string CommandsFailed = "commands.failed";
+
+    // Safety-critical commands (step-up PIN)
+    public const string SafetyStepUpRequired = "safety.step_up_required";
+    public const string SafetyLocked = "safety.locked";
+    public const string SafetyNotAllowed = "safety.not_allowed";
+    public const string SafetyPinNotSet = "safety.pin_not_set";
+    public const string SafetyPinIncorrect = "safety.pin_incorrect";
+
+    // Connectors and integrations
+    public const string ConnectorsNotFound = "connectors.not_found";
+    public const string IntegrationsInvalidConfig = "integrations.invalid_config";
 }

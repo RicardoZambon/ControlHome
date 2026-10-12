@@ -1,6 +1,8 @@
 using System.Globalization;
+using ControlHome.Application.Security;
 using ControlHome.Infrastructure.Configuration;
 using ControlHome.Infrastructure.Persistence;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Serilog;
 using Serilog.Events;
 using Serilog.Extensions.Hosting;
@@ -27,6 +29,9 @@ public static class LoggingSetup
 
     public static WebApplicationBuilder AddControlHomeLogging(this WebApplicationBuilder builder)
     {
+        builder.Services.TryAddSingleton<KnownSecrets>();
+        builder.Services.TryAddSingleton<KnownSecretsRedactor>();
+
         // preserveStaticLogger: each host gets its own logger, so several hosts in one process (WebApplicationFactory
         // tests) never fight over the static bootstrap logger. Everything is configured lazily, after Build().
         builder.Host.UseSerilog(
@@ -41,6 +46,7 @@ public static class LoggingSetup
         IConfiguration appConfiguration,
         IServiceProvider services)
     {
+        var redactor = services.GetRequiredService<KnownSecretsRedactor>();
         configuration
             .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
@@ -48,7 +54,11 @@ public static class LoggingSetup
             .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
             .ReadFrom.Configuration(appConfiguration)
             .ReadFrom.Services(services)
+            .Destructure.With(redactor)
             .Enrich.FromLogContext()
+
+            // Last enricher: secrets (integration tokens, passwords) never reach a sink.
+            .Enrich.With(redactor)
             // Expected while the database starts (e.g. the framework pre-loading the Data Protection key ring); the API
             // answers 503 db.unavailable meanwhile, and the initializer logs the database state itself.
             .Filter.ByExcluding(static e => IsDatabaseNotReady(e.Exception))

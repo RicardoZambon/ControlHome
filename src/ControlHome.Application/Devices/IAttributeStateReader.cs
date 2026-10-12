@@ -5,8 +5,8 @@ namespace ControlHome.Application.Devices;
 
 /// <summary>
 /// Where current attribute values come from. The default (<see cref="DbAttributeStateReader"/>) reads the persisted
-/// <c>AttributeState</c> rows; the runtime pipeline registers its in-memory state cache instead (register it before
-/// <see cref="DevicesServiceCollectionExtensions.AddDevices"/>, which only adds the default when none is registered).
+/// <c>AttributeState</c> rows; the device runtime (Infrastructure's <c>AddDeviceRuntime</c>) replaces it with a reader
+/// that serves its in-memory state cache while this process is the active runtime.
 /// </summary>
 public interface IAttributeStateReader
 {

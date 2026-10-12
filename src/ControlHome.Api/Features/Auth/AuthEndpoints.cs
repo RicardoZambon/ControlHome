@@ -1,6 +1,7 @@
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
 using ControlHome.Application.Auth;
+using ControlHome.Application.Security;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace ControlHome.Api.Features.Auth;
@@ -52,8 +53,48 @@ public static class AuthEndpoints
             .WithSummary("Changes the signed-in user's password.")
             .WithValidation<ChangePasswordRequest>(); // 400: validation.failed or auth.password_incorrect
 
+        me.MapGet("/pin", GetPinStatusAsync)
+            .WithName("getSafetyPin")
+            .WithSummary("Whether the signed-in user has a safety PIN, and any lockout.");
+
+        me.MapPut("/pin", SetPinAsync)
+            .WithName("setSafetyPin")
+            .WithSummary("Sets the safety PIN (4–8 digits) for safety-critical commands, or changes it (currentPin required).")
+            .WithDescription(
+                "400 validation.failed or safety.pin_incorrect (wrong currentPin; counts as a failed attempt); 423 safety.locked " +
+                "(retryAfterSeconds) after 5 wrong PINs within 15 minutes.")
+            .WithValidation<SetPinRequest>()
+            .ProducesProblem(StatusCodes.Status423Locked);
+
+        group.MapPost("/step-up", StepUpAsync)
+            .WithName("stepUp")
+            .WithSummary("Confirms the safety PIN: allows one safety-critical command (unlock, open the gate, disarm) within 60 s.")
+            .WithDescription(
+                "409 safety.pin_not_set; 400 safety.pin_incorrect; 423 safety.locked (retryAfterSeconds) after 5 wrong PINs " +
+                "within 15 minutes, which also blocks safety-critical commands for 15 minutes.")
+            .RequireAuthorization()
+            .WithValidation<StepUpRequest>()
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status423Locked);
+
         return app;
     }
+
+    private static async Task<Results<Ok<SafetyPinStatusDto>, ProblemHttpResult>> GetPinStatusAsync(StepUpService safety) =>
+        (await safety.GetStatusAsync()).ToHttpResult();
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> SetPinAsync(
+        SetPinRequest request,
+        StepUpService safety,
+        CancellationToken cancellationToken) =>
+        (await safety.SetPinAsync(request, cancellationToken)).ToHttpResult();
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> StepUpAsync(
+        StepUpRequest request,
+        StepUpService safety,
+        CancellationToken cancellationToken) =>
+        (await safety.StepUpAsync(request, cancellationToken)).ToHttpResult();
 
     private static async Task<Results<Ok<MeDto>, ProblemHttpResult>> LoginAsync(
         LoginRequest request,

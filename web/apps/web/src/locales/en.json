@@ -177,7 +177,11 @@
       "not_found": "That device control no longer exists. Reload the page."
     },
     "integrations": {
-      "not_found": "That integration no longer exists. Reload the page."
+      "not_found": "That integration no longer exists. Reload the page.",
+      "invalid_config": "Some settings aren't valid. Check the highlighted fields."
+    },
+    "connectors": {
+      "not_found": "That kind of integration isn't available in this version."
     },
     "commands": {
       "invalid_arguments": "The device can't take that value.",
@@ -187,7 +191,21 @@
       "argument_out_of_range": "That value is outside the device's range.",
       "argument_not_on_step": "Pick a value on the device's steps.",
       "argument_not_allowed": "The device doesn't support that option.",
-      "argument_too_long": "That text is too long for the device."
+      "argument_too_long": "That text is too long for the device.",
+      "unsupported": "This device doesn't support that action.",
+      "duplicate": "That action was already sent.",
+      "gate_closed": "The device doesn't accept remote control right now. Turn on remote control on the device itself.",
+      "unavailable": "This device's integration isn't running right now. Try again in a moment.",
+      "refused": "The device refused the action.",
+      "timed_out": "The device didn't confirm in time. Check its state.",
+      "failed": "The action didn't work. Try again."
+    },
+    "safety": {
+      "step_up_required": "Confirm with your safety PIN.",
+      "locked": "Too many wrong PINs. Safety actions are locked for a while.",
+      "not_allowed": "You aren't allowed to do this safety action.",
+      "pin_not_set": "Set a safety PIN in your profile first.",
+      "pin_incorrect": "That PIN isn't right."
     }
   }
 }

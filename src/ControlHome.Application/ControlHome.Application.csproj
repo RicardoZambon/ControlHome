@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ControlHome.Domain\ControlHome.Domain.csproj" />
+    <!-- The connector SDK's contracts (descriptors, command batches/outcomes): the command service and integrations use them. -->
+    <ProjectReference Include="..\ControlHome.Connectors.Abstractions\ControlHome.Connectors.Abstractions.csproj" />
   </ItemGroup>
 
 </Project>

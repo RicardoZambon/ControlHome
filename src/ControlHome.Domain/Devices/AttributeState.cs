@@ -69,7 +69,8 @@ public sealed class AttributeState
             StateValueKind.Bool => (StateValueKind.Bool, value.B!.Value ? 1 : 0, null, null),
             StateValueKind.Number => (StateValueKind.Number, value.N, null, null),
             StateValueKind.String when value.S!.Length <= MaxStringLength => (StateValueKind.String, null, value.S, null),
-            StateValueKind.String => (StateValueKind.String, null, null, JsonSerializer.Serialize(value.S)),
+            // The json column (SQL Server's json type) holds objects and arrays only: a long string is a one-element array.
+            StateValueKind.String => (StateValueKind.String, null, null, JsonSerializer.Serialize(new[] { value.S })),
             StateValueKind.Json => (StateValueKind.Json, null, null, value.J!.Value.GetRawText()),
             _ => (StateValueKind.Null, null, null, null),
         };
@@ -83,11 +84,24 @@ public sealed class AttributeState
         StateValueKind.Bool when num is { } flag => StateValue.Bool(flag != 0),
         StateValueKind.Number when num is { } number => StateValue.Number(number),
         StateValueKind.String when str is not null => StateValue.String(str),
-        StateValueKind.String when json is not null => StateValue.String(JsonSerializer.Deserialize<string>(json)
-            ?? throw new InvalidOperationException("A long string state holds JSON null.")),
+        StateValueKind.String when json is not null => StateValue.String(DecodeLongString(json)),
         StateValueKind.Json when json is not null => StateValue.Json(ParseJson(json)),
         _ => throw new InvalidOperationException($"The state columns hold no '{kind}' value."),
     };
+
+    /// <summary>A long string: <c>["text"]</c>, or a JSON string literal (the first encoding, still read).</summary>
+    private static string DecodeLongString(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        var text = root.ValueKind switch
+        {
+            JsonValueKind.Array when root.GetArrayLength() == 1 && root[0].ValueKind == JsonValueKind.String => root[0].GetString(),
+            JsonValueKind.String => root.GetString(),
+            _ => null,
+        };
+        return text ?? throw new InvalidOperationException("A long string state does not hold a string.");
+    }
 
     private static JsonElement ParseJson(string json)
     {

@@ -31,14 +31,23 @@ public sealed class AttributeStateTests
     }
 
     [Fact]
-    public void Booleans_are_stored_as_numbers_and_long_strings_as_json()
+    public void Booleans_are_stored_as_numbers_and_long_strings_as_a_json_array()
     {
         AttributeState.Encode(StateValue.True).ShouldBe((StateValueKind.Bool, 1d, (string?)null, (string?)null));
 
+        // SQL Server's json type holds objects and arrays only (no top-level scalars): ["<text>"].
         var longText = new string('x', AttributeState.MaxStringLength + 1);
         var (_, _, str, json) = AttributeState.Encode(StateValue.String(longText));
         str.ShouldBeNull();
-        JsonSerializer.Deserialize<string>(json!).ShouldBe(longText);
+        JsonSerializer.Deserialize<string[]>(json!).ShouldBe([longText]);
+    }
+
+    [Fact]
+    public void Long_strings_stored_as_a_json_string_literal_are_still_read()
+    {
+        var longText = new string('y', AttributeState.MaxStringLength + 1);
+
+        AttributeState.Decode(StateValueKind.String, null, null, JsonSerializer.Serialize(longText)).ShouldBe(StateValue.String(longText));
     }
 
     [Fact]
