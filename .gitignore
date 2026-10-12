@@ -426,3 +426,37 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# ---------------------------------------------------------------------------
+# ControlHome additions
+# ---------------------------------------------------------------------------
+# Local runtime data (keys, logs, setup code, uploads)
+.data/
+deploy/data/
+# Environment files (keep the documented example)
+.env
+.env.*
+!.env.example
+# Frontend build / test output
+dist/
+*.tsbuildinfo
+.vite/
+web/**/coverage/
+playwright-report/
+test-results/
+web/tests/e2e/screenshots/
+blob-report/
+# SPA copied into the API for local runs
+src/ControlHome.Api/wwwroot/
+# Local-only config
+**/appsettings.*.local.json
+.claude/settings.local.json
+.claude/worktrees/
+# Key material and backups
+*.pem
+*.key
+*.pfx
+*.p12
+*.bak
+# Raw (unscrubbed) recorded vendor payloads
+**/fixtures/_raw/
