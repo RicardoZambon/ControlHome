@@ -1,0 +1,18 @@
+{
+  "admin": {
+    "userName": "ada",
+    "displayName": "Ada Lovelace",
+    "password": "analytical engine notes"
+  },
+  "member": {
+    "userName": "grace",
+    "displayName": "Grace Hopper",
+    "password": "a ship in port is safe"
+  },
+  "home": {
+    "name": "Casa Azul",
+    "timeZoneId": "America/Sao_Paulo",
+    "locale": "en",
+    "currency": "BRL"
+  }
+}

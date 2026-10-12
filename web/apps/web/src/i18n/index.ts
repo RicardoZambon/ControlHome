@@ -58,6 +58,9 @@ export function detectLocale(): AppLocale {
 
 const isTest = import.meta.env.MODE === 'test'
 
+/** Prefix of the console warning for a missing key (the Playwright gates in web/tests/e2e fail on it). */
+const MISSING_KEY_WARNING = '[i18n] Missing key'
+
 function createI18nInstance(locale: AppLocale) {
   return createI18n({
     legacy: false,
@@ -66,12 +69,16 @@ function createI18nInstance(locale: AppLocale) {
     messages: buildMessages(),
     missingWarn: !isTest,
     fallbackWarn: false,
-    // Tests fail on any key that is missing in the active locale (every key must exist in en and pt-BR).
+    // Tests fail on any key that is missing in the active locale (every key must exist in en and pt-BR). Elsewhere a
+    // missing key is a console warning, in production builds too (vue-i18n's own warning exists only in development),
+    // and the text falls back to English.
     missing: isTest
       ? (missingLocale: string, key: string) => {
           throw new Error(`Missing i18n key "${key}" for locale "${missingLocale}".`)
         }
-      : undefined,
+      : (missingLocale: string, key: string) => {
+          console.warn(`${MISSING_KEY_WARNING} "${key}" for locale "${missingLocale}".`)
+        },
   })
 }
 

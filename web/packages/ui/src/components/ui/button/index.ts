@@ -8,7 +8,8 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        // /95, not upstream's /90: primary-foreground on primary/90 over the light background is 4.2:1 (< WCAG AA).
+        default: 'bg-primary text-primary-foreground hover:bg-primary/95',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90 focus-visible:ring-destructive',
         outline: 'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground',

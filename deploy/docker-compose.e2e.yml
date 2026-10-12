@@ -10,3 +10,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Testing
       Setup__Code: E2E-SETUP-CODE-1
+      # Every spec completes the setup and signs in again from the same address: lift the per-IP limits
+      # (5 setups per 10 minutes, 10 sign-ins per minute).
+      RateLimiting__Setup__PermitLimit: "10000"
+      RateLimiting__Login__PermitLimit: "10000"

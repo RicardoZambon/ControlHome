@@ -69,9 +69,13 @@ They deviate from upstream shadcn-vue on purpose:
   `focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background`
   (instead of `ring-ring/50`). Always pair `ring-offset-*` with a token color: Tailwind's default offset color is
   `#fff`. Invalid fields (`aria-invalid`) use `border-destructive` and a `ring-destructive` focus ring.
+- **Hover keeps 4.5:1.** The primary Button (and link Badge) hover is `bg-primary/95`: upstream's `/90` over the light
+  background leaves `primary-foreground` at 4.2:1.
 - **Switch:** `bg-input` track and `bg-background` thumb when off, `bg-primary` / `bg-primary-foreground` when on.
   **Tabs:** inactive `text-muted-foreground`, active `bg-background text-foreground border-border shadow-sm`.
-  **Sidebar** group labels use `text-muted-foreground`; the outline menu button uses `ring-sidebar-border`.
+  **Sidebar** group labels use `text-muted-foreground`; the outline menu button uses `ring-sidebar-border`; a menu
+  button's tooltip is disabled (not just hidden) unless the sidebar is collapsed, so Escape closes the mobile sheet.
+  **Slider** passes `aria-label` / `aria-labelledby` to its thumbs (the elements with `role="slider"`).
 - **Translatable strings.** Screen-reader texts have English defaults and a prop for the translation:
   `DialogContent` / `DialogScrollContent` / `SheetContent` `close-label`, `DialogFooter` `close-label`,
   `Breadcrumb` `label`, `BreadcrumbEllipsis` `label`, `SidebarTrigger` / `SidebarRail` `label`,

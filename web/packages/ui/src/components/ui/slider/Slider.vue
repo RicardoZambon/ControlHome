@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import type { SliderRootEmits, SliderRootProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
+import { useAttrs } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
 import { SliderRange, SliderRoot, SliderThumb, SliderTrack, useForwardPropsEmits } from 'reka-ui'
 import { cn } from '@controlhome/ui/lib/utils'
+
+// `aria-label` / `aria-labelledby` name the thumbs (role="slider"), not the root: the root is a plain span.
+defineOptions({ inheritAttrs: false })
 
 const props = defineProps<SliderRootProps & { class?: HTMLAttributes['class'] }>()
 const emits = defineEmits<SliderRootEmits>()
@@ -11,6 +15,13 @@ const emits = defineEmits<SliderRootEmits>()
 const delegatedProps = reactiveOmit(props, 'class')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+const attrs = useAttrs()
+// A function, not a computed: `attrs` is not reactive, but it is current on every render.
+const thumbName = () => ({
+  'aria-label': attrs['aria-label'] as string | undefined,
+  'aria-labelledby': attrs['aria-labelledby'] as string | undefined,
+})
 </script>
 
 <template>
@@ -23,7 +34,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         props.class,
       )
     "
-    v-bind="forwarded"
+    v-bind="{ ...forwarded, ...$attrs, 'aria-label': undefined, 'aria-labelledby': undefined }"
   >
     <SliderTrack
       data-slot="slider-track"
@@ -39,6 +50,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       v-for="(_, key) in modelValue"
       :key="key"
       data-slot="slider-thumb"
+      v-bind="thumbName()"
       class="bg-background border-primary block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
     />
   </SliderRoot>

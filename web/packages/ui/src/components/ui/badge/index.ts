@@ -8,7 +8,8 @@ export const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90',
+        // /95 like Button: primary/90 over the light background is below WCAG AA for primary-foreground.
+        default: 'border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/95',
         secondary: 'border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90',
         destructive:
           'border-transparent bg-destructive text-destructive-foreground [a&]:hover:bg-destructive/90 focus-visible:ring-destructive',

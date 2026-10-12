@@ -33,7 +33,9 @@ const delegatedProps = reactiveOmit(props, 'tooltip')
     <slot />
   </SidebarMenuButtonChild>
 
-  <Tooltip v-else>
+  <!-- Disabled (not only hidden) unless the sidebar is collapsed: a hidden tooltip still opens on focus, and its layer
+       would take the first Escape meant for the mobile menu sheet. -->
+  <Tooltip v-else :disabled="state !== 'collapsed' || isMobile">
     <TooltipTrigger as-child>
       <SidebarMenuButtonChild v-bind="{ ...delegatedProps, ...$attrs }">
         <slot />
