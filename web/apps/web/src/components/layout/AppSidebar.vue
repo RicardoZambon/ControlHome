@@ -17,7 +17,7 @@ import {
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { navItems, visibleNavGroups, type NavItem } from '../../lib/nav'
+import { isNavItemActive, navItems, visibleNavGroups, type NavItem } from '../../lib/nav'
 import { useHomeStore } from '../../stores/home'
 import { useSessionStore } from '../../stores/session'
 import BrandMark from '../brand/BrandMark.vue'
@@ -31,10 +31,7 @@ const { isMobile, setOpenMobile } = useSidebar()
 
 const groups = computed(() => visibleNavGroups(navItems, session.me?.roles ?? []))
 
-function isActive(item: NavItem): boolean {
-  const target = router.resolve(item.to)
-  return target.path === '/' ? route.path === '/' : route.path.startsWith(target.path)
-}
+const isActive = (item: NavItem) => isNavItemActive(item, route, router)
 
 // The mobile menu is a sheet: close it once a page is chosen.
 watch(
@@ -86,11 +83,16 @@ const statusText = computed(() => {
     <SidebarContent>
       <nav :aria-label="t('shell.primaryNavigation')">
         <SidebarGroup v-for="group in groups" :key="group.id">
-          <SidebarGroupLabel>{{ t(group.labelKey) }}</SidebarGroupLabel>
+          <SidebarGroupLabel v-if="group.labelKey">{{ t(group.labelKey) }}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem v-for="item in group.items" :key="item.to.name">
-                <SidebarMenuButton as-child :is-active="isActive(item)" :tooltip="t(item.labelKey)">
+                <SidebarMenuButton
+                  as-child
+                  :is-active="isActive(item)"
+                  :tooltip="t(item.labelKey)"
+                  class="in-data-[mobile=true]:h-11 in-data-[mobile=true]:text-base"
+                >
                   <RouterLink :to="item.to">
                     <component :is="item.icon" />
                     <span>{{ t(item.labelKey) }}</span>

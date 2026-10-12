@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import type { RouteLocationRaw } from 'vue-router'
+import type { RouteLocationNormalizedLoaded, RouteLocationRaw, Router } from 'vue-router'
 
 export type NavGroup = 'home' | 'settings'
 
@@ -18,8 +18,12 @@ export interface NavItem {
   group?: NavGroup
 }
 
-export const NAV_GROUPS: readonly { id: NavGroup; labelKey: string }[] = [
-  { id: 'home', labelKey: 'shell.nav.groups.home' },
+/**
+ * Sidebar sections in order. The first one has no label: it holds the home's own pages under the brand (a 'Home'
+ * label over a single 'Home' item would only repeat it).
+ */
+export const NAV_GROUPS: readonly { id: NavGroup; labelKey?: string }[] = [
+  { id: 'home' },
   { id: 'settings', labelKey: 'shell.nav.groups.settings' },
 ]
 
@@ -37,7 +41,7 @@ export const navItems: readonly NavItem[] = Object.values(navModules)
 export function visibleNavGroups(
   items: readonly NavItem[],
   roles: readonly string[],
-): { id: NavGroup; labelKey: string; items: NavItem[] }[] {
+): { id: NavGroup; labelKey?: string; items: NavItem[] }[] {
   const allowed = items
     .filter((item) => !item.roles?.length || item.roles.some((role) => roles.includes(role)))
     .sort((a, b) => a.order - b.order)
@@ -45,4 +49,14 @@ export function visibleNavGroups(
     ...group,
     items: allowed.filter((item) => (item.group ?? 'home') === group.id),
   })).filter((group) => group.items.length > 0)
+}
+
+/** Whether `item` is the current page or one of its sub-pages (the dashboard only matches `/` itself). */
+export function isNavItemActive(
+  item: NavItem,
+  route: RouteLocationNormalizedLoaded,
+  router: Router,
+): boolean {
+  const target = router.resolve(item.to)
+  return target.path === '/' ? route.path === '/' : route.path.startsWith(target.path)
 }

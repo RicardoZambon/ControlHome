@@ -31,15 +31,23 @@ const RELATIVE_UNITS: readonly [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60],
 ]
 
-/** "3 hours ago" / "há 3 horas"; "now" under a minute. */
-export function formatRelative(value: string | Date, now: Date, locale: string): string {
+/**
+ * "3 hours ago" / "há 3 horas". Under a minute: `justNow` when given ("Just now"), else Intl's "now" / "agora".
+ */
+export function formatRelative(value: string | Date, now: Date, locale: string, justNow?: string): string {
   const date = typeof value === 'string' ? new Date(value) : value
   const seconds = Math.round((date.getTime() - now.getTime()) / 1000)
   const format = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
   for (const [unit, size] of RELATIVE_UNITS) {
     if (Math.abs(seconds) >= size) return format.format(Math.trunc(seconds / size), unit)
   }
-  return format.format(0, 'second')
+  return justNow ?? format.format(0, 'second')
+}
+
+/** The text with its first letter in upper case ("yesterday" → "Yesterday", "há 3 horas" → "Há 3 horas"). */
+export function capitalize(text: string, locale: string): string {
+  const [first = '', ...rest] = [...text]
+  return first.toLocaleUpperCase(locale) + rest.join('')
 }
 
 /** Full date and time in the user's language, optionally in a time zone. */
@@ -55,6 +63,27 @@ export function formatDateTime(value: string | Date, locale: string, timeZone?: 
 /** `America/Sao_Paulo` → `America / Sao Paulo`. */
 export function formatTimeZoneName(timeZone: string): string {
   return timeZone.replaceAll('_', ' ').replaceAll('/', ' / ')
+}
+
+/**
+ * A time zone as people know it, in their language: "Brasilia Standard Time" / "Horário Padrão de Brasília"
+ * (CLDR's generic name, or the specific one when the generic is only an offset, as for UTC). Falls back to the id.
+ */
+export function timeZoneDisplayName(timeZone: string, locale: string, date = new Date()): string {
+  const nameIn = (style: 'longGeneric' | 'long') => {
+    try {
+      return new Intl.DateTimeFormat(locale, { timeZone, timeZoneName: style })
+        .formatToParts(date)
+        .find((part) => part.type === 'timeZoneName')?.value
+    } catch {
+      return undefined
+    }
+  }
+  const isOffset = (name?: string) => !name || /^(?:GMT|UTC)(?:[+\-−]\d|$)/.test(name)
+  const generic = nameIn('longGeneric')
+  if (!isOffset(generic)) return generic!
+  const specific = nameIn('long')
+  return isOffset(specific) ? formatTimeZoneName(timeZone) : specific!
 }
 
 /** `GMT-03:00`-style offset of a time zone right now (empty when the zone is unknown). */

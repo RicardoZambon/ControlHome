@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Alert, AlertDescription, Badge, Button, Card, Skeleton, cn } from '@controlhome/ui'
 import {
-  ArrowUpRight,
   ChartLine,
+  ChevronRight,
   Clock,
   Coins,
   Globe,
@@ -16,10 +16,9 @@ import {
   Zap,
 } from '@lucide/vue'
 import { useNow } from '@vueuse/core'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FloorPlanArt from '../../../components/brand/FloorPlanArt.vue'
-import { dayPartOf, formatTimeZoneName, timeZoneOffset } from '../../../lib/format'
+import { dayPartOf, timeZoneDisplayName, timeZoneOffset } from '../../../lib/format'
 import { useHomeStore } from '../../../stores/home'
 import { useSessionStore } from '../../../stores/session'
 
@@ -48,11 +47,21 @@ const time = computed(() => formatIn({ hour: '2-digit', minute: '2-digit' }))
 const date = computed(() => formatIn({ weekday: 'long', day: 'numeric', month: 'long' }))
 const isoNow = computed(() => now.value.toISOString())
 
-const details = computed(() => {
+interface DetailRow {
+  icon: Component
+  label: string
+  /** Absent: the value isn't set yet (shown muted, so it doesn't read like data). */
+  value?: string
+  /** A second, muted line (the time zone's UTC offset). */
+  hint?: string
+  title?: string
+}
+
+const details = computed<DetailRow[]>(() => {
   const value = home.value
   if (!value) return []
   const number = new Intl.NumberFormat(locale.value, { maximumFractionDigits: 4 })
-  let price = t('common.notSet')
+  let price: string | undefined
   if (value.pricePerKwh !== null) {
     try {
       const money = new Intl.NumberFormat(locale.value, {
@@ -77,7 +86,10 @@ const details = computed(() => {
     {
       icon: Globe,
       label: t('dashboard.details.timeZone'),
-      value: `${formatTimeZoneName(value.timeZoneId)} · ${timeZoneOffset(value.timeZoneId, now.value)}`,
+      value: timeZoneDisplayName(value.timeZoneId, locale.value, now.value),
+      // A real minus sign (U+2212): "GMT−03:00".
+      hint: timeZoneOffset(value.timeZoneId, now.value).replace('-', '−'),
+      title: value.timeZoneId,
     },
     {
       icon: MapPin,
@@ -85,7 +97,7 @@ const details = computed(() => {
       value:
         value.latitude !== null && value.longitude !== null
           ? `${number.format(value.latitude)}, ${number.format(value.longitude)}`
-          : t('common.notSet'),
+          : undefined,
     },
     {
       icon: Languages,
@@ -154,7 +166,7 @@ const comingNext = computed(() => [
         class="pointer-events-none absolute inset-0 bg-radial-[at_100%_0%] from-accent via-transparent to-transparent"
       />
       <div
-        class="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-center lg:p-10"
+        class="relative grid gap-6 p-6 sm:gap-8 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-center lg:p-10"
       >
         <div class="space-y-4">
           <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
@@ -166,104 +178,92 @@ const comingNext = computed(() => [
           </p>
           <h1
             id="dashboard-greeting"
-            class="font-serif text-4xl leading-[1.05] font-medium tracking-tight text-balance sm:text-5xl"
+            class="font-serif text-4xl leading-[1.05] font-medium tracking-tight sm:text-5xl"
           >
             {{ greeting }}
           </h1>
           <Skeleton v-if="!home && homeStore.loading" class="h-5 w-72 max-w-full" />
-          <p v-else-if="home" class="max-w-xl text-lg text-pretty text-muted-foreground">
+          <p v-else-if="home" class="max-w-xl text-lg text-muted-foreground">
             {{ t('dashboard.welcome', { home: home.name }) }}
           </p>
         </div>
-        <div class="relative rounded-xl border bg-background/70 p-4 sm:p-5">
-          <FloorPlanArt variant="outline" class="opacity-60" />
-          <div class="absolute inset-0 flex items-center justify-center p-6">
-            <div
-              class="max-w-60 space-y-1 rounded-lg bg-card/90 px-4 py-3 text-center shadow-sm backdrop-blur-sm"
-            >
-              <p class="font-serif text-lg leading-snug font-medium text-balance">
-                {{ t('dashboard.planTeaser') }}
-              </p>
-              <p class="text-xs text-pretty text-muted-foreground">{{ t('dashboard.planTeaserDetail') }}</p>
-            </div>
-          </div>
+        <!-- Where the floor plan will be: one dashed frame (a one-line note on phones). -->
+        <div
+          class="hidden min-h-48 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed bg-background/60 p-6 text-center sm:flex"
+        >
+          <Layers class="size-6 text-muted-foreground" aria-hidden="true" />
+          <p class="max-w-64 font-serif text-lg leading-snug font-medium">{{ t('dashboard.planTeaser') }}</p>
+          <p class="max-w-64 text-sm text-muted-foreground">{{ t('dashboard.planTeaserDetail') }}</p>
         </div>
+        <p
+          class="flex items-center gap-2.5 rounded-lg border border-dashed bg-background/60 px-3 py-2.5 text-sm text-muted-foreground sm:hidden"
+        >
+          <Layers class="size-4 shrink-0" aria-hidden="true" />
+          {{ t('dashboard.planBanner') }}
+        </p>
       </div>
     </section>
 
     <div class="grid gap-10 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-8">
-      <section aria-labelledby="dashboard-start" class="space-y-4">
-        <h2 id="dashboard-start" class="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-          {{ t('dashboard.start.heading') }}
-        </h2>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <RouterLink
-            v-for="(card, index) in startCards"
-            :key="card.title"
-            :to="card.to"
-            :class="
-              cn(
-                'group relative flex flex-col gap-4 rounded-xl border bg-card p-5 shadow-xs transition-all outline-none hover:-translate-y-0.5 hover:border-ring/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:fill-mode-both motion-safe:duration-500',
-                index === 1 && 'motion-safe:delay-100',
-              )
-            "
-          >
-            <div class="flex items-start justify-between">
+      <div class="grid content-start gap-10">
+        <section aria-labelledby="dashboard-start" class="space-y-4">
+          <h2 id="dashboard-start" class="eyebrow">{{ t('dashboard.start.heading') }}</h2>
+          <ul class="grid gap-3">
+            <li v-for="card in startCards" :key="card.title">
+              <RouterLink
+                :to="card.to"
+                class="group flex items-center gap-4 rounded-xl border bg-card p-4 shadow-xs transition-[border-color,box-shadow] outline-none hover:border-ring/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <span
+                  :class="cn('flex size-10 shrink-0 items-center justify-center rounded-lg', card.tone)"
+                  aria-hidden="true"
+                >
+                  <component :is="card.icon" class="size-5" />
+                </span>
+                <span class="grid min-w-0 flex-1 gap-0.5">
+                  <span class="font-medium">{{ card.title }}</span>
+                  <span class="text-sm text-muted-foreground">{{ card.description }}</span>
+                </span>
+                <ChevronRight
+                  class="size-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </RouterLink>
+            </li>
+          </ul>
+        </section>
+
+        <section aria-labelledby="dashboard-next" class="space-y-4">
+          <h2 id="dashboard-next" class="eyebrow">{{ t('dashboard.next.heading') }}</h2>
+          <ol class="grid gap-3">
+            <li
+              v-for="item in comingNext"
+              :key="item.title"
+              class="flex items-start gap-4 rounded-xl border bg-card/60 p-4"
+            >
               <span
-                :class="cn('flex size-10 items-center justify-center rounded-lg', card.tone)"
+                :class="cn('flex size-10 shrink-0 items-center justify-center rounded-lg', item.tone)"
                 aria-hidden="true"
               >
-                <component :is="card.icon" class="size-5" />
+                <component :is="item.icon" class="size-5" />
               </span>
-              <ArrowUpRight
-                class="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                aria-hidden="true"
-              />
-            </div>
-            <div class="space-y-1">
-              <h3 class="font-medium">{{ card.title }}</h3>
-              <p class="text-sm text-pretty text-muted-foreground">{{ card.description }}</p>
-            </div>
-          </RouterLink>
-        </div>
-
-        <h2
-          id="dashboard-next"
-          class="pt-6 text-sm font-semibold tracking-wide text-muted-foreground uppercase"
-        >
-          {{ t('dashboard.next.heading') }}
-        </h2>
-        <ol class="grid gap-3" aria-labelledby="dashboard-next">
-          <li
-            v-for="item in comingNext"
-            :key="item.title"
-            class="flex items-start gap-4 rounded-xl border bg-card/60 p-4"
-          >
-            <span
-              :class="cn('flex size-9 shrink-0 items-center justify-center rounded-lg', item.tone)"
-              aria-hidden="true"
-            >
-              <component :is="item.icon" class="size-4.5" />
-            </span>
-            <div class="min-w-0 flex-1 space-y-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <h3 class="font-medium">{{ item.title }}</h3>
-                <Badge variant="outline" class="text-muted-foreground">{{ item.badge }}</Badge>
+              <!-- The badge always sits top right of the text, beside the title; the description gets the full width. -->
+              <div class="grid min-w-0 flex-1 gap-0.5">
+                <div class="flex items-start justify-between gap-3">
+                  <h3 class="font-medium">{{ item.title }}</h3>
+                  <Badge variant="outline" class="mt-0.5 shrink-0 text-muted-foreground">{{
+                    item.badge
+                  }}</Badge>
+                </div>
+                <p class="text-sm text-muted-foreground">{{ item.description }}</p>
               </div>
-              <p class="text-sm text-pretty text-muted-foreground">{{ item.description }}</p>
-            </div>
-          </li>
-        </ol>
-      </section>
+            </li>
+          </ol>
+        </section>
+      </div>
 
       <section aria-labelledby="dashboard-details" class="space-y-4">
-        <h2
-          id="dashboard-details"
-          class="text-sm font-semibold tracking-wide text-muted-foreground uppercase"
-        >
-          {{ t('dashboard.details.heading') }}
-        </h2>
+        <h2 id="dashboard-details" class="eyebrow">{{ t('dashboard.details.heading') }}</h2>
         <Card class="gap-0 py-2">
           <Alert v-if="homeStore.error && !home" variant="destructive" class="m-4 w-auto">
             <AlertDescription class="flex flex-wrap items-center justify-between gap-3">
@@ -276,11 +276,15 @@ const comingNext = computed(() => [
           </Alert>
           <dl v-else-if="home" class="divide-y">
             <div v-for="row in details" :key="row.label" class="flex items-start gap-3 px-5 py-3.5">
-              <dt class="flex w-36 shrink-0 items-start gap-3 text-sm text-muted-foreground">
+              <dt class="flex w-32 shrink-0 items-start gap-3 text-sm text-muted-foreground sm:w-36">
                 <component :is="row.icon" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 {{ row.label }}
               </dt>
-              <dd class="min-w-0 text-sm font-medium wrap-break-word">{{ row.value }}</dd>
+              <dd v-if="row.value" class="grid min-w-0 gap-0.5 text-sm wrap-break-word" :title="row.title">
+                <span class="font-medium">{{ row.value }}</span>
+                <span v-if="row.hint" class="text-muted-foreground tabular-nums">{{ row.hint }}</span>
+              </dd>
+              <dd v-else class="text-sm text-muted-foreground">{{ t('common.notSet') }}</dd>
             </div>
           </dl>
           <div v-else class="grid gap-4 p-5">

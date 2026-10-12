@@ -10,13 +10,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  Badge,
   Button,
   Card,
   Dialog,
   DialogScrollContent,
   Skeleton,
-  Switch,
   Table,
   TableBody,
   TableCaption,
@@ -26,7 +24,7 @@ import {
   TableRow,
   toast,
 } from '@controlhome/ui'
-import { LoaderCircle, RefreshCw, UserRoundPlus } from '@lucide/vue'
+import { RefreshCw, UserRoundPlus } from '@lucide/vue'
 import { useNow } from '@vueuse/core'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -34,13 +32,14 @@ import FormAlert from '../../../components/FormAlert.vue'
 import PageHeader from '../../../components/PageHeader.vue'
 import UserAvatar from '../../../components/UserAvatar.vue'
 import { useProblem } from '../../../composables/useProblem'
-import { formatDateTime, formatRelative } from '../../../lib/format'
+import { capitalize, formatDateTime, formatRelative } from '../../../lib/format'
 import { unwrap } from '../../../lib/problem'
 import { useSessionStore } from '../../../stores/session'
 import ResetUserPasswordForm from '../components/ResetUserPasswordForm.vue'
 import RoleBadge from '../components/RoleBadge.vue'
 import UserActionsMenu from '../components/UserActionsMenu.vue'
 import UserForm from '../components/UserForm.vue'
+import UserStatusBadge from '../components/UserStatusBadge.vue'
 import { sortUsers, upsertUser } from '../users'
 
 const { t, locale } = useI18n()
@@ -51,7 +50,6 @@ const now = useNow({ interval: 60_000 })
 const users = ref<UserDto[]>([])
 const loading = ref(true)
 const loadError = ref<unknown>(null)
-const pending = ref<string | null>(null)
 
 const sorted = computed(() => sortUsers(users.value, locale.value))
 
@@ -70,11 +68,16 @@ onMounted(load)
 
 const isMe = (user: UserDto) => user.id === session.me?.id
 const lastLogin = (user: UserDto) =>
-  user.lastLoginAtUtc ? formatRelative(user.lastLoginAtUtc, now.value, locale.value) : t('users.never')
+  user.lastLoginAtUtc
+    ? capitalize(
+        formatRelative(user.lastLoginAtUtc, now.value, locale.value, t('common.justNow')),
+        locale.value,
+      )
+    : t('users.never')
 const lastLoginTitle = (user: UserDto) =>
   user.lastLoginAtUtc ? formatDateTime(user.lastLoginAtUtc, locale.value) : undefined
 
-// --- Dialogs: create / edit, reset password, delete ------------------------------------------------------------------
+// --- Dialogs: create / edit, reset password -------------------------------------------------------------------------
 type DialogKind = 'create' | 'edit' | 'reset'
 // The content stays in place while the dialog animates out; `dialogOpen` drives the dialog.
 const dialog = ref<{ kind: DialogKind; user: UserDto | null } | null>(null)
@@ -98,58 +101,57 @@ function onPasswordReset(user: UserDto): void {
   toast.success(t('users.toast.passwordReset', { name: user.displayName }))
 }
 
-const deleting = ref<UserDto | null>(null)
-const deleteBusy = ref(false)
-const deleteError = ref('')
-const deleteOpen = ref(false)
+// --- Confirmations: deactivate, reactivate, delete -------------------------------------------------------------------
+type ConfirmKind = 'deactivate' | 'reactivate' | 'delete'
+const confirming = ref<{ kind: ConfirmKind; user: UserDto } | null>(null)
+const confirmOpen = ref(false)
+const confirmBusy = ref(false)
+const confirmError = ref('')
 
-function askDelete(user: UserDto): void {
-  deleteError.value = ''
-  deleting.value = user
-  deleteOpen.value = true
+function askConfirm(kind: ConfirmKind, user: UserDto): void {
+  confirmError.value = ''
+  confirming.value = { kind, user }
+  confirmOpen.value = true
 }
 
-function onDeleteOpenChange(open: boolean): void {
+function onConfirmOpenChange(open: boolean): void {
   // Stay open while the request runs.
-  deleteOpen.value = open || deleteBusy.value
+  confirmOpen.value = open || confirmBusy.value
 }
 
-async function confirmDelete(): Promise<void> {
-  const user = deleting.value
-  if (!user) return
-  deleteBusy.value = true
-  deleteError.value = ''
-  try {
+async function runConfirmed(kind: ConfirmKind, user: UserDto): Promise<void> {
+  if (kind === 'delete') {
     unwrap(await deleteUser({ path: { id: user.id } }))
     users.value = users.value.filter((existing) => existing.id !== user.id)
     toast.success(t('users.toast.deleted', { name: user.displayName }))
-    deleteBusy.value = false
-    deleteOpen.value = false
-  } catch (error) {
-    // users.cannot_delete_self, users.last_admin, ...: shown in the dialog.
-    deleteError.value = problem.message(error)
-  } finally {
-    deleteBusy.value = false
+    return
   }
+  const active = kind === 'reactivate'
+  // The server protects the last active Admin (users.last_admin).
+  const updated = unwrap(
+    await updateUser({
+      path: { id: user.id },
+      body: { displayName: user.displayName, role: user.role, isDisabled: !active },
+    }),
+  )
+  users.value = upsertUser(users.value, updated)
+  toast.success(t(active ? 'users.toast.enabled' : 'users.toast.disabled', { name: user.displayName }))
 }
 
-/** Enables or disables an account (the server protects the last active Admin: users.last_admin). */
-async function setActive(user: UserDto, active: boolean): Promise<void> {
-  if (pending.value) return
-  pending.value = user.id
+async function confirm(): Promise<void> {
+  const current = confirming.value
+  if (!current) return
+  confirmBusy.value = true
+  confirmError.value = ''
   try {
-    const updated = unwrap(
-      await updateUser({
-        path: { id: user.id },
-        body: { displayName: user.displayName, role: user.role, isDisabled: !active },
-      }),
-    )
-    users.value = upsertUser(users.value, updated)
-    toast.success(t(active ? 'users.toast.enabled' : 'users.toast.disabled', { name: user.displayName }))
+    await runConfirmed(current.kind, current.user)
+    confirmBusy.value = false
+    confirmOpen.value = false
   } catch (error) {
-    problem.toastError(error)
+    // users.cannot_delete_self, users.last_admin, ...: shown in the dialog.
+    confirmError.value = problem.message(error)
   } finally {
-    pending.value = null
+    confirmBusy.value = false
   }
 }
 </script>
@@ -158,7 +160,7 @@ async function setActive(user: UserDto, active: boolean): Promise<void> {
   <div>
     <PageHeader :eyebrow="t('users.eyebrow')" :title="t('users.title')" :description="t('users.description')">
       <template #actions>
-        <Button @click="openDialog('create', null)">
+        <Button class="max-sm:w-full" @click="openDialog('create', null)">
           <UserRoundPlus />
           {{ t('users.add') }}
         </Button>
@@ -186,7 +188,7 @@ async function setActive(user: UserDto, active: boolean): Promise<void> {
               <TableHead class="h-11">{{ t('users.role') }}</TableHead>
               <TableHead class="h-11">{{ t('users.status') }}</TableHead>
               <TableHead class="h-11">{{ t('users.lastLogin') }}</TableHead>
-              <TableHead class="h-11 w-16 pr-6 text-right">
+              <TableHead class="h-11 w-16 pr-4 text-right">
                 <span class="sr-only">{{ t('common.actions') }}</span>
               </TableHead>
             </TableRow>
@@ -196,9 +198,9 @@ async function setActive(user: UserDto, active: boolean): Promise<void> {
               <TableRow v-for="index in 3" :key="index">
                 <TableCell class="py-4 pl-6"><Skeleton class="h-9 w-56" /></TableCell>
                 <TableCell><Skeleton class="h-5 w-20" /></TableCell>
-                <TableCell><Skeleton class="h-5 w-24" /></TableCell>
+                <TableCell><Skeleton class="h-5 w-20" /></TableCell>
                 <TableCell><Skeleton class="h-4 w-28" /></TableCell>
-                <TableCell class="pr-6" />
+                <TableCell class="pr-4" />
               </TableRow>
             </template>
             <TableRow
@@ -207,42 +209,22 @@ async function setActive(user: UserDto, active: boolean): Promise<void> {
               :key="user.id"
               :data-disabled="user.isDisabled || undefined"
             >
-              <TableCell class="py-3.5 pl-6">
+              <TableCell class="py-3 pl-6">
                 <div class="flex items-center gap-3">
-                  <UserAvatar
-                    :name="user.displayName"
-                    :seed="user.userName"
-                    :class="user.isDisabled ? 'opacity-50 grayscale' : ''"
-                  />
+                  <UserAvatar :name="user.displayName" :seed="user.userName" :inactive="user.isDisabled" />
                   <div class="grid min-w-0 leading-tight">
-                    <span class="flex items-center gap-2 truncate font-medium">
+                    <span class="truncate font-medium">
                       {{ user.displayName }}
-                      <Badge v-if="isMe(user)" variant="outline" class="text-muted-foreground">
+                      <span v-if="isMe(user)" class="font-normal text-muted-foreground">
                         {{ t('users.you') }}
-                      </Badge>
+                      </span>
                     </span>
                     <span class="truncate text-sm text-muted-foreground">{{ user.userName }}</span>
                   </div>
                 </div>
               </TableCell>
               <TableCell><RoleBadge :role="user.role" /></TableCell>
-              <TableCell>
-                <div class="flex items-center gap-2.5">
-                  <Switch
-                    :model-value="!user.isDisabled"
-                    :disabled="pending === user.id"
-                    :aria-label="t('users.activeToggle', { name: user.displayName })"
-                    @update:model-value="(active) => setActive(user, active === true)"
-                  />
-                  <span :class="user.isDisabled ? 'text-sm text-muted-foreground' : 'text-sm'">
-                    {{ user.isDisabled ? t('users.disabled') : t('users.active') }}
-                  </span>
-                  <LoaderCircle
-                    v-if="pending === user.id"
-                    class="size-4 animate-spin text-muted-foreground"
-                  />
-                </div>
-              </TableCell>
+              <TableCell><UserStatusBadge :disabled="user.isDisabled" /></TableCell>
               <TableCell class="text-sm text-muted-foreground">
                 <time
                   v-if="user.lastLoginAtUtc"
@@ -253,14 +235,15 @@ async function setActive(user: UserDto, active: boolean): Promise<void> {
                 </time>
                 <span v-else>{{ t('users.never') }}</span>
               </TableCell>
-              <TableCell class="pr-6 text-right">
+              <TableCell class="pr-4 text-right">
                 <UserActionsMenu
                   :user="user"
-                  :busy="pending === user.id"
+                  :self="isMe(user)"
+                  :busy="confirmBusy && confirming?.user.id === user.id"
                   @edit="openDialog('edit', user)"
                   @reset-password="openDialog('reset', user)"
-                  @toggle-active="setActive(user, user.isDisabled)"
-                  @delete="askDelete(user)"
+                  @toggle-active="askConfirm(user.isDisabled ? 'reactivate' : 'deactivate', user)"
+                  @delete="askConfirm('delete', user)"
                 />
               </TableCell>
             </TableRow>
@@ -277,60 +260,46 @@ async function setActive(user: UserDto, active: boolean): Promise<void> {
         </template>
         <li v-for="user in sorted" v-else :key="user.id" class="rounded-xl border bg-card p-4 shadow-xs">
           <div class="flex items-start gap-3">
-            <UserAvatar
-              :name="user.displayName"
-              :seed="user.userName"
-              :class="user.isDisabled ? 'opacity-50 grayscale' : ''"
-            />
-            <div class="grid min-w-0 flex-1 gap-0.5 leading-tight">
-              <span class="flex flex-wrap items-center gap-2 font-medium">
-                <span class="truncate">{{ user.displayName }}</span>
-                <Badge v-if="isMe(user)" variant="outline" class="text-muted-foreground">{{
-                  t('users.you')
-                }}</Badge>
+            <UserAvatar :name="user.displayName" :seed="user.userName" :inactive="user.isDisabled" />
+            <div class="grid min-w-0 flex-1 gap-0.5 pt-0.5 leading-tight">
+              <span class="truncate font-medium">
+                {{ user.displayName }}
+                <span v-if="isMe(user)" class="font-normal text-muted-foreground">{{ t('users.you') }}</span>
               </span>
               <span class="truncate text-sm text-muted-foreground">{{ user.userName }}</span>
             </div>
             <UserActionsMenu
               :user="user"
-              :busy="pending === user.id"
+              :self="isMe(user)"
+              :busy="confirmBusy && confirming?.user.id === user.id"
               @edit="openDialog('edit', user)"
               @reset-password="openDialog('reset', user)"
-              @toggle-active="setActive(user, user.isDisabled)"
-              @delete="askDelete(user)"
+              @toggle-active="askConfirm(user.isDisabled ? 'reactivate' : 'deactivate', user)"
+              @delete="askConfirm('delete', user)"
             />
           </div>
-          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+          <div class="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
             <RoleBadge :role="user.role" />
-            <div class="flex items-center gap-2">
-              <span class="text-sm text-muted-foreground">
-                {{ user.isDisabled ? t('users.disabled') : t('users.active') }}
-              </span>
-              <Switch
-                :model-value="!user.isDisabled"
-                :disabled="pending === user.id"
-                :aria-label="t('users.activeToggle', { name: user.displayName })"
-                @update:model-value="(active) => setActive(user, active === true)"
-              />
-            </div>
+            <UserStatusBadge :disabled="user.isDisabled" />
+            <span class="ml-auto text-xs text-muted-foreground">
+              <template v-if="user.lastLoginAtUtc">
+                {{ t('users.lastLogin') }}:
+                <time :datetime="user.lastLoginAtUtc">{{ lastLogin(user) }}</time>
+              </template>
+              <template v-else>{{ t('users.never') }}</template>
+            </span>
           </div>
-          <p class="mt-2 text-xs text-muted-foreground">
-            <template v-if="user.lastLoginAtUtc">
-              {{ t('users.lastLogin') }}:
-              <time :datetime="user.lastLoginAtUtc">{{ lastLogin(user) }}</time>
-            </template>
-            <template v-else>{{ t('users.never') }}</template>
-          </p>
         </li>
       </ul>
     </template>
 
     <Dialog v-model:open="dialogOpen">
-      <DialogScrollContent :close-label="t('common.close')" class="outline-none sm:max-w-lg">
+      <DialogScrollContent :close-label="t('common.close')" class="sm:max-w-lg">
         <UserForm
           v-if="dialog?.kind === 'create' || dialog?.kind === 'edit'"
           :key="dialog.user?.id ?? 'new'"
           :user="dialog.user"
+          :self="dialog.user ? isMe(dialog.user) : false"
           @saved="onSaved"
         />
         <ResetUserPasswordForm
@@ -342,20 +311,23 @@ async function setActive(user: UserDto, active: boolean): Promise<void> {
       </DialogScrollContent>
     </Dialog>
 
-    <AlertDialog :open="deleteOpen" @update:open="onDeleteOpenChange">
-      <AlertDialogContent v-if="deleting">
+    <AlertDialog :open="confirmOpen" @update:open="onConfirmOpenChange">
+      <AlertDialogContent v-if="confirming">
         <AlertDialogHeader>
           <AlertDialogTitle class="font-serif text-2xl font-medium tracking-tight">
-            {{ t('users.delete.title', { name: deleting.displayName }) }}
+            {{ t(`users.${confirming.kind}.title`, { name: confirming.user.displayName }) }}
           </AlertDialogTitle>
-          <AlertDialogDescription>{{ t('users.delete.description') }}</AlertDialogDescription>
+          <AlertDialogDescription>{{ t(`users.${confirming.kind}.description`) }}</AlertDialogDescription>
         </AlertDialogHeader>
-        <FormAlert v-if="deleteError" :message="deleteError" />
+        <FormAlert v-if="confirmError" :message="confirmError" />
         <AlertDialogFooter>
-          <AlertDialogCancel :disabled="deleteBusy">{{ t('common.cancel') }}</AlertDialogCancel>
-          <Button variant="destructive" :disabled="deleteBusy" @click="confirmDelete">
-            <LoaderCircle v-if="deleteBusy" class="animate-spin" />
-            {{ deleteBusy ? t('users.delete.deleting') : t('users.delete.confirm') }}
+          <AlertDialogCancel :disabled="confirmBusy">{{ t('common.cancel') }}</AlertDialogCancel>
+          <Button
+            :variant="confirming.kind === 'reactivate' ? 'default' : 'destructive'"
+            :loading="confirmBusy"
+            @click="confirm"
+          >
+            {{ confirmBusy ? t(`users.${confirming.kind}.busy`) : t(`users.${confirming.kind}.confirm`) }}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

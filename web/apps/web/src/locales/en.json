@@ -24,7 +24,8 @@
     "search": "Search",
     "you": "You",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "justNow": "Just now"
   },
   "locales": {
     "en": "English",
@@ -67,10 +68,12 @@
     "systemDatabase": "Database: {state}",
     "nav": {
       "groups": {
-        "home": "Home",
         "settings": "Settings"
       }
-    }
+    },
+    "openNavigation": "Open navigation",
+    "tabNavigation": "Sections",
+    "themeCurrent": "Theme: {theme}"
   },
   "databaseStates": {
     "NotConfigured": "not configured",

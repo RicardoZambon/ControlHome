@@ -8,7 +8,7 @@ const props = defineProps<{ label: string; class?: HTMLAttributes['class'] }>()
 
 <template>
   <div :class="cn('grid content-start gap-3 rounded-xl border bg-card p-4', props.class)">
-    <p class="text-xs font-medium tracking-wide text-muted-foreground uppercase">{{ label }}</p>
+    <p class="eyebrow">{{ label }}</p>
     <slot />
   </div>
 </template>

@@ -38,7 +38,10 @@ const version = computed(() => session.status?.version.split('+')[0])
       <div
         class="pointer-events-none absolute inset-x-0 top-0 h-72 bg-radial-[at_50%_0%] from-accent to-transparent to-70% lg:hidden"
       />
-      <header class="relative flex items-center justify-between gap-3 px-4 py-4 sm:px-8 sm:py-6">
+      <!-- On wide screens: the same top offset as the brand in the side panel, so both rows line up. -->
+      <header
+        class="relative flex items-center justify-between gap-3 px-4 py-4 sm:px-8 sm:py-6 lg:px-12 lg:pt-12 lg:pb-0 xl:px-16 xl:pt-16"
+      >
         <BrandLockup class="lg:invisible" />
         <div class="flex items-center gap-1">
           <ThemeMenu />
@@ -52,7 +55,10 @@ const version = computed(() => session.status?.version.split('+')[0])
       >
         <slot />
       </main>
-      <footer v-if="version" class="relative px-4 pb-6 text-xs text-muted-foreground sm:px-8">
+      <footer
+        v-if="version"
+        class="relative px-4 pb-6 text-center text-xs text-muted-foreground sm:px-8 lg:pb-12 xl:pb-16"
+      >
         {{ t('app.name') }} · {{ t('app.version', { version }) }}
       </footer>
     </div>

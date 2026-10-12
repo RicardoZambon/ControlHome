@@ -3,8 +3,17 @@ import { Avatar, AvatarFallback, cn } from '@controlhome/ui'
 import { computed, type HTMLAttributes } from 'vue'
 import { hashOf, initialsOf } from '../lib/format'
 
-/** Initials on a room color picked from the user name, so each person keeps the same color everywhere. */
-const props = defineProps<{ name: string; seed?: string; large?: boolean; class?: HTMLAttributes['class'] }>()
+/**
+ * Initials on a room color picked from the user name, so each person keeps the same color everywhere. `inactive`
+ * (a deactivated account): neutral muted colors instead, still readable (never faded with opacity).
+ */
+const props = defineProps<{
+  name: string
+  seed?: string
+  large?: boolean
+  inactive?: boolean
+  class?: HTMLAttributes['class']
+}>()
 
 // Full class names, so Tailwind generates them.
 const tones = [
@@ -18,7 +27,9 @@ const tones = [
   'bg-room-8 text-room-8-foreground',
 ]
 
-const tone = computed(() => tones[hashOf(props.seed ?? props.name) % tones.length])
+const tone = computed(() =>
+  props.inactive ? 'bg-muted text-muted-foreground' : tones[hashOf(props.seed ?? props.name) % tones.length],
+)
 const initials = computed(() => initialsOf(props.name))
 </script>
 

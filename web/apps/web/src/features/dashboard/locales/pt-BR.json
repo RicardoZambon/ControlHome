@@ -15,7 +15,7 @@
     "heading": "Deixe do seu jeito",
     "profileTitle": "Seu perfil",
     "profileDescription": "Seu nome, idioma, tema e senha.",
-    "usersTitle": "Moradores",
+    "usersTitle": "Usuários",
     "usersDescription": "Adicione quem mora aqui e escolha o que cada pessoa pode fazer.",
     "open": "Abrir"
   },
@@ -39,5 +39,6 @@
     "devicesDescription": "Conecte luzes, tomadas e sensores e controle tudo ao vivo de qualquer tela.",
     "energyTitle": "Energia e histórico",
     "energyDescription": "Veja quanto cada dispositivo consome e quanto custa pelo preço da sua energia."
-  }
+  },
+  "planBanner": "As plantas da casa chegam na próxima atualização."
 }

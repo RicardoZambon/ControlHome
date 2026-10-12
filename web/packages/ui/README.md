@@ -33,14 +33,30 @@ import { Sidebar, SidebarProvider } from '@controlhome/ui/components/ui/sidebar'
   (`text-white`, `bg-black/80`, `hover:border-white`, ...). A line with the marker `color-ok` is skipped (only for
   tests of color code).
 
-Device-state colors: `state-on` (green), `state-off` (grey), `state-offline` (slate), `state-warn` (orange),
-`state-energy` (amber), `state-danger` (red), `state-info` (blue). Each has a `-foreground` for text on it.
+Device-state colors: `state-on` (green), `state-off` (grey), `state-offline` (slate violet), `state-warn` (orange),
+`state-energy` (amber), `state-danger` (red), `state-info` (blue). Each has a `-foreground` for text on it. Off and
+offline also differ in shape (a filled dot vs a hollow ring or a WifiOff icon), never by color alone.
 
 Room colors: `room-1` ... `room-8` (blue, sand, sage, rose, teal, coral, olive, violet), calm low-chroma hues
 45 degrees apart, ordered so neighbours differ strongly. Each has a `-foreground`. They are the categorical chart
 palette too.
 
-Effects: `bg-overlay` is the scrim behind dialogs and sheets; `shadow-sm` ... `shadow-2xl` use the shadow tokens.
+Effects: `bg-overlay` is the scrim behind dialogs and sheets; `shadow-sm` ... `shadow-2xl` use the shadow tokens and
+add a 1 px top highlight (`--shadow-highlight`: invisible in the light theme, a faint light edge in the dark one).
+
+Elevation in the dark theme reads as lightness: `--background` < `--card` < `--popover` (menus, popovers, dialogs and
+sheets all use `bg-popover`). Never put cards on a tray lighter than they are: use `bg-background`, not `bg-muted`,
+behind them.
+
+## Sizes and type
+
+- `src/styles/sizes.css` holds the control heights: `--control-h-sm` / `--control-h` / `--control-h-lg` = 32 / 40 / 48 px,
+  and 36 / 44 / 48 px on touch screens and below `md` (44 px tap targets). `theme.css` maps them to spacing, so
+  `h-control`, `size-control-sm`, `pr-control`, `min-w-control-lg` ... exist. Button, Input, SelectTrigger, Toggle and
+  TabsList use them: forms look the same on every page. Use `-lg` only on purpose (the setup code and its Continue).
+- `eyebrow` (a utility in `styles/index.css`) is the one style for small section labels: page eyebrows, dashboard
+  section headings, sidebar group labels, specimen labels.
+- Headings (`h1`-`h4`) use `text-wrap: balance` and paragraphs `text-wrap: pretty` (base layer).
 
 ## Theme
 
@@ -71,9 +87,21 @@ They deviate from upstream shadcn-vue on purpose:
   `#fff`. Invalid fields (`aria-invalid`) use `border-destructive` and a `ring-destructive` focus ring.
 - **Hover keeps 4.5:1.** The primary Button (and link Badge) hover is `bg-primary/95`: upstream's `/90` over the light
   background leaves `primary-foreground` at 4.2:1.
+- **Button** has a `loading` prop: it keeps the variant's colors (only `disabled` dims to 50%), shows a spinner in
+  place of its icons, sets `aria-busy` and ignores clicks and form submission.
+- **Disabled fields** (Input, Textarea, SelectTrigger) use `bg-muted text-muted-foreground`, so they never look like
+  an empty field with a placeholder; a Label right before a disabled control dims too. SelectTrigger text is 16 px
+  below `md` like Input's (iOS Safari zooms into smaller fields).
+- **Alert** variants: `default`, `destructive`, `success`, `warning`, `info`. The colored ones color the icon and the
+  edge (and the title of `destructive`); the body stays `--foreground`. `success` / `warning` / `info` sit on a 10 % tint
+  of their state color.
+- **Tap targets:** the Switch track and the Slider thumb get an invisible `::before` around them (about 44 px).
+  Dialog and sheet close buttons are `size-control-sm`. `SidebarTrigger` takes its icon as a slot (PanelLeft by
+  default; pass a Menu icon where it opens the mobile sheet).
 - **Switch:** `bg-input` track and `bg-background` thumb when off, `bg-primary` / `bg-primary-foreground` when on.
   **Tabs:** inactive `text-muted-foreground`, active `bg-background text-foreground border-border shadow-sm`.
-  **Sidebar** group labels use `text-muted-foreground`; the outline menu button uses `ring-sidebar-border`; a menu
+  **Table** heads use `text-muted-foreground`. **CardFooter** stacks full-width buttons below `sm`.
+  **Sidebar** group labels use `eyebrow`; the outline menu button uses `ring-sidebar-border`; a menu
   button's tooltip is disabled (not just hidden) unless the sidebar is collapsed, so Escape closes the mobile sheet.
   **Slider** passes `aria-label` / `aria-labelledby` to its thumbs (the elements with `role="slider"`).
 - **Translatable strings.** Screen-reader texts have English defaults and a prop for the translation:

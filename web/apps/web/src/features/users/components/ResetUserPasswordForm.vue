@@ -15,7 +15,6 @@ import {
   useForm,
   z,
 } from '@controlhome/ui'
-import { LoaderCircle } from '@lucide/vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
@@ -109,8 +108,7 @@ const onSubmit = handleSubmit(async (values) => {
       <DialogClose as-child>
         <Button type="button" variant="outline">{{ t('common.cancel') }}</Button>
       </DialogClose>
-      <Button type="submit" :disabled="isSubmitting">
-        <LoaderCircle v-if="isSubmitting" class="animate-spin" />
+      <Button type="submit" :loading="isSubmitting">
         {{ isSubmitting ? t('users.reset.submitting') : t('users.reset.submit') }}
       </Button>
     </DialogFooter>

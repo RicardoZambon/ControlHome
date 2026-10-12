@@ -20,7 +20,6 @@ import {
   useForm,
   z,
 } from '@controlhome/ui'
-import { LoaderCircle } from '@lucide/vue'
 import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
@@ -36,8 +35,8 @@ import {
 } from '../../../lib/validation'
 import { ROLES } from '../users'
 
-/** Create (user = null) or edit form, rendered inside a dialog. */
-const props = defineProps<{ user: UserDto | null }>()
+/** Create (user = null) or edit form, rendered inside a dialog. `self`: the signed-in user's own account. */
+const props = defineProps<{ user: UserDto | null; self?: boolean }>()
 const emit = defineEmits<{ saved: [user: UserDto, created: boolean] }>()
 const { t } = useI18n()
 const problem = useProblem()
@@ -178,10 +177,16 @@ const onSubmit = handleSubmit(async (values) => {
         <FormItem class="flex flex-row items-start justify-between gap-4 rounded-lg border p-3">
           <div class="grid gap-1">
             <FormLabel>{{ t('users.form.disabled') }}</FormLabel>
-            <FormDescription class="text-xs">{{ t('users.form.disabledHelp') }}</FormDescription>
+            <FormDescription class="text-xs">{{
+              self ? t('users.form.selfDisabledHelp') : t('users.form.disabledHelp')
+            }}</FormDescription>
           </div>
           <FormControl>
-            <Switch :model-value="value" @update:model-value="(checked) => handleChange(checked === true)" />
+            <Switch
+              :model-value="value"
+              :disabled="self"
+              @update:model-value="(checked) => handleChange(checked === true)"
+            />
           </FormControl>
         </FormItem>
       </FormField>
@@ -191,8 +196,7 @@ const onSubmit = handleSubmit(async (values) => {
       <DialogClose as-child>
         <Button type="button" variant="outline">{{ t('common.cancel') }}</Button>
       </DialogClose>
-      <Button type="submit" :disabled="isSubmitting">
-        <LoaderCircle v-if="isSubmitting" class="animate-spin" />
+      <Button type="submit" :loading="isSubmitting">
         <template v-if="user">{{ isSubmitting ? t('users.form.saving') : t('users.form.save') }}</template>
         <template v-else>{{ isSubmitting ? t('users.form.creating') : t('users.form.create') }}</template>
       </Button>

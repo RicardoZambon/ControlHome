@@ -40,8 +40,7 @@ async function select(value: unknown): Promise<void> {
     <DropdownMenuTrigger as-child>
       <Button
         variant="ghost"
-        size="sm"
-        class="gap-1.5 px-2 text-muted-foreground hover:text-accent-foreground"
+        class="gap-1.5 px-2.5 text-muted-foreground hover:text-accent-foreground has-[>svg]:px-2.5"
         :aria-label="t('shell.chooseLanguage')"
         :title="t('shell.chooseLanguage')"
       >

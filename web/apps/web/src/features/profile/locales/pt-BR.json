@@ -1,7 +1,7 @@
 {
   "title": "Perfil",
   "nav": "Perfil",
-  "eyebrow": "Sua conta",
+  "eyebrow": "Configurações",
   "description": "Como você aparece, como o ControlHome fica para você e a sua senha.",
   "account": {
     "userName": "Nome de usuário",

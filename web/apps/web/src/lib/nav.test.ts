@@ -31,6 +31,11 @@ describe('visibleNavGroups', () => {
     ])
     expect(visibleNavGroups([items[0]!], ['Viewer'])).toEqual([])
   })
+
+  it('labels every group but the first (the home pages under the brand)', () => {
+    const groups = visibleNavGroups(items, ['Admin'])
+    expect(groups.map((group) => group.labelKey)).toEqual([undefined, 'shell.nav.groups.settings'])
+  })
 })
 
 describe('navItems', () => {

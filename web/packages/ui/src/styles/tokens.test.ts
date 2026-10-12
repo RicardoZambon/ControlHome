@@ -29,6 +29,7 @@ const effectTokens = [
   '--shadow-color-subtle',
   '--shadow-color',
   '--shadow-color-strong',
+  '--shadow-highlight',
 ] as const
 const shadowTokens = new Set<string>(effectTokens.filter((token) => token.startsWith('--shadow-')))
 const nonColorTokens = new Set(['--radius'])

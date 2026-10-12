@@ -11,7 +11,6 @@ import {
   useForm,
   z,
 } from '@controlhome/ui'
-import { LoaderCircle } from '@lucide/vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
@@ -82,18 +81,19 @@ const onSubmit = handleSubmit(async (values) => {
       aria-hidden="true"
       readonly
     />
-    <FormField v-slot="{ componentField }" name="currentPassword">
-      <FormItem class="sm:max-w-sm">
-        <FormLabel>{{ t('profile.password.current') }}</FormLabel>
-        <FormControl>
-          <PasswordInput v-bind="componentField" autocomplete="current-password" />
-        </FormControl>
-        <FormMessage />
-      </FormItem>
-    </FormField>
+    <!-- One grid for all three fields: the current password lines up with the new one below it. -->
     <div class="grid items-start gap-6 sm:grid-cols-2">
+      <FormField v-slot="{ componentField }" name="currentPassword">
+        <FormItem class="sm:col-start-1">
+          <FormLabel>{{ t('profile.password.current') }}</FormLabel>
+          <FormControl>
+            <PasswordInput v-bind="componentField" autocomplete="current-password" />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      </FormField>
       <FormField v-slot="{ componentField }" name="newPassword">
-        <FormItem>
+        <FormItem class="sm:col-start-1">
           <FormLabel>{{ t('profile.password.new') }}</FormLabel>
           <FormControl>
             <PasswordInput v-bind="componentField" autocomplete="new-password" />
@@ -111,9 +111,8 @@ const onSubmit = handleSubmit(async (values) => {
         </FormItem>
       </FormField>
     </div>
-    <div class="flex justify-end border-t pt-5">
-      <Button type="submit" variant="secondary" :disabled="isSubmitting">
-        <LoaderCircle v-if="isSubmitting" class="animate-spin" />
+    <div class="flex flex-col border-t pt-5 sm:flex-row sm:justify-end">
+      <Button type="submit" variant="secondary" :loading="isSubmitting">
         {{ isSubmitting ? t('profile.password.submitting') : t('profile.password.submit') }}
       </Button>
     </div>

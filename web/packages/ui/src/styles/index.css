@@ -8,9 +8,23 @@
  */
 @import 'vue-sonner/style.css' layer(components);
 @import './tokens.css';
+@import './sizes.css';
 @import './theme.css';
 
 @custom-variant dark (&:is(.dark *));
+
+/*
+ * The one label style for small section titles: page eyebrows, dashboard section headings, sidebar groups, the UI
+ * kit's specimen labels. `class="eyebrow"`.
+ */
+@utility eyebrow {
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
 
 @layer base {
   * {
@@ -19,5 +33,17 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+  }
+
+  /* No one-word orphans in headings; nicer rag in running text. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
   }
 }

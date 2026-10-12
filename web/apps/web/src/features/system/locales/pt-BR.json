@@ -75,7 +75,22 @@
       "heading": "Sala de estar, 21,5 °C",
       "body": "O texto da interface usa Onest: números claros e um desenho aberto que continua legível em tamanhos pequenos em qualquer tela.",
       "small": "Textos pequenos e legendas usam a cor de texto atenuada.",
-      "mono": "Código de configuração ABCD-EFGH-JKMN"
+      "mono": "Código de configuração ABCD-EFGH-JKMN",
+      "h1": "Usuários",
+      "h3": "Seu perfil",
+      "caption": "Atualizado há 2 minutos",
+      "eyebrow": "Configurações",
+      "roles": {
+        "display": "Destaque",
+        "h1": "Título da página (h1)",
+        "h2": "Título de seção (h2)",
+        "h3": "Título de cartão (h3)",
+        "body": "Corpo",
+        "small": "Pequeno",
+        "caption": "Legenda",
+        "eyebrow": "Sobretítulo",
+        "mono": "Monoespaçada"
+      }
     },
     "sample": {
       "label": "Nome do cômodo",
@@ -99,18 +114,13 @@
         "away": "Fora de casa"
       },
       "slider": "Brilho",
-      "toggle": "Negrito",
-      "toggleGroup": "Alinhamento do texto",
-      "align": {
-        "left": "Alinhar à esquerda",
-        "center": "Centralizar",
-        "right": "Alinhar à direita"
-      },
+      "toggle": "Favorito",
+      "toggleGroup": "Cena",
       "searchable": "Seleção com busca",
       "password": "Senha",
       "formTitle": "Validação",
       "formSubmit": "Validar",
-      "alertTitle": "Atenção",
+      "alertTitle": "Aviso",
       "alertDescription": "Alertas explicam algo sobre a página atual.",
       "destructiveTitle": "Algo falhou",
       "destructiveDescription": "Alertas destrutivos descrevem um erro e como corrigi-lo.",
@@ -178,8 +188,20 @@
       "item": "Item {number}",
       "energy": "kWh",
       "menuShortcut": "E",
-      "percent": "{value}%"
+      "percent": "{value}%",
+      "scenes": {
+        "morning": "Manhã",
+        "relax": "Relaxar",
+        "night": "Noite"
+      },
+      "successTitle": "Salvo",
+      "successDescription": "Alertas de sucesso confirmam que algo deu certo.",
+      "warningTitle": "Confira isto",
+      "warningDescription": "Avisos apontam algo que pode precisar da sua atenção.",
+      "infoTitle": "Bom saber",
+      "infoDescription": "Alertas informativos trazem contexto sem urgência."
     },
-    "specimen": "Aa"
+    "specimen": "Aa",
+    "avatars": "Avatares"
   }
 }

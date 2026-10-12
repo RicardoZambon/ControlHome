@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Alert, AlertDescription, Button, Card, CardContent, toast } from '@controlhome/ui'
-import { Copy, Database, Info, LoaderCircle, RefreshCw } from '@lucide/vue'
+import { Copy, Database, Info, RefreshCw } from '@lucide/vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -75,9 +75,8 @@ async function copyExample(): Promise<void> {
           {{ t('setup.database.stillMissing') }}
         </p>
         <span v-else />
-        <Button type="button" size="lg" :disabled="checking" @click="emit('recheck')">
-          <LoaderCircle v-if="checking" class="animate-spin" />
-          <RefreshCw v-else />
+        <Button type="button" size="lg" :loading="checking" @click="emit('recheck')">
+          <RefreshCw />
           {{ checking ? t('setup.database.checking') : t('setup.database.checkAgain') }}
         </Button>
       </div>

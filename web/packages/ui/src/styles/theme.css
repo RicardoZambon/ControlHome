@@ -82,6 +82,11 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* Control sizes (sizes.css): `h-control`, `size-control-sm`, `pr-control`, ... */
+  --spacing-control-sm: var(--control-h-sm);
+  --spacing-control: var(--control-h);
+  --spacing-control-lg: var(--control-h-lg);
 }
 
 /*
@@ -97,11 +102,23 @@
 
   --shadow-2xs: 0 1px var(--shadow-color-subtle);
   --shadow-xs: 0 1px 2px 0 var(--shadow-color-subtle);
-  --shadow-sm: 0 1px 3px 0 var(--shadow-color), 0 1px 2px -1px var(--shadow-color);
-  --shadow-md: 0 4px 6px -1px var(--shadow-color), 0 2px 4px -2px var(--shadow-color);
-  --shadow-lg: 0 10px 15px -3px var(--shadow-color), 0 4px 6px -4px var(--shadow-color);
-  --shadow-xl: 0 20px 25px -5px var(--shadow-color), 0 8px 10px -6px var(--shadow-color);
-  --shadow-2xl: 0 25px 50px -12px var(--shadow-color-strong);
+  /*
+   * From sm up, raised surfaces (cards, menus, dialogs, sheets) also get a 1 px top highlight. It is invisible on the
+   * light theme (white on white) and shows the elevation on dark surfaces, where shadows barely read.
+   */
+  --shadow-sm:
+    inset 0 1px 0 0 var(--shadow-highlight), 0 1px 3px 0 var(--shadow-color),
+    0 1px 2px -1px var(--shadow-color);
+  --shadow-md:
+    inset 0 1px 0 0 var(--shadow-highlight), 0 4px 6px -1px var(--shadow-color),
+    0 2px 4px -2px var(--shadow-color);
+  --shadow-lg:
+    inset 0 1px 0 0 var(--shadow-highlight), 0 10px 15px -3px var(--shadow-color),
+    0 4px 6px -4px var(--shadow-color);
+  --shadow-xl:
+    inset 0 1px 0 0 var(--shadow-highlight), 0 20px 25px -5px var(--shadow-color),
+    0 8px 10px -6px var(--shadow-color);
+  --shadow-2xl: inset 0 1px 0 0 var(--shadow-highlight), 0 25px 50px -12px var(--shadow-color-strong);
 
   --inset-shadow-2xs: inset 0 1px var(--shadow-color-subtle);
   --inset-shadow-xs: inset 0 1px 1px var(--shadow-color-subtle);

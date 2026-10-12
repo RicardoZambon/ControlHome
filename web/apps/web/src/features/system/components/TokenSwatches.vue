@@ -24,7 +24,13 @@ const GROUPS: readonly Group[] = [
 ]
 const BRAND = new Set(['primary', 'secondary', 'accent', 'muted', 'destructive'])
 const LINES = new Set(['border', 'input', 'ring'])
-const EFFECTS = new Set(['overlay', 'shadow-color-subtle', 'shadow-color', 'shadow-color-strong'])
+const EFFECTS = new Set([
+  'overlay',
+  'shadow-color-subtle',
+  'shadow-color',
+  'shadow-color-strong',
+  'shadow-highlight',
+])
 const BASE = new Set(['black', 'white'])
 const NOT_COLORS = new Set(['radius'])
 
@@ -63,7 +69,7 @@ const paint = (name: string, foreground?: string): CSSProperties => ({
 <template>
   <div class="grid gap-8">
     <div v-for="group in groups" :key="group.id" class="space-y-3">
-      <h3 class="text-sm font-semibold">{{ t(`system.uiKit.groups.${group.id}`) }}</h3>
+      <h3 class="eyebrow">{{ t(`system.uiKit.groups.${group.id}`) }}</h3>
       <ul class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         <li
           v-for="swatch in group.swatches"
@@ -91,9 +97,10 @@ const paint = (name: string, foreground?: string): CSSProperties => ({
             }}</span>
           </div>
           <div class="grid gap-0.5 p-3">
-            <code class="truncate text-xs font-semibold">--{{ swatch.name }}</code>
-            <span class="truncate font-mono text-[0.68rem] text-muted-foreground">{{ swatch.value }}</span>
-            <span v-if="swatch.foreground" class="truncate font-mono text-[0.68rem] text-muted-foreground">
+            <!-- Names wrap instead of being cut off on narrow screens. -->
+            <code class="text-xs font-semibold break-all">--{{ swatch.name }}</code>
+            <span class="font-mono text-[0.68rem] break-all text-muted-foreground">{{ swatch.value }}</span>
+            <span v-if="swatch.foreground" class="font-mono text-[0.68rem] break-all text-muted-foreground">
               --{{ swatch.foreground }}
             </span>
           </div>

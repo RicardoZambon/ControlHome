@@ -15,7 +15,7 @@
     "heading": "Make it yours",
     "profileTitle": "Your profile",
     "profileDescription": "Your name, language, theme and password.",
-    "usersTitle": "Household",
+    "usersTitle": "Users",
     "usersDescription": "Add the people who live here and choose what each one can do.",
     "open": "Open"
   },
@@ -39,5 +39,6 @@
     "devicesDescription": "Connect your lights, plugs and sensors and control them live from any screen.",
     "energyTitle": "Energy and history",
     "energyDescription": "See what each device uses and what it costs at your electricity price."
-  }
+  },
+  "planBanner": "Floor plans arrive in the next update."
 }

@@ -25,10 +25,11 @@ const { toggleSidebar } = useSidebar()
     data-slot="sidebar-trigger"
     variant="ghost"
     size="icon"
-    :class="cn('h-7 w-7', props.class)"
+    :class="cn(props.class)"
     @click="toggleSidebar"
   >
-    <PanelLeft />
+    <!-- The icon: PanelLeft by default (collapse on desktop); pass a Menu icon where it opens the mobile sheet. -->
+    <slot><PanelLeft /></slot>
     <span class="sr-only">{{ label }}</span>
   </Button>
 </template>

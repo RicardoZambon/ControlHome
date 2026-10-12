@@ -42,7 +42,7 @@ async function signOut(): Promise<void> {
     <DropdownMenuTrigger as-child>
       <Button
         variant="ghost"
-        class="h-10 gap-2 rounded-full px-1 lg:rounded-md lg:pr-2"
+        class="h-control gap-2 rounded-full px-1.5 has-[>svg]:px-1.5 lg:rounded-md lg:pr-2"
         :aria-label="t('shell.userMenu', { name: me.displayName })"
       >
         <UserAvatar :name="me.displayName" :seed="me.userName" class="size-8" />

@@ -107,13 +107,9 @@ export function isPhone(page: Page): boolean {
   return (page.viewportSize()?.width ?? 1440) < 768
 }
 
-/** The main navigation, opening the menu sheet first on phones. */
+/** The main navigation, opening the menu sheet first on phones (they also get a bottom tab bar). */
 export async function openNavigation(page: Page, locale: Locale = 'en') {
-  if (isPhone(page))
-    await page
-      .getByRole('button', { name: tr(locale, 'shell.toggleSidebar') })
-      .first()
-      .click()
+  if (isPhone(page)) await page.getByRole('button', { name: tr(locale, 'shell.openNavigation') }).click()
   const navigation = page.getByRole('navigation', { name: tr(locale, 'shell.primaryNavigation') })
   await expect(navigation).toBeVisible()
   return navigation

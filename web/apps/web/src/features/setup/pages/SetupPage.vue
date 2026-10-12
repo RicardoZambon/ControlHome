@@ -148,7 +148,7 @@ async function finish(): Promise<void> {
 <template>
   <div class="w-full max-w-2xl">
     <header class="mb-8 space-y-3">
-      <p class="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+      <p class="eyebrow">
         {{ t('setup.eyebrow') }}
       </p>
       <h1 class="font-serif text-4xl font-medium tracking-tight text-balance sm:text-5xl">

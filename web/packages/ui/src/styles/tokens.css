@@ -2,7 +2,7 @@
  * ControlHome design tokens: the only file in the repository that defines colors.
  *
  * - Values are OKLCH inside the sRGB gamut, so every browser renders the same color. Colors are opaque,
- *   except the effect tokens (`--overlay`, `--shadow-color*`), which are translucent by design.
+ *   except the effect tokens (`--overlay`, `--shadow-color*`, `--shadow-highlight`), which are translucent by design.
  * - `:root` is the light theme, `.dark` (set on <html>) is the dark theme.
  * - Every `--x` / `--x-foreground` pair reaches WCAG AA (>= 4.5:1). Primary, destructive, the device
  *   states and the room colors also reach >= 3:1 against the page, card and popover surfaces, so they work
@@ -56,13 +56,16 @@
   --sidebar-border: oklch(0.9 0.008 230);
   --sidebar-ring: oklch(0.55 0.09 195);
 
-  /* Device states. */
+  /*
+   * Device states. Off (neutral grey) and offline (slate violet) also differ in shape wherever they are shown: a
+   * filled dot for off, a hollow ring or a WifiOff icon for offline, never color alone.
+   */
   --state-on: oklch(0.53 0.135 150);
   --state-on-foreground: oklch(0.985 0.005 150);
   --state-off: oklch(0.55 0.008 250);
   --state-off-foreground: oklch(0.985 0 0);
-  --state-offline: oklch(0.48 0.035 260);
-  --state-offline-foreground: oklch(0.985 0.005 260);
+  --state-offline: oklch(0.47 0.06 275);
+  --state-offline-foreground: oklch(0.985 0.005 275);
   --state-warn: oklch(0.62 0.145 48);
   --state-warn-foreground: oklch(0.2 0.04 50);
   --state-energy: oklch(0.65 0.125 72);
@@ -98,17 +101,22 @@
   --shadow-color-subtle: oklch(0.22 0.025 250 / 0.06);
   --shadow-color: oklch(0.22 0.025 250 / 0.1);
   --shadow-color-strong: oklch(0.22 0.025 250 / 0.25);
+  /* Top edge of raised surfaces (shadow-sm and up): white on white here, so it does not show. */
+  --shadow-highlight: oklch(1 0 0 / 0.5);
 }
 
 .dark {
   color-scheme: dark;
 
-  /* Surfaces: deep slate. */
+  /*
+   * Surfaces: deep slate. Elevation reads as lightness: background < card < popover (menus, dialogs, sheets).
+   * Never put cards on a tray lighter than they are (use the background, not --muted, behind them).
+   */
   --background: oklch(0.17 0.012 250);
   --foreground: oklch(0.96 0.005 230);
   --card: oklch(0.21 0.014 250);
   --card-foreground: oklch(0.96 0.005 230);
-  --popover: oklch(0.23 0.015 250);
+  --popover: oklch(0.25 0.016 250);
   --popover-foreground: oklch(0.96 0.005 230);
 
   /* Brand: bright teal on dark surfaces, dark text on brand fills. */
@@ -125,7 +133,7 @@
 
   /* Lines and focus. */
   --border: oklch(0.3 0.015 250);
-  --input: oklch(0.52 0.02 245);
+  --input: oklch(0.55 0.02 245);
   --ring: oklch(0.72 0.115 195);
 
   /* Navigation sidebar. */
@@ -143,8 +151,8 @@
   --state-on-foreground: oklch(0.2 0.04 150);
   --state-off: oklch(0.7 0.005 250);
   --state-off-foreground: oklch(0.18 0.01 250);
-  --state-offline: oklch(0.6 0.045 260);
-  --state-offline-foreground: oklch(0.14 0.01 260);
+  --state-offline: oklch(0.63 0.065 275);
+  --state-offline-foreground: oklch(0.14 0.01 275);
   --state-warn: oklch(0.76 0.15 55);
   --state-warn-foreground: oklch(0.2 0.04 50);
   --state-energy: oklch(0.82 0.15 80);
@@ -174,7 +182,9 @@
 
   /* Effects: a deeper scrim and stronger shadows, which would vanish on dark surfaces otherwise. */
   --overlay: oklch(0.08 0.01 250 / 0.75);
-  --shadow-color-subtle: oklch(0.08 0.01 250 / 0.3);
-  --shadow-color: oklch(0.08 0.01 250 / 0.45);
-  --shadow-color-strong: oklch(0.08 0.01 250 / 0.65);
+  --shadow-color-subtle: oklch(0.08 0.01 250 / 0.35);
+  --shadow-color: oklch(0.08 0.01 250 / 0.6);
+  --shadow-color-strong: oklch(0.08 0.01 250 / 0.8);
+  /* A faint light top edge: on dark surfaces it is what shows that a card, menu or dialog is raised. */
+  --shadow-highlight: oklch(1 0 0 / 0.08);
 }

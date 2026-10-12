@@ -24,7 +24,8 @@
     "search": "Buscar",
     "you": "Você",
     "showPassword": "Mostrar senha",
-    "hidePassword": "Ocultar senha"
+    "hidePassword": "Ocultar senha",
+    "justNow": "Agora mesmo"
   },
   "locales": {
     "en": "English",
@@ -67,10 +68,12 @@
     "systemDatabase": "Banco de dados: {state}",
     "nav": {
       "groups": {
-        "home": "Casa",
         "settings": "Configurações"
       }
-    }
+    },
+    "openNavigation": "Abrir navegação",
+    "tabNavigation": "Seções",
+    "themeCurrent": "Tema: {theme}"
   },
   "databaseStates": {
     "NotConfigured": "não configurado",

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button, Card, CardContent, cn } from '@controlhome/ui'
-import { DatabaseZap, LoaderCircle, RefreshCw, TriangleAlert } from '@lucide/vue'
+import { DatabaseZap, RefreshCw, TriangleAlert } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -44,9 +44,8 @@ const stateLabel = computed(() =>
         </div>
       </div>
       <div class="flex justify-end border-t pt-6">
-        <Button type="button" variant="outline" :disabled="checking" @click="emit('recheck')">
-          <LoaderCircle v-if="checking" class="animate-spin" />
-          <RefreshCw v-else />
+        <Button type="button" variant="outline" :loading="checking" @click="emit('recheck')">
+          <RefreshCw />
           {{ checking ? t('setup.database.checking') : t('setup.database.checkAgain') }}
         </Button>
       </div>

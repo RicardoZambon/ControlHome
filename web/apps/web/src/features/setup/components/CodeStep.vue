@@ -51,7 +51,7 @@ const onSubmit = handleSubmit((values) => emit('next', normalizeSetupCode(values
         <FormControl>
           <Input
             v-bind="componentField"
-            class="h-12 font-mono text-lg tracking-[0.18em] uppercase md:text-lg"
+            class="h-control-lg font-mono text-lg tracking-[0.18em] uppercase md:text-lg"
             :placeholder="t('setup.code.placeholder')"
             autocomplete="one-time-code"
             autocapitalize="characters"

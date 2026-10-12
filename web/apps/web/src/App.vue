@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Toaster } from '@controlhome/ui'
+import { useMediaQuery } from '@vueuse/core'
 import { computed, ref, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -21,6 +22,12 @@ watchEffect(() => {
   const key = route.meta.titleKey
   document.title = key ? `${t(key)} · ${name}` : name
 })
+
+// Phones: toasts at the top, where they cover neither a dialog's buttons nor the bottom tab bar.
+const isPhone = useMediaQuery('(max-width: 768px)')
+const toastPosition = computed<'top-center' | 'bottom-right'>(() =>
+  isPhone.value ? 'top-center' : 'bottom-right',
+)
 
 const toastOptions = computed(() => ({
   closeButtonAriaLabel: t('common.close'),
@@ -45,7 +52,7 @@ const toastOptions = computed(() => ({
     </RouterView>
   </component>
   <Toaster
-    position="bottom-right"
+    :position="toastPosition"
     close-button
     :container-aria-label="t('shell.notifications')"
     :toast-options="toastOptions"

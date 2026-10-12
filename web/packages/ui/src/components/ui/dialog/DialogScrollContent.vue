@@ -37,7 +37,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       <DialogContent
         :class="
           cn(
-            'border-border bg-background relative z-50 my-8 grid w-full max-w-lg gap-4 border p-6 shadow-lg duration-200 sm:rounded-lg md:w-full',
+            'border-border bg-popover text-popover-foreground relative z-50 my-8 grid w-full max-w-lg gap-4 border p-6 shadow-lg outline-none duration-200 sm:rounded-lg md:w-full',
             props.class,
           )
         "
@@ -55,7 +55,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
         <slot />
 
         <DialogClose
-          class="hover:bg-secondary focus-visible:ring-ring focus-visible:ring-offset-background absolute top-4 right-4 rounded-md p-0.5 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden"
+          class="hover:bg-secondary focus-visible:ring-ring focus-visible:ring-offset-popover absolute top-3 right-3 inline-flex size-control-sm items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden"
         >
           <X class="size-4" />
           <span class="sr-only">{{ closeLabel }}</span>

@@ -16,6 +16,7 @@ const delegatedProps = reactiveOmit(props, 'class')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 
+// The thumb is 16 px; an invisible ::before around it makes the tap target 44 px.
 const attrs = useAttrs()
 // A function, not a computed: `attrs` is not reactive, but it is current on every render.
 const thumbName = () => ({
@@ -51,7 +52,7 @@ const thumbName = () => ({
       :key="key"
       data-slot="slider-thumb"
       v-bind="thumbName()"
-      class="bg-background border-primary block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+      class="bg-background border-primary block size-4 shrink-0 rounded-full border shadow-sm before:absolute before:-inset-3.5 before:rounded-full transition-[color,box-shadow] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
     />
   </SliderRoot>
 </template>

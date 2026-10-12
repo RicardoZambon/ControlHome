@@ -20,7 +20,7 @@ import {
   useForm,
   z,
 } from '@controlhome/ui'
-import { LoaderCircle, Monitor, Moon, Sun } from '@lucide/vue'
+import { Monitor, Moon, Sun } from '@lucide/vue'
 import { ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
@@ -143,9 +143,8 @@ const onSubmit = handleSubmit(async (values) => {
         <FormMessage />
       </FormItem>
     </FormField>
-    <div class="flex justify-end border-t pt-5">
-      <Button type="submit" :disabled="isSubmitting">
-        <LoaderCircle v-if="isSubmitting" class="animate-spin" />
+    <div class="flex flex-col border-t pt-5 sm:flex-row sm:justify-end">
+      <Button type="submit" :loading="isSubmitting">
         {{ isSubmitting ? t('common.saving') : t('common.save') }}
       </Button>
     </div>

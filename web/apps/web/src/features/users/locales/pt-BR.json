@@ -1,27 +1,25 @@
 {
   "title": "Usuários",
   "nav": "Usuários",
-  "eyebrow": "Moradores",
+  "eyebrow": "Configurações",
   "description": "Todos que podem abrir esta casa e o que cada pessoa pode fazer.",
   "add": "Adicionar usuário",
   "listLabel": "Usuários",
-  "you": "Você",
+  "you": "(você)",
   "never": "Nunca entrou",
   "lastLogin": "Última entrada",
   "created": "Adicionado em",
   "role": "Papel",
   "status": "Situação",
   "user": "Usuário",
-  "active": "Ativa",
-  "disabled": "Desativada",
-  "activeToggle": "Conta de {name} ativa",
+  "active": "Ativo",
   "loadFailed": "Não foi possível carregar os usuários.",
   "actions": {
     "menu": "Ações para {name}",
     "edit": "Editar",
     "resetPassword": "Redefinir senha",
-    "disable": "Desativar conta",
-    "enable": "Ativar conta",
+    "deactivate": "Desativar conta",
+    "reactivate": "Reativar conta",
     "delete": "Excluir"
   },
   "form": {
@@ -40,7 +38,8 @@
     "create": "Adicionar usuário",
     "creating": "Adicionando…",
     "save": "Salvar alterações",
-    "saving": "Salvando…"
+    "saving": "Salvando…",
+    "selfDisabledHelp": "Você não pode desativar a sua própria conta. Outro administrador pode."
   },
   "reset": {
     "title": "Nova senha para {name}",
@@ -54,7 +53,7 @@
     "title": "Excluir {name}?",
     "description": "A conta é removida e a pessoa não consegue mais entrar. Isso não pode ser desfeito.",
     "confirm": "Excluir usuário",
-    "deleting": "Excluindo…"
+    "busy": "Excluindo…"
   },
   "toast": {
     "created": "{name} foi adicionado.",
@@ -63,5 +62,19 @@
     "deleted": "{name} foi excluído.",
     "disabled": "{name} não consegue mais entrar.",
     "enabled": "{name} pode entrar novamente."
+  },
+  "inactive": "Inativo",
+  "selfDeactivate": "Você não pode desativar a sua própria conta.",
+  "deactivate": {
+    "title": "Desativar {name}?",
+    "description": "A pessoa não consegue mais entrar, e as sessões abertas terminam em até um minuto. Você pode reativar a conta depois.",
+    "confirm": "Desativar",
+    "busy": "Desativando…"
+  },
+  "reactivate": {
+    "title": "Reativar {name}?",
+    "description": "A pessoa pode entrar de novo com a senha atual.",
+    "confirm": "Reativar",
+    "busy": "Reativando…"
   }
 }

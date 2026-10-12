@@ -75,7 +75,22 @@
       "heading": "Living room, 21.5 °C",
       "body": "Interface text uses Onest: clear figures and an open shape that stays legible at small sizes on any screen.",
       "small": "Small print and captions use the muted foreground.",
-      "mono": "Setup code ABCD-EFGH-JKMN"
+      "mono": "Setup code ABCD-EFGH-JKMN",
+      "h1": "Users",
+      "h3": "Your profile",
+      "caption": "Updated 2 minutes ago",
+      "eyebrow": "Settings",
+      "roles": {
+        "display": "Display",
+        "h1": "Page title (h1)",
+        "h2": "Section title (h2)",
+        "h3": "Card title (h3)",
+        "body": "Body",
+        "small": "Small",
+        "caption": "Caption",
+        "eyebrow": "Eyebrow",
+        "mono": "Monospace"
+      }
     },
     "sample": {
       "label": "Room name",
@@ -99,13 +114,8 @@
         "away": "Away"
       },
       "slider": "Brightness",
-      "toggle": "Bold",
-      "toggleGroup": "Text alignment",
-      "align": {
-        "left": "Align left",
-        "center": "Align center",
-        "right": "Align right"
-      },
+      "toggle": "Favorite",
+      "toggleGroup": "Scene",
       "searchable": "Searchable select",
       "password": "Password",
       "formTitle": "Validation",
@@ -178,8 +188,20 @@
       "item": "Item {number}",
       "energy": "kWh",
       "menuShortcut": "E",
-      "percent": "{value}%"
+      "percent": "{value}%",
+      "scenes": {
+        "morning": "Morning",
+        "relax": "Relax",
+        "night": "Night"
+      },
+      "successTitle": "Saved",
+      "successDescription": "Success alerts confirm that something worked.",
+      "warningTitle": "Check this",
+      "warningDescription": "Warnings point out something that may need your attention.",
+      "infoTitle": "Good to know",
+      "infoDescription": "Info alerts add context without urgency."
     },
-    "specimen": "Aa"
+    "specimen": "Aa",
+    "avatars": "Avatars"
   }
 }

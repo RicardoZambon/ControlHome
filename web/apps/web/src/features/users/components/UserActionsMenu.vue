@@ -11,7 +11,11 @@ import {
 import { Ellipsis, KeyRound, Pencil, Trash, UserRoundCheck, UserRoundX } from '@lucide/vue'
 import { useI18n } from 'vue-i18n'
 
-defineProps<{ user: UserDto; busy?: boolean }>()
+/**
+ * The row actions of a user. Deactivating and deleting ask for confirmation (the page's dialog); neither is offered
+ * on your own account, which says why instead.
+ */
+defineProps<{ user: UserDto; self?: boolean; busy?: boolean }>()
 const emit = defineEmits<{ edit: []; resetPassword: []; toggleActive: []; delete: [] }>()
 const { t } = useI18n()
 </script>
@@ -22,14 +26,15 @@ const { t } = useI18n()
     <DropdownMenuTrigger as-child>
       <Button
         variant="ghost"
-        size="icon-sm"
+        size="icon"
+        class="text-muted-foreground"
         :disabled="busy"
         :aria-label="t('users.actions.menu', { name: user.displayName })"
       >
         <Ellipsis />
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" class="w-52">
+    <DropdownMenuContent align="end" class="w-60">
       <DropdownMenuItem @select="emit('edit')">
         <Pencil />
         {{ t('users.actions.edit') }}
@@ -38,15 +43,25 @@ const { t } = useI18n()
         <KeyRound />
         {{ t('users.actions.resetPassword') }}
       </DropdownMenuItem>
-      <DropdownMenuItem @select="emit('toggleActive')">
-        <UserRoundCheck v-if="user.isDisabled" />
-        <UserRoundX v-else />
-        {{ user.isDisabled ? t('users.actions.enable') : t('users.actions.disable') }}
+      <DropdownMenuItem :disabled="self" class="items-start" @select="emit('toggleActive')">
+        <UserRoundCheck v-if="user.isDisabled" class="mt-0.5" />
+        <UserRoundX v-else class="mt-0.5" />
+        <span class="grid gap-0.5">
+          {{ user.isDisabled ? t('users.actions.reactivate') : t('users.actions.deactivate') }}
+          <span v-if="self" class="text-xs text-muted-foreground">{{ t('users.selfDeactivate') }}</span>
+        </span>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
-      <DropdownMenuItem variant="destructive" @select="emit('delete')">
+      <DropdownMenuItem v-if="!self" variant="destructive" @select="emit('delete')">
         <Trash />
         {{ t('users.actions.delete') }}
+      </DropdownMenuItem>
+      <DropdownMenuItem v-else disabled class="items-start">
+        <Trash class="mt-0.5" />
+        <span class="grid gap-0.5">
+          {{ t('users.actions.delete') }}
+          <span class="text-xs text-muted-foreground">{{ t('errors.users.cannot_delete_self') }}</span>
+        </span>
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>

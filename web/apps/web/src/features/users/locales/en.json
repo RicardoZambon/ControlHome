@@ -1,11 +1,11 @@
 {
   "title": "Users",
   "nav": "Users",
-  "eyebrow": "Household",
+  "eyebrow": "Settings",
   "description": "Everyone who can open this home, and what each person is allowed to do.",
   "add": "Add user",
   "listLabel": "Users",
-  "you": "You",
+  "you": "(you)",
   "never": "Never signed in",
   "lastLogin": "Last sign-in",
   "created": "Added",
@@ -13,15 +13,13 @@
   "status": "Status",
   "user": "User",
   "active": "Active",
-  "disabled": "Disabled",
-  "activeToggle": "Account of {name} active",
   "loadFailed": "Couldn't load the users.",
   "actions": {
     "menu": "Actions for {name}",
     "edit": "Edit",
     "resetPassword": "Reset password",
-    "disable": "Disable account",
-    "enable": "Enable account",
+    "deactivate": "Deactivate account",
+    "reactivate": "Reactivate account",
     "delete": "Delete"
   },
   "form": {
@@ -35,12 +33,13 @@
     "role": "Role",
     "password": "Password",
     "passwordHelp": "At least 10 characters.",
-    "disabled": "Disable this account",
+    "disabled": "Deactivate this account",
     "disabledHelp": "A disabled account can't sign in, and its open sessions end within a minute.",
     "create": "Add user",
     "creating": "Adding…",
     "save": "Save changes",
-    "saving": "Saving…"
+    "saving": "Saving…",
+    "selfDisabledHelp": "You can't deactivate your own account. Another administrator can."
   },
   "reset": {
     "title": "New password for {name}",
@@ -54,7 +53,7 @@
     "title": "Delete {name}?",
     "description": "Their account is removed and they can no longer sign in. This can't be undone.",
     "confirm": "Delete user",
-    "deleting": "Deleting…"
+    "busy": "Deleting…"
   },
   "toast": {
     "created": "{name} was added.",
@@ -63,5 +62,19 @@
     "deleted": "{name} was deleted.",
     "disabled": "{name} can no longer sign in.",
     "enabled": "{name} can sign in again."
+  },
+  "inactive": "Inactive",
+  "selfDeactivate": "You can't deactivate your own account.",
+  "deactivate": {
+    "title": "Deactivate {name}?",
+    "description": "They can no longer sign in, and their open sessions end within a minute. You can reactivate the account later.",
+    "confirm": "Deactivate",
+    "busy": "Deactivating…"
+  },
+  "reactivate": {
+    "title": "Reactivate {name}?",
+    "description": "They can sign in again with their current password.",
+    "confirm": "Reactivate",
+    "busy": "Reactivating…"
   }
 }

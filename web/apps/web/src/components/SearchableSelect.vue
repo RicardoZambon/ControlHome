@@ -109,6 +109,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
   <Popover v-model:open="open">
+    <!-- Text like Input and SelectTrigger: 16 px on phones (no zoom on focus in iOS Safari), 14 px from md. -->
     <PopoverTrigger as-child>
       <Button
         v-bind="$attrs"
@@ -117,7 +118,7 @@ function onKeydown(event: KeyboardEvent): void {
         :aria-label="selected ? `${label}: ${selected.label}` : label"
         :class="
           cn(
-            'w-full justify-between gap-2 border-input px-3 font-normal shadow-xs aria-invalid:border-destructive',
+            'w-full justify-between gap-2 border-input px-3 text-base font-normal shadow-xs aria-invalid:border-destructive md:text-sm',
             !selected && 'text-muted-foreground',
             props.class,
           )

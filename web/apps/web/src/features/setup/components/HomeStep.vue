@@ -16,7 +16,7 @@ import {
   useForm,
   z,
 } from '@controlhome/ui'
-import { LoaderCircle, LocateFixed } from '@lucide/vue'
+import { LocateFixed } from '@lucide/vue'
 import { computed, ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SearchableSelect from '../../../components/SearchableSelect.vue'
@@ -212,11 +212,11 @@ const goBack = () => emit('back', asDraft({ ...props.modelValue, ...values }))
           type="button"
           variant="outline"
           class="col-span-2 sm:col-span-1 sm:mt-6"
-          :disabled="locating || !secureContext || !geolocationAvailable"
+          :loading="locating"
+          :disabled="!secureContext || !geolocationAvailable"
           @click="fillMyLocation"
         >
-          <LoaderCircle v-if="locating" class="animate-spin" />
-          <LocateFixed v-else />
+          <LocateFixed />
           {{ locating ? t('setup.home.locating') : t('setup.home.useMyLocation') }}
         </Button>
       </div>

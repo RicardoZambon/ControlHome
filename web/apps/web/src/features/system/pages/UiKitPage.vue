@@ -102,21 +102,23 @@ import {
   z,
 } from '@controlhome/ui'
 import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  Bold,
   CircleAlert,
+  CircleCheck,
   Copy,
   Info,
-  LoaderCircle,
+  Moon,
   Pencil,
   Plus,
+  Sofa,
   Star,
+  Sun,
   Trash,
+  TriangleAlert,
+  WifiOff,
 } from '@lucide/vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import DeviceStateDot from '../../../components/DeviceStateDot.vue'
 import PageHeader from '../../../components/PageHeader.vue'
 import PasswordInput from '../../../components/PasswordInput.vue'
 import SearchableSelect from '../../../components/SearchableSelect.vue'
@@ -151,18 +153,32 @@ const badgeVariants = ['default', 'secondary', 'outline', 'destructive'] as cons
 // Full class names, so Tailwind generates them.
 const shadows = ['shadow-2xs', 'shadow-xs', 'shadow-sm', 'shadow-md', 'shadow-lg', 'shadow-xl', 'shadow-2xl']
 const radii = ['rounded-sm', 'rounded-md', 'rounded-lg', 'rounded-xl', 'rounded-2xl', 'rounded-full']
-const stateDots = [
-  { key: 'on', class: 'bg-state-on' },
-  { key: 'off', class: 'bg-state-off' },
-  { key: 'offline', class: 'bg-state-offline' },
+const deviceStates = ['on', 'off', 'offline'] as const
+const avatarSizes = ['size-8', 'size-9', 'size-12'] as const
+// Each type role with the classes that make it (the spec line is the class list, so it can't drift).
+const typeRoles = [
+  { role: 'display', sample: 'display', class: 'font-serif text-5xl font-medium tracking-tight' },
+  { role: 'h1', sample: 'h1', class: 'font-serif text-3xl font-medium tracking-tight md:text-4xl' },
+  { role: 'h2', sample: 'heading', class: 'font-serif text-2xl font-medium tracking-tight' },
+  { role: 'h3', sample: 'h3', class: 'font-medium' },
+  { role: 'body', sample: 'body', class: 'text-base' },
+  { role: 'small', sample: 'small', class: 'text-sm text-muted-foreground' },
+  { role: 'caption', sample: 'caption', class: 'text-xs text-muted-foreground' },
+  { role: 'eyebrow', sample: 'eyebrow', class: 'eyebrow' },
+  { role: 'mono', sample: 'mono', class: 'font-mono text-sm' },
+] as const
+const scenes = [
+  { value: 'morning', icon: Sun },
+  { value: 'relax', icon: Sofa },
+  { value: 'night', icon: Moon },
 ] as const
 
 const checked = ref(true)
 const switchOn = ref(true)
 const scene = ref('relax')
 const brightness = ref([64])
-const bold = ref(false)
-const align = ref('left')
+const favoriteToggle = ref(false)
+const activeScene = ref('relax')
 const room = ref('kitchen')
 const searchable = ref('kitchen')
 const password = ref('')
@@ -214,7 +230,8 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
     </KitSection>
 
     <KitSection id="kit-effects" :title="t('system.uiKit.sections.effects')">
-      <div class="grid grid-cols-2 gap-6 rounded-xl bg-muted p-6 sm:grid-cols-4 lg:grid-cols-7">
+      <!-- On the page background, never a lighter tray: raised cards must not look sunken in the dark theme. -->
+      <div class="grid grid-cols-2 gap-6 rounded-xl border bg-background p-6 sm:grid-cols-4 lg:grid-cols-7">
         <div v-for="shadow in shadows" :key="shadow" class="grid gap-2 text-center">
           <div :class="['h-16 rounded-lg bg-card', shadow]" />
           <code class="text-xs text-muted-foreground">{{ shadow }}</code>
@@ -232,15 +249,19 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
     </KitSection>
 
     <KitSection id="kit-typography" :title="t('system.uiKit.sections.typography')">
-      <div class="grid gap-5 rounded-xl border bg-card p-6">
-        <p class="font-serif text-5xl font-medium tracking-tight text-balance">
-          {{ t('system.uiKit.type.display') }}
-        </p>
-        <p class="font-serif text-2xl font-medium tracking-tight">{{ t('system.uiKit.type.heading') }}</p>
-        <p class="max-w-2xl text-base">{{ t('system.uiKit.type.body') }}</p>
-        <p class="text-sm text-muted-foreground">{{ t('system.uiKit.type.small') }}</p>
-        <p class="font-mono text-sm">{{ t('system.uiKit.type.mono') }}</p>
-      </div>
+      <dl class="divide-y rounded-xl border bg-card">
+        <div
+          v-for="entry in typeRoles"
+          :key="entry.role"
+          class="grid gap-2 p-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-baseline sm:gap-6 sm:px-6"
+        >
+          <dt class="grid gap-1">
+            <span class="text-sm font-medium">{{ t(`system.uiKit.type.roles.${entry.role}`) }}</span>
+            <code class="text-xs wrap-break-word text-muted-foreground">{{ entry.class }}</code>
+          </dt>
+          <dd :class="[entry.class, 'max-w-2xl min-w-0']">{{ t(`system.uiKit.type.${entry.sample}`) }}</dd>
+        </div>
+      </dl>
     </KitSection>
 
     <KitSection id="kit-buttons" :title="t('system.uiKit.sections.buttons')">
@@ -277,9 +298,8 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
             <Button variant="ghost" size="icon-sm" :aria-label="t('system.uiKit.sample.menuDuplicate')"
               ><Copy
             /></Button>
-            <Button disabled
-              ><LoaderCircle class="animate-spin" />{{ t('system.uiKit.states.loading') }}</Button
-            >
+            <Button loading><Plus />{{ t('system.uiKit.states.loading') }}</Button>
+            <Button variant="outline" loading>{{ t('system.uiKit.states.loading') }}</Button>
           </div>
         </KitSpecimen>
       </div>
@@ -303,9 +323,9 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
             <Badge class="border-transparent bg-state-off text-state-off-foreground">{{
               t('system.uiKit.sample.table.off')
             }}</Badge>
-            <Badge class="border-transparent bg-state-offline text-state-offline-foreground">{{
-              t('system.uiKit.sample.table.offline')
-            }}</Badge>
+            <Badge class="border-transparent bg-state-offline text-state-offline-foreground"
+              ><WifiOff aria-hidden="true" />{{ t('system.uiKit.sample.table.offline') }}</Badge
+            >
             <Badge class="border-transparent bg-state-warn text-state-warn-foreground">{{
               t('system.uiKit.sample.toasts.warning')
             }}</Badge>
@@ -320,12 +340,18 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
             }}</Badge>
           </div>
         </KitSpecimen>
-        <KitSpecimen :label="t('system.uiKit.sections.badges')">
-          <div class="flex flex-wrap items-center gap-3">
-            <UserAvatar name="Ana Souza" />
-            <UserAvatar name="Bruno Lima" />
-            <UserAvatar name="Carla Dias" />
-            <UserAvatar name="Diego Rocha" class="size-12" />
+        <KitSpecimen :label="t('system.uiKit.avatars')">
+          <div class="flex flex-wrap items-end gap-6">
+            <figure v-for="(size, index) in avatarSizes" :key="size" class="grid justify-items-center gap-2">
+              <UserAvatar
+                :name="['Ana Souza', 'Bruno Lima', 'Carla Dias'][index]!"
+                :large="size === 'size-12'"
+                :class="size"
+              />
+              <figcaption>
+                <code class="text-xs text-muted-foreground">{{ size }}</code>
+              </figcaption>
+            </figure>
           </div>
         </KitSpecimen>
       </div>
@@ -464,7 +490,7 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
             </div>
           </RadioGroup>
         </KitSpecimen>
-        <KitSpecimen :label="`${t('system.uiKit.sample.slider')} · ${t('system.uiKit.sample.toggle')}`">
+        <KitSpecimen :label="`${t('system.uiKit.sample.slider')} · ${t('system.uiKit.sample.toggleGroup')}`">
           <div class="grid gap-5">
             <div class="grid gap-3">
               <div class="flex items-center justify-between text-sm">
@@ -476,23 +502,20 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
               <Slider v-model="brightness" :max="100" :step="1" aria-labelledby="kit-slider-label" />
             </div>
             <div class="flex flex-wrap items-center gap-3">
-              <Toggle v-model="bold" :aria-label="t('system.uiKit.sample.toggle')"><Bold /></Toggle>
               <ToggleGroup
-                v-model="align"
+                v-model="activeScene"
                 type="single"
                 variant="outline"
                 :aria-label="t('system.uiKit.sample.toggleGroup')"
               >
-                <ToggleGroupItem value="left" :aria-label="t('system.uiKit.sample.align.left')"
-                  ><AlignLeft
-                /></ToggleGroupItem>
-                <ToggleGroupItem value="center" :aria-label="t('system.uiKit.sample.align.center')"
-                  ><AlignCenter
-                /></ToggleGroupItem>
-                <ToggleGroupItem value="right" :aria-label="t('system.uiKit.sample.align.right')"
-                  ><AlignRight
-                /></ToggleGroupItem>
+                <ToggleGroupItem v-for="option in scenes" :key="option.value" :value="option.value">
+                  <component :is="option.icon" />
+                  {{ t(`system.uiKit.sample.scenes.${option.value}`) }}
+                </ToggleGroupItem>
               </ToggleGroup>
+              <Toggle v-model="favoriteToggle" variant="outline" :aria-label="t('system.uiKit.sample.toggle')"
+                ><Star
+              /></Toggle>
             </div>
           </div>
         </KitSpecimen>
@@ -510,6 +533,21 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
           <CircleAlert />
           <AlertTitle>{{ t('system.uiKit.sample.destructiveTitle') }}</AlertTitle>
           <AlertDescription>{{ t('system.uiKit.sample.destructiveDescription') }}</AlertDescription>
+        </Alert>
+        <Alert variant="success">
+          <CircleCheck />
+          <AlertTitle>{{ t('system.uiKit.sample.successTitle') }}</AlertTitle>
+          <AlertDescription>{{ t('system.uiKit.sample.successDescription') }}</AlertDescription>
+        </Alert>
+        <Alert variant="warning">
+          <TriangleAlert />
+          <AlertTitle>{{ t('system.uiKit.sample.warningTitle') }}</AlertTitle>
+          <AlertDescription>{{ t('system.uiKit.sample.warningDescription') }}</AlertDescription>
+        </Alert>
+        <Alert variant="info" class="lg:col-span-2">
+          <Info />
+          <AlertTitle>{{ t('system.uiKit.sample.infoTitle') }}</AlertTitle>
+          <AlertDescription>{{ t('system.uiKit.sample.infoDescription') }}</AlertDescription>
         </Alert>
         <KitSpecimen :label="`${t('system.uiKit.sample.progress')} · ${t('system.uiKit.states.loading')}`">
           <Progress :model-value="brightness[0]" :aria-label="t('system.uiKit.sample.progress')" />
@@ -599,7 +637,7 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
               <SheetDescription>{{ t('system.uiKit.sample.sheetDescription') }}</SheetDescription>
             </SheetHeader>
             <div class="px-4">
-              <FloorPlanArt surface-class="fill-background" />
+              <FloorPlanArt surface-class="fill-popover" />
             </div>
           </SheetContent>
         </Sheet>
@@ -731,15 +769,15 @@ function showToast(kind: 'default' | 'success' | 'info' | 'warning' | 'error'): 
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-for="(dot, index) in stateDots" :key="dot.key">
+              <TableRow v-for="(state, index) in deviceStates" :key="state">
                 <TableCell class="pl-4 font-medium">{{
                   t('system.uiKit.sample.item', { number: index + 1 })
                 }}</TableCell>
                 <TableCell>{{ t(roomOptions[index]!.labelKey) }}</TableCell>
                 <TableCell class="pr-4">
                   <span class="inline-flex items-center gap-2">
-                    <span :class="['size-2 rounded-full', dot.class]" aria-hidden="true" />
-                    {{ t(`system.uiKit.sample.table.${dot.key}`) }}
+                    <DeviceStateDot :state="state" />
+                    {{ t(`system.uiKit.sample.table.${state}`) }}
                   </span>
                 </TableCell>
               </TableRow>

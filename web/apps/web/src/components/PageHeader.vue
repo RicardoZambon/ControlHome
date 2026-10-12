@@ -21,11 +21,11 @@ const props = defineProps<{
     "
   >
     <div class="min-w-0 space-y-2">
-      <p v-if="eyebrow" class="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+      <p v-if="eyebrow" class="eyebrow">
         {{ eyebrow }}
       </p>
-      <h1 class="font-serif text-3xl font-medium tracking-tight text-balance md:text-4xl">{{ title }}</h1>
-      <p v-if="description" class="max-w-2xl text-pretty text-muted-foreground">{{ description }}</p>
+      <h1 class="font-serif text-3xl font-medium tracking-tight md:text-4xl">{{ title }}</h1>
+      <p v-if="description" class="max-w-2xl text-muted-foreground">{{ description }}</p>
       <slot name="meta" />
     </div>
     <div v-if="$slots.actions" class="flex shrink-0 flex-wrap items-center gap-2">

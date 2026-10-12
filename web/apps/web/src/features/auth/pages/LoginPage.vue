@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
   Button,
+  Card,
+  CardContent,
   Checkbox,
   FormControl,
   FormField,
@@ -11,7 +13,6 @@ import {
   useForm,
   z,
 } from '@controlhome/ui'
-import { ChevronRight, LoaderCircle } from '@lucide/vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -42,6 +43,8 @@ const { handleSubmit, isSubmitting, setFieldError } = useForm({
 })
 
 const formError = ref('')
+// 'Forgot your password?' shows its help inline, under the form.
+const forgotOpen = ref(false)
 
 const onSubmit = handleSubmit(async (values) => {
   formError.value = ''
@@ -56,66 +59,72 @@ const onSubmit = handleSubmit(async (values) => {
 </script>
 
 <template>
-  <div class="w-full max-w-sm">
-    <div class="mb-8 space-y-2">
+  <div class="w-full max-w-md">
+    <header class="mb-8 space-y-2">
       <h1 class="font-serif text-4xl font-medium tracking-tight">{{ t('auth.login.heading') }}</h1>
       <p class="text-muted-foreground">{{ t('auth.login.subtitle') }}</p>
-    </div>
+    </header>
 
-    <form novalidate class="grid gap-5" @submit="onSubmit">
-      <FormAlert v-if="formError" :message="formError" />
-      <FormField v-slot="{ componentField }" name="userName">
-        <FormItem>
-          <FormLabel>{{ t('auth.login.userName') }}</FormLabel>
-          <FormControl>
-            <Input
-              v-bind="componentField"
-              class="h-10"
-              autocomplete="username"
-              autocapitalize="off"
-              spellcheck="false"
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      </FormField>
-      <FormField v-slot="{ componentField }" name="password">
-        <FormItem>
-          <FormLabel>{{ t('auth.login.password') }}</FormLabel>
-          <FormControl>
-            <PasswordInput v-bind="componentField" class="[&_input]:h-10" autocomplete="current-password" />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      </FormField>
-      <FormField v-slot="{ value, handleChange }" name="rememberMe">
-        <FormItem class="flex flex-row items-center gap-3">
-          <FormControl>
-            <Checkbox
-              :model-value="value"
-              @update:model-value="(checked) => handleChange(checked === true)"
-            />
-          </FormControl>
-          <FormLabel class="font-normal">{{ t('auth.login.rememberMe') }}</FormLabel>
-        </FormItem>
-      </FormField>
-      <Button type="submit" size="lg" class="mt-1 w-full" :disabled="isSubmitting">
-        <LoaderCircle v-if="isSubmitting" class="animate-spin" />
-        {{ isSubmitting ? t('auth.login.submitting') : t('auth.login.submit') }}
-      </Button>
-    </form>
+    <Card class="gap-0 py-0 shadow-md">
+      <CardContent class="p-6 sm:p-8">
+        <form novalidate class="grid gap-5" @submit="onSubmit">
+          <FormAlert v-if="formError" :message="formError" />
+          <FormField v-slot="{ componentField }" name="userName">
+            <FormItem>
+              <FormLabel>{{ t('auth.login.userName') }}</FormLabel>
+              <FormControl>
+                <Input
+                  v-bind="componentField"
+                  autocomplete="username"
+                  autocapitalize="off"
+                  spellcheck="false"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+          <FormField v-slot="{ componentField }" name="password">
+            <FormItem>
+              <FormLabel>{{ t('auth.login.password') }}</FormLabel>
+              <FormControl>
+                <PasswordInput v-bind="componentField" autocomplete="current-password" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+          <FormField v-slot="{ value, handleChange }" name="rememberMe">
+            <FormItem class="flex flex-row items-center gap-3">
+              <FormControl>
+                <Checkbox
+                  :model-value="value"
+                  @update:model-value="(checked) => handleChange(checked === true)"
+                />
+              </FormControl>
+              <FormLabel class="font-normal">{{ t('auth.login.rememberMe') }}</FormLabel>
+            </FormItem>
+          </FormField>
+          <Button type="submit" class="mt-1 w-full" :loading="isSubmitting">
+            {{ isSubmitting ? t('auth.login.submitting') : t('auth.login.submit') }}
+          </Button>
+        </form>
 
-    <details class="group mt-8 rounded-lg border bg-card/60 px-4 py-3 text-sm">
-      <summary
-        class="flex cursor-pointer list-none items-center gap-2 rounded-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden"
-      >
-        <ChevronRight
-          class="size-4 text-muted-foreground transition-transform group-open:rotate-90"
-          aria-hidden="true"
-        />
-        {{ t('auth.login.forgot') }}
-      </summary>
-      <p class="mt-2 pl-6 text-pretty text-muted-foreground">{{ t('auth.login.forgotHelp') }}</p>
-    </details>
+        <div class="mt-4 grid justify-items-center gap-1 text-center">
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            class="text-sm font-normal"
+            aria-controls="login-forgot-help"
+            :aria-expanded="forgotOpen"
+            @click="forgotOpen = !forgotOpen"
+          >
+            {{ t('auth.login.forgot') }}
+          </Button>
+          <p v-show="forgotOpen" id="login-forgot-help" class="text-sm text-muted-foreground">
+            {{ t('auth.login.forgotHelp') }}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   </div>
 </template>
