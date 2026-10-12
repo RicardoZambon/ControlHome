@@ -28,7 +28,7 @@ Vue Router 5.4.0, vue-i18n 11.4.14, Vitest 5.0.3, Playwright 1.64.0, @hey-api/op
 - SQL Server 2025 is required (`UseCompatibilityLevel(170)`). Nothing before `builder.Build()` opens a DB/network connection.
 - Database names must match `^ControlHome_(Dev|Test|Compose)(_[A-Za-z0-9]+)?$` for any CREATE/DROP done by tooling or tests.
 - No secret values in any committed file (connection strings live in user-secrets / gitignored `.env`).
-- Ports: API 5080 (dev), Vite 5173 (dev), container 8099 (`ASPNETCORE_HTTP_PORTS`).
+- Ports: API 5080 (dev), Vite 5173 (dev), container 8711 (`ASPNETCORE_HTTP_PORTS`).
 
 ## Review Focus
 1. Setup race / replay: two concurrent `POST /api/setup/complete` or a second call after completion → exactly one admin; later
@@ -412,7 +412,7 @@ fc00::/7, fe80::/10`; `TrustedProxyNetworks` default empty).
   build`; stage `build` = `mcr.microsoft.com/dotnet/sdk:10.0.302-noble@sha256:…` `--platform=$BUILDPLATFORM` → `dotnet restore -a
   $TARGETARCH`, `dotnet publish src/ControlHome.Api -c Release -a $TARGETARCH --no-restore -o /out -p:OpenApiGenerateDocuments=false`;
   final = `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra@sha256:…`: copy `/out` → `/app`, web `dist` → `/app/wwwroot`;
-  `ENV ASPNETCORE_HTTP_PORTS=8099 ControlHome__DataPath=/data DOTNET_RUNNING_IN_CONTAINER=true`; `EXPOSE 8099`;
+  `ENV ASPNETCORE_HTTP_PORTS=8711 ControlHome__DataPath=/data DOTNET_RUNNING_IN_CONTAINER=true`; `EXPOSE 8711`;
   `HEALTHCHECK CMD ["dotnet", "/app/ControlHome.Api.dll", "--healthcheck"]`; `ENTRYPOINT ["dotnet", "/app/ControlHome.Api.dll"]`;
   labels `org.opencontainers.image.source=https://github.com/RicardoZambon/ControlHome`, licenses Apache-2.0.
 - `Program.cs`: if `args` contains `--healthcheck` → GET `http://127.0.0.1:{port}/health/live` (2 s timeout) → exit 0/1 before
@@ -435,14 +435,14 @@ fc00::/7, fe80::/10`; `TrustedProxyNetworks` default empty).
 
 ### Task 0.4-C: Compose files + CI e2e + release + CodeQL + Dependabot
 - `deploy/docker-compose.yml` (prod): service `controlhome` — `image: ghcr.io/ricardozambon/controlhome:${CONTROLHOME_VERSION:-edge}`,
-  `network_mode: host`, `user: "${CONTROLHOME_UID:-1000}:${CONTROLHOME_GID:-1000}"`, env `ASPNETCORE_HTTP_PORTS=${CONTROLHOME_PORT:-8099}`,
+  `network_mode: host`, `user: "${CONTROLHOME_UID:-1000}:${CONTROLHOME_GID:-1000}"`, env `ASPNETCORE_HTTP_PORTS=${CONTROLHOME_PORT:-8711}`,
   `ConnectionStrings__ControlHome=${CONTROLHOME_DB_CONNECTION:-}`, `Setup__Code=${CONTROLHOME_SETUP_CODE:-}`, `TZ`;
   `volumes: ./data:/data`; `read_only: true`; `tmpfs: [/tmp]`; `cap_drop: [ALL]`; `security_opt: [no-new-privileges:true]`;
   `restart: unless-stopped`. Profile `bundled-db`: service `mssql` — `mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04`,
   `MSSQL_PID=Express`, `ACCEPT_EULA=Y`, `MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD:?}`, `ports: ["127.0.0.1:1433:1433"]`,
   volume `mssql-data:/var/opt/mssql`, `mem_limit: 2g`, healthcheck via `/opt/mssql-tools18/bin/sqlcmd -C -Q "SELECT 1"`.
 - `deploy/docker-compose.dev.yml` (override): `controlhome` → `build: {context: .., dockerfile: deploy/Dockerfile}`,
-  `network_mode: bridge`, `ports: ["8080:8099"]`, `user: "1654:1654"`, connection string to `Server=mssql,1433;Database=ControlHome_Compose;…`
+  `network_mode: bridge`, `ports: ["8080:8711"]`, `user: "1654:1654"`, connection string to `Server=mssql,1433;Database=ControlHome_Compose;…`
   from `.env`; e2e override `deploy/docker-compose.e2e.yml` sets `ASPNETCORE_ENVIRONMENT=Testing`, `Setup__Code=E2E-SETUP-CODE-1`.
 - `deploy/.env.example` documenting every variable (placeholders only).
 - `ci.yml` job `e2e` (needs backend+frontend): create `.env` from CI-generated SA password, `docker compose … up -d --build
