@@ -9,8 +9,9 @@ namespace ControlHome.Infrastructure.Setup;
 public static class SetupInfrastructureExtensions
 {
     /// <summary>
-    /// The setup code (<see cref="ISetupCodeProvider"/>, singleton) and the exclusive transaction the setup completion runs
-    /// in. Registering touches nothing; the code is generated when first resolved.
+    /// The setup code (<see cref="ISetupCodeProvider"/>, singleton), the exclusive transaction the setup completion runs
+    /// in and the pre-database connection setup (<see cref="IDatabaseConnectionSetup"/>). Registering touches nothing; the
+    /// code is generated when first resolved.
     /// </summary>
     public static IServiceCollection AddSetupInfrastructure(this IServiceCollection services)
     {
@@ -18,6 +19,7 @@ public static class SetupInfrastructureExtensions
         services.TryAddSingleton<SetupCodeProvider>();
         services.TryAddSingleton<ISetupCodeProvider>(sp => sp.GetRequiredService<SetupCodeProvider>());
         services.TryAddScoped<IExclusiveTransaction, SqlExclusiveTransaction>();
+        services.TryAddSingleton<IDatabaseConnectionSetup, DatabaseConnectionSetup>();
         return services;
     }
 

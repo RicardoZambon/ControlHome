@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import type { Locator, Page } from '@playwright/test'
 import {
+  SETUP_CODE,
   completeSetup,
   createUser,
   expect,
@@ -34,6 +35,33 @@ async function screenshotWholePage(page: Page, path: string): Promise<void> {
   await page.setViewportSize({ width: viewport.width, height: Math.max(height, viewport.height) })
   await page.screenshot({ path })
   await page.setViewportSize(viewport)
+}
+
+/**
+ * Pre-database setup mode, simulated in the browser (the app under test has its database): `GET /api/setup/status`
+ * answers "no database connection", so the wizard asks for one right after the setup code. Undo with `page.unrouteAll()`.
+ */
+async function simulateNoDatabase(page: Page): Promise<void> {
+  await page.route('**/api/setup/status', (route) =>
+    route.fulfill({
+      json: {
+        setupCompleted: false,
+        databaseState: 'NotConfigured',
+        databaseConfigured: false,
+        databaseSource: 'none',
+        databaseError: null,
+        version: 'screenshots',
+      },
+    }),
+  )
+}
+
+/** Opens the wizard's database step (status simulated by `simulateNoDatabase`). */
+async function openDatabaseStep(page: Page, locale: Locale): Promise<void> {
+  await page.goto('/setup')
+  await page.getByLabel(tr(locale, 'setup.code.label')).fill(SETUP_CODE)
+  await page.getByRole('button', { name: tr(locale, 'common.continue') }).click()
+  await expect(page.getByRole('heading', { name: tr(locale, 'setup.steps.database.title') })).toBeVisible()
 }
 
 interface Route {
@@ -118,6 +146,78 @@ for (const width of WIDTHS) {
         await page.getByRole('button', { name: t('setup.review.finish') }).click()
         await expect(page.getByText(t('errors.setup.invalid_code'))).toBeVisible()
         await capture('setup-invalid-code')
+
+        // Database step (simulated pre-database mode): a refused login, the script when the login can't create the
+        // database, and the progress while the server prepares it.
+        await simulateNoDatabase(page)
+        await openDatabaseStep(page, 'en')
+        await page.getByLabel(t('setup.database.userName'), { exact: true }).fill('controlhome')
+        await page.getByLabel(t('setup.database.password'), { exact: true }).fill('not the password')
+        const connect = page.getByRole('button', { name: t('setup.database.connect') })
+        await page.route('**/api/setup/database', (route) =>
+          route.fulfill({
+            status: 400,
+            contentType: 'application/problem+json',
+            json: { status: 400, code: 'db.connection_failed', reason: 'login_failed' },
+          }),
+        )
+        await connect.click()
+        await expect(page.getByRole('alert')).toContainText(t('setup.database.reasons.login_failed'))
+        await capture('setup-database-error')
+
+        await page.unroute('**/api/setup/database')
+        await page.route('**/api/setup/database', (route) =>
+          route.fulfill({
+            status: 409,
+            contentType: 'application/problem+json',
+            json: {
+              status: 409,
+              code: 'db.create_denied',
+              script: [
+                '-- Run as a SQL Server administrator (for example sa, in SQL Server Management Studio or sqlcmd).',
+                '-- Then sign in to the setup wizard with the login ControlHome_App and the password you chose here.',
+                'USE [master];',
+                'GO',
+                'CREATE DATABASE [ControlHome];',
+                'GO',
+                'ALTER DATABASE [ControlHome] SET COMPATIBILITY_LEVEL = 170;',
+                'ALTER DATABASE [ControlHome] SET RECOVERY SIMPLE;',
+                'GO',
+                "CREATE LOGIN [ControlHome_App] WITH PASSWORD = N'<choose-a-strong-password>', CHECK_POLICY = ON;",
+                'GO',
+                'USE [ControlHome];',
+                'GO',
+                'CREATE USER [ControlHome_App] FOR LOGIN [ControlHome_App];',
+                'ALTER ROLE [db_owner] ADD MEMBER [ControlHome_App];',
+                'GO',
+                '',
+              ].join('\n'),
+            },
+          }),
+        )
+        await connect.click()
+        await expect(page.getByText(t('setup.database.createDenied.title'))).toBeVisible()
+        await capture('setup-database-script')
+
+        await page.unroute('**/api/setup/database')
+        await page.unroute('**/api/setup/status')
+        const migrating = {
+          setupCompleted: false,
+          databaseState: 'Migrating',
+          databaseConfigured: true,
+          databaseSource: 'file',
+          databaseError: null,
+          version: 'screenshots',
+        }
+        await page.route('**/api/setup/status', (route) => route.fulfill({ json: migrating }))
+        await page.route('**/api/setup/database', (route) =>
+          route.fulfill({ status: 202, json: { ...migrating, databaseState: 'Connecting' } }),
+        )
+        await page.getByLabel(t('setup.database.password'), { exact: true }).fill('the right one')
+        await page.getByRole('button', { name: t('setup.database.checkAgain') }).click()
+        await expect(page.getByText(t('setup.database.progress.preparing'), { exact: true })).toBeVisible()
+        await capture('setup-database-progress')
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
 
         await completeSetup(request, { locale: 'en' })
         await createUser(request, testData.member, 'Member')
@@ -252,6 +352,15 @@ for (const width of WIDTHS) {
 
           await resetApp(request)
           await capture(anonymousRoutes[0]!)
+
+          // The database step of a server without a database connection (simulated in the browser).
+          await simulateNoDatabase(page)
+          await openDatabaseStep(page, locale)
+          await expect(page.locator('html')).toHaveAttribute('lang', locale)
+          await page.evaluate(() => document.fonts.ready)
+          await gates.check(`/setup database step (${width} px, ${theme}, ${locale})`)
+          await screenshotWholePage(page, `${outputDir}setup-database-${width}-${theme}-${locale}.png`)
+          await page.unrouteAll({ behavior: 'ignoreErrors' })
 
           // Set up through Playwright's own request context, so the browser is still signed out for /login.
           await completeSetup(request, { locale })

@@ -13,6 +13,11 @@
       "title": "Confirme que o servidor é seu",
       "description": "Digite o código de uso único que o ControlHome mostrou ao iniciar. Só quem tem acesso ao servidor consegue vê-lo."
     },
+    "database": {
+      "label": "Banco de dados",
+      "title": "Conecte o banco de dados",
+      "description": "O ControlHome guarda sua casa no SQL Server 2025. Informe qual servidor usar; a conexão é testada antes de qualquer coisa ser salva."
+    },
     "admin": {
       "label": "Sua conta",
       "title": "Crie o administrador",
@@ -88,24 +93,60 @@
     "finishing": "Preparando sua casa…"
   },
   "database": {
-    "title": "Conecte um banco de dados",
-    "description": "O ControlHome guarda sua casa no SQL Server 2025, e ainda não há uma conexão de banco configurada.",
-    "how": "Defina a variável de ambiente CONTROLHOME_DB_CONNECTION com a string de conexão e reinicie o contêiner:",
-    "example": "CONTROLHOME_DB_CONNECTION=\"Server=<servidor>,1433;Database=ControlHome;User ID=<login>;Password=<senha>;TrustServerCertificate=True\"",
-    "createHint": "O ControlHome cria o banco na primeira inicialização quando o login tem permissão.",
-    "later": "Conectar um banco de dados por esta página chega numa versão futura.",
+    "host": "Servidor",
+    "hostHelp": "Nome ou endereço IP, como este servidor do ControlHome o alcança. No Docker, prefira o endereço IP: nomes .local costumam não funcionar lá.",
+    "hostInvalid": "Informe um nome de servidor ou um endereço IP.",
+    "port": "Porta",
+    "portInvalid": "Use uma porta de 1 a 65535.",
+    "name": "Banco de dados",
+    "nameHelp": "O ControlHome o cria se o login tiver permissão.",
+    "nameInvalid": "Comece com uma letra e use só letras, números e _.",
+    "userName": "Login",
+    "password": "Senha",
+    "trust": "Confiar no certificado do servidor",
+    "trustHelp": "A conexão é sempre criptografada. A maioria dos servidores domésticos usa o certificado autoassinado do próprio SQL Server; deixe ligado, a menos que o seu tenha um certificado em que sua rede confia.",
+    "connect": "Conectar",
+    "connectFailed": "Não foi possível conectar ao banco",
+    "testing": "Testando a conexão…",
     "checkAgain": "Verificar de novo",
     "checking": "Verificando…",
-    "copy": "Copiar",
-    "copied": "Copiado para a área de transferência.",
-    "stillMissing": "Ainda sem banco de dados. Reinicie o ControlHome depois de definir a variável."
+    "reasons": {
+      "login_failed": "O SQL Server recusou o login. Confira o login e a senha, e se a autenticação do SQL Server está ativada.",
+      "certificate": "O certificado do servidor não é confiável. Ligue “Confiar no certificado do servidor” ou dê ao SQL Server um certificado em que sua rede confia.",
+      "unreachable": "Nada respondeu nesse endereço. Confira o servidor e a porta, e se o SQL Server aceita conexões TCP deste servidor.",
+      "no_database_access": "O banco de dados existe, mas este login não consegue abri-lo. Use um login com acesso ou dê acesso a este.",
+      "other": "O SQL Server recusou a conexão. O log do ControlHome tem os detalhes."
+    },
+    "createDenied": {
+      "title": "Crie o banco de dados primeiro",
+      "description": "Este login não tem permissão para criar bancos de dados. Peça a um administrador que execute o script abaixo, por exemplo como sa no SQL Server Management Studio ou no sqlcmd, depois de trocar a senha de exemplo. Ele cria o banco e um login, ControlHome_App, que só pode usar este banco.",
+      "next": "Depois informe ControlHome_App e a senha dele acima e verifique de novo.",
+      "script": "Script para criar o banco de dados",
+      "copy": "Copiar script",
+      "copied": "Script copiado."
+    },
+    "progress": {
+      "saved": "Conexão testada e salva",
+      "connecting": "Conectando ao SQL Server",
+      "preparing": "Criando e atualizando o banco de dados",
+      "ready": "Pronto",
+      "hint": "Na primeira vez leva até um minuto. Esta página continua sozinha.",
+      "failedTitle": "Não foi possível preparar o banco de dados",
+      "failedDescription": "A conexão está salva e o ControlHome tenta de novo a cada minuto. Corrija o problema no SQL Server e esta página continua sozinha."
+    },
+    "connected": {
+      "title": "Banco de dados conectado",
+      "description": "O ControlHome está conectado ao banco de dados e pronto para a próxima etapa."
+    },
+    "ready": "O banco de dados está pronto.",
+    "alreadySetUp": "Este banco de dados já tem uma casa configurada. Entre com sua conta."
   },
   "waiting": {
     "title": "Preparando o banco de dados",
     "description": "O ControlHome está conectando ao banco de dados e preparando-o. Esta página continua sozinha.",
     "state": "Banco de dados: {state}",
     "failedTitle": "Não foi possível preparar o banco de dados",
-    "failedDescription": "Confira a string de conexão e o log do servidor e tente de novo."
+    "failedDescription": "O ControlHome tenta de novo a cada minuto. Confira o servidor de banco de dados e o log do ControlHome; esta página continua sozinha."
   },
   "done": "Bem-vindo à sua casa, {name}!"
 }

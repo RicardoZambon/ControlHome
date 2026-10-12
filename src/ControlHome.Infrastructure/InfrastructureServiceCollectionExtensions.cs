@@ -3,6 +3,7 @@ using ControlHome.Application.Auditing;
 using ControlHome.Infrastructure.Auditing;
 using ControlHome.Infrastructure.Configuration;
 using ControlHome.Infrastructure.Persistence;
+using ControlHome.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -13,7 +14,8 @@ namespace ControlHome.Infrastructure;
 public static class InfrastructureServiceCollectionExtensions
 {
     /// <summary>
-    /// Options, data directory, DbContext (+ <see cref="IControlHomeDb"/>), database readiness and the audit log.
+    /// Options, data directory, the database connection (configuration, then the setup wizard's encrypted
+    /// <c>config/database.json</c>), DbContext (+ <see cref="IControlHomeDb"/>), database readiness and the audit log.
     /// Everything is resolved lazily: registering opens no connection and reads no file.
     /// The <see cref="DatabaseInitializer"/> is added separately by <see cref="AddDatabaseInitializer"/>.
     /// </summary>
@@ -24,7 +26,11 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<DataDirectory>();
-        services.TryAddSingleton<IDatabaseConnectionProvider, ConfigurationDatabaseConnectionProvider>();
+        services.TryAddSingleton<DataProtectionCertificateStore>();
+        services.TryAddSingleton<BootstrapDataProtection>();
+        services.TryAddSingleton<DatabaseConfigFile>();
+        services.TryAddSingleton<IDatabaseConnectionProvider, DatabaseConnectionProvider>();
+        services.TryAddSingleton<ISqlServerProbe, SqlServerProbe>();
         services.TryAddSingleton<DatabaseReadiness>();
         services.TryAddSingleton<IDatabaseStatus, DatabaseStatus>();
 

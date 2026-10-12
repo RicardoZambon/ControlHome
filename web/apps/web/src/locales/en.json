@@ -119,6 +119,7 @@
     },
     "db": {
       "unavailable": "The database isn't available right now. ControlHome keeps retrying on its own.",
+      "already_configured": "A database is already connected. Reload the page to continue.",
       "connection_failed": "Couldn't connect to the database. Check the server address and the credentials.",
       "create_denied": "The database login isn't allowed to create the database. Create it with the script instead.",
       "migration_failed": "Updating the database failed. The server log has the details.",

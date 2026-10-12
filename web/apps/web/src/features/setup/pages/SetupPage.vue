@@ -15,12 +15,15 @@ import HomeStep from '../components/HomeStep.vue'
 import ReviewStep from '../components/ReviewStep.vue'
 import SetupStepper from '../components/SetupStepper.vue'
 import {
-  SETUP_STEPS,
   createDraft,
   errorsByStep,
   firstStepWithErrors,
+  nextStep,
+  previousStep,
+  setupSteps,
   toRequest,
   type AdminDraft,
+  type DatabaseDraft,
   type HomeDraft,
   type SetupStepId,
 } from '../setup'
@@ -30,27 +33,34 @@ const router = useRouter()
 const session = useSessionStore()
 const problem = useProblem()
 
-// --- Database gate: no connection configured, or configured but not ready yet -------------------------------------
+// --- Database: none configured → a wizard step; configured (environment) but not ready yet → wait for it ----------
 const status = computed(() => session.status)
-const phase = computed<'database' | 'waiting' | 'wizard'>(() => {
-  if (!status.value) return 'wizard'
-  if (!status.value.databaseConfigured) return 'database'
+/** Once the server reported no database connection, the wizard keeps its database step (shown as done afterwards). */
+const includeDatabase = ref(false)
+watch(
+  () => status.value?.databaseConfigured,
+  (configured) => {
+    if (configured === false) includeDatabase.value = true
+  },
+  { immediate: true },
+)
+const steps = computed(() => setupSteps(includeDatabase.value))
+const phase = computed<'waiting' | 'wizard'>(() => {
+  if (includeDatabase.value || !status.value) return 'wizard'
   return status.value.databaseState === 'Ready' ? 'wizard' : 'waiting'
 })
 const checking = ref(false)
-const rechecked = ref(false)
 
 async function recheck(): Promise<void> {
   checking.value = true
   try {
     await session.loadStatus()
-    rechecked.value = true
   } finally {
     checking.value = false
   }
 }
 
-// While the database is connecting or migrating, follow its progress.
+// While a configured database is connecting or migrating, follow its progress.
 let poll: ReturnType<typeof setInterval> | undefined
 watch(
   () => phase.value === 'waiting' && status.value?.databaseState !== 'Failed',
@@ -65,7 +75,7 @@ onBeforeUnmount(() => {
 })
 
 // --- Wizard ----------------------------------------------------------------------------------------------------------
-const draft = reactive(createDraft(currentLocale()))
+const draft = reactive(createDraft(currentLocale(), window.location.hostname))
 const step = ref<SetupStepId>('code')
 const reached = ref(0)
 const stepErrors = ref<Partial<Record<SetupStepId, Record<string, string>>>>({})
@@ -73,9 +83,10 @@ const submitting = ref(false)
 const finishError = ref('')
 const heading = ref<HTMLElement | null>(null)
 
-async function goTo(next: SetupStepId): Promise<void> {
+async function goTo(next: SetupStepId | undefined): Promise<void> {
+  if (!next) return
   step.value = next
-  reached.value = Math.max(reached.value, SETUP_STEPS.indexOf(next))
+  reached.value = Math.max(reached.value, steps.value.indexOf(next))
   // Move focus to the new step's title, so keyboard and screen-reader users start at the top of it.
   await nextTick()
   heading.value?.focus()
@@ -88,19 +99,37 @@ function clearErrors(stepId: SetupStepId): void {
 function onCode(code: string): void {
   draft.setupCode = code
   clearErrors('code')
-  void goTo('admin')
+  void goTo(nextStep(steps.value, 'code'))
+}
+
+function onDatabase(database: DatabaseDraft, forward: boolean): void {
+  draft.database = database
+  void goTo(forward ? nextStep(steps.value, 'database') : previousStep(steps.value, 'database'))
+}
+
+/** The server refused the setup code while testing the database: back to the first step, with the message. */
+function onDatabaseInvalidCode(database: DatabaseDraft): void {
+  draft.database = database
+  stepErrors.value = { ...stepErrors.value, code: { setupCode: t('errors.setup.invalid_code') } }
+  void goTo('code')
+}
+
+/** The chosen database already holds a home that was set up (a reinstall): sign in instead. */
+async function onAlreadySetUp(): Promise<void> {
+  toast.info(t('setup.database.alreadySetUp'))
+  await router.replace({ name: 'login' })
 }
 
 function onAdmin(admin: AdminDraft, forward: boolean): void {
   draft.admin = admin
   if (forward) clearErrors('admin')
-  void goTo(forward ? 'home' : 'code')
+  void goTo(forward ? nextStep(steps.value, 'admin') : previousStep(steps.value, 'admin'))
 }
 
 function onHome(home: HomeDraft, forward: boolean): void {
   draft.home = home
   if (forward) clearErrors('home')
-  void goTo(forward ? 'review' : 'admin')
+  void goTo(forward ? nextStep(steps.value, 'home') : previousStep(steps.value, 'home'))
 }
 
 async function finish(): Promise<void> {
@@ -131,7 +160,7 @@ async function finish(): Promise<void> {
         next[stepId] = Object.fromEntries(fields.map((field) => [field, t('validation.invalid')]))
       }
       stepErrors.value = next
-      const first = firstStepWithErrors(byStep)
+      const first = firstStepWithErrors(byStep, steps.value)
       if (first) {
         toast.error(problem.message(error))
         await goTo(first)
@@ -157,21 +186,15 @@ async function finish(): Promise<void> {
       <p class="max-w-xl text-pretty text-muted-foreground">{{ t('setup.intro') }}</p>
     </header>
 
-    <DatabaseStep
-      v-if="phase === 'database'"
-      :checking="checking"
-      :still-missing="rechecked"
-      @recheck="recheck"
-    />
     <DatabaseWaiting
-      v-else-if="phase === 'waiting'"
+      v-if="phase === 'waiting'"
       :state="status?.databaseState ?? ''"
       :checking="checking"
       @recheck="recheck"
     />
 
     <template v-else>
-      <SetupStepper class="mb-6" :current="step" :reached="reached" @go="goTo" />
+      <SetupStepper class="mb-6" :steps="steps" :current="step" :reached="reached" @go="goTo" />
       <Card class="gap-0 py-0 shadow-md">
         <CardContent class="p-6 sm:p-8">
           <div class="mb-7 space-y-1.5">
@@ -194,6 +217,15 @@ async function finish(): Promise<void> {
               :errors="stepErrors.code"
               @next="onCode"
             />
+            <DatabaseStep
+              v-else-if="step === 'database'"
+              :model-value="draft.database"
+              :setup-code="draft.setupCode"
+              @next="(database) => onDatabase(database, true)"
+              @back="(database) => onDatabase(database, false)"
+              @invalid-code="onDatabaseInvalidCode"
+              @already-set-up="onAlreadySetUp"
+            />
             <AdminStep
               v-else-if="step === 'admin'"
               :model-value="draft.admin"
@@ -214,7 +246,7 @@ async function finish(): Promise<void> {
               :busy="submitting"
               :error="finishError"
               @edit="goTo"
-              @back="goTo('home')"
+              @back="goTo(previousStep(steps, 'review'))"
               @finish="finish"
             />
           </div>

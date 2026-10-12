@@ -5,7 +5,7 @@ namespace ControlHome.Infrastructure.Persistence;
 /// <summary>The database's startup state machine.</summary>
 public enum DatabaseState
 {
-    /// <summary>No connection string configured.</summary>
+    /// <summary>No connection string configured (waiting for the setup wizard to save one).</summary>
     NotConfigured,
 
     /// <summary>Waiting for the server (retrying with back-off).</summary>
@@ -17,7 +17,10 @@ public enum DatabaseState
     /// <summary>Usable.</summary>
     Ready,
 
-    /// <summary>Gave up; <see cref="DatabaseReadiness.LastError"/> has the error code.</summary>
+    /// <summary>
+    /// The last attempt failed; <see cref="DatabaseReadiness.LastError"/> has the error code. Retried every
+    /// <see cref="DatabaseOptions.RetryInterval"/>.
+    /// </summary>
     Failed,
 }
 
@@ -89,6 +92,13 @@ public sealed class DatabaseReadiness
 public sealed class DatabaseStatus(DatabaseReadiness readiness, IDatabaseConnectionProvider connections) : IDatabaseStatus
 {
     public bool IsConfigured => connections.GetConnectionString() is not null;
+
+    public string Source => connections.Source switch
+    {
+        DatabaseConnectionSource.Environment => "environment",
+        DatabaseConnectionSource.File => "file",
+        _ => "none",
+    };
 
     public bool IsReady => readiness.IsReady;
 

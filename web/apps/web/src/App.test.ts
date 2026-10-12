@@ -15,7 +15,14 @@ vi.mock('@controlhome/api-client', async (importOriginal) => ({
 }))
 
 const status = (setupCompleted: boolean) => ({
-  data: { setupCompleted, databaseState: 'Ready', databaseConfigured: true, version: '0.3.0+abc' },
+  data: {
+    setupCompleted,
+    databaseState: 'Ready',
+    databaseConfigured: true,
+    databaseSource: 'environment',
+    databaseError: null,
+    version: '0.3.0+abc',
+  },
   error: undefined,
 })
 
@@ -50,12 +57,14 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('explains the database variable when no database is configured', async () => {
+  it('adds the database step after the setup code when no database is configured', async () => {
     api.getSetupStatus.mockResolvedValue({
       data: {
         setupCompleted: false,
         databaseState: 'NotConfigured',
         databaseConfigured: false,
+        databaseSource: 'none',
+        databaseError: null,
         version: '0.3.0',
       },
       error: undefined,
@@ -63,8 +72,11 @@ describe('App', () => {
     const { wrapper } = await mountWithApp(App, { path: '/setup', locale: 'pt-BR' })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('CONTROLHOME_DB_CONNECTION')
-    expect(wrapper.text()).toContain('Conecte um banco de dados')
+    const steps = wrapper.findAll('nav ol li').map((step) => step.text())
+    expect(steps).toHaveLength(5)
+    expect(steps[0]).toContain('Código')
+    expect(steps[1]).toContain('Banco de dados')
+    expect(wrapper.text()).toContain('Etapa 1 de 5')
     wrapper.unmount()
   })
 

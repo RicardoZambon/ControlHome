@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   login: vi.fn(),
   logout: vi.fn(),
   completeSetup: vi.fn(),
+  configureDatabase: vi.fn(),
   updateProfile: vi.fn(),
 }))
 
@@ -127,6 +128,8 @@ describe('session store', () => {
       setupCompleted: true,
       databaseState: 'Ready',
       databaseConfigured: true,
+      databaseSource: 'environment',
+      databaseError: null,
       version: '0.3.0',
     }
     api.getSetupStatus.mockResolvedValueOnce({ data: status, error: undefined })
@@ -137,6 +140,61 @@ describe('session store', () => {
     await session.loadStatus()
 
     expect(session.status).toEqual(status)
+  })
+
+  it('saves the database connection and takes the status the server answers with', async () => {
+    const accepted = {
+      setupCompleted: false,
+      databaseState: 'Connecting',
+      databaseConfigured: true,
+      databaseSource: 'file',
+      databaseError: null,
+      version: '0.4.0',
+    }
+    api.configureDatabase.mockResolvedValue({ data: accepted, error: undefined })
+    const session = useSessionStore()
+    const request = {
+      setupCode: 'ABCD',
+      host: '192.168.1.20',
+      port: 1433,
+      database: 'ControlHome',
+      userName: 'sa',
+      password: 'secret',
+      trustServerCertificate: true,
+    }
+
+    await expect(session.configureDatabase(request)).resolves.toEqual(accepted)
+
+    expect(api.configureDatabase).toHaveBeenCalledWith({ body: request })
+    expect(session.status).toEqual(accepted)
+  })
+
+  it('throws the problem when the database connection is refused', async () => {
+    api.configureDatabase.mockResolvedValue({
+      data: undefined,
+      error: { status: 409, code: 'db.create_denied', script: 'CREATE DATABASE [ControlHome];' },
+      response: new Response(null, { status: 409 }),
+    })
+    const session = useSessionStore()
+
+    const error = await session
+      .configureDatabase({
+        setupCode: 'ABCD',
+        host: 'db',
+        port: 1433,
+        database: 'ControlHome',
+        userName: 'app',
+        password: 'secret',
+        trustServerCertificate: true,
+      })
+      .catch((reason: unknown) => reason)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).problem).toMatchObject({
+      code: 'db.create_denied',
+      script: 'CREATE DATABASE [ControlHome];',
+    })
+    expect(session.status).toBeNull()
   })
 
   it('saves top-bar preferences to the profile', async () => {
@@ -166,7 +224,14 @@ describe('session store', () => {
     useTheme().setMode('dark')
     const session = useSessionStore()
     session.$patch({
-      status: { setupCompleted: false, databaseState: 'Ready', databaseConfigured: true, version: '0.3.0' },
+      status: {
+        setupCompleted: false,
+        databaseState: 'Ready',
+        databaseConfigured: true,
+        databaseSource: 'environment',
+        databaseError: null,
+        version: '0.3.0',
+      },
     })
 
     const me = await session.completeSetup({

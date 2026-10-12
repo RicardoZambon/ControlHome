@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CompleteSetupData, CompleteSetupErrors, CompleteSetupResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GetHomeData, GetHomeErrors, GetHomeResponses, GetMeData, GetMeErrors, GetMeResponses, GetSetupStatusData, GetSetupStatusResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, ResetPasswordWithTokenData, ResetPasswordWithTokenErrors, ResetPasswordWithTokenResponses, ResetUserPasswordData, ResetUserPasswordErrors, ResetUserPasswordResponses, UpdateHomeData, UpdateHomeErrors, UpdateHomeResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses } from './types.gen';
+import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CompleteSetupData, CompleteSetupErrors, CompleteSetupResponses, ConfigureDatabaseData, ConfigureDatabaseErrors, ConfigureDatabaseResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GetHomeData, GetHomeErrors, GetHomeResponses, GetMeData, GetMeErrors, GetMeResponses, GetSetupStatusData, GetSetupStatusResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, ResetPasswordWithTokenData, ResetPasswordWithTokenErrors, ResetPasswordWithTokenResponses, ResetUserPasswordData, ResetUserPasswordErrors, ResetUserPasswordResponses, UpdateHomeData, UpdateHomeErrors, UpdateHomeResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -22,6 +22,20 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
  * First-run state; answers even while the database is not ready.
  */
 export const getSetupStatus = <ThrowOnError extends boolean = false>(options?: Options<GetSetupStatusData, ThrowOnError>): RequestResult<GetSetupStatusResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetSetupStatusResponses, unknown, ThrowOnError>({ url: '/api/setup/status', ...options });
+
+/**
+ * Pre-database setup: tests the SQL Server connection, saves it (encrypted) and starts the database initialization.
+ *
+ * Only while no database connection is configured (else 409 db.already_configured); answers even while the database is not ready. 400: validation.failed, setup.invalid_code, db.connection_failed (extension reason), sql.version_unsupported or sql.compatibility_unsupported; 409: db.create_denied (extension script: T-SQL for an administrator) or db.already_configured. 202: saved; poll GET /api/setup/status until databaseState is Ready.
+ */
+export const configureDatabase = <ThrowOnError extends boolean = false>(options: Options<ConfigureDatabaseData, ThrowOnError>): RequestResult<ConfigureDatabaseResponses, ConfigureDatabaseErrors, ThrowOnError> => (options.client ?? client).post<ConfigureDatabaseResponses, ConfigureDatabaseErrors, ThrowOnError>({
+    url: '/api/setup/database',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 /**
  * Creates the first Admin and the home, then signs the admin in.

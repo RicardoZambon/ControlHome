@@ -13,6 +13,11 @@
       "title": "Confirm it's your server",
       "description": "Enter the one-time code ControlHome printed when it started. Only someone with access to the server can see it."
     },
+    "database": {
+      "label": "Database",
+      "title": "Connect the database",
+      "description": "ControlHome keeps your home in SQL Server 2025. Tell it which server to use; the connection is tested before anything is saved."
+    },
     "admin": {
       "label": "Your account",
       "title": "Create the administrator",
@@ -88,24 +93,60 @@
     "finishing": "Setting up your home…"
   },
   "database": {
-    "title": "Connect a database",
-    "description": "ControlHome keeps your home in SQL Server 2025, and no database connection is configured yet.",
-    "how": "Set the environment variable CONTROLHOME_DB_CONNECTION to the connection string and restart the container:",
-    "example": "CONTROLHOME_DB_CONNECTION=\"Server=<host>,1433;Database=ControlHome;User ID=<login>;Password=<password>;TrustServerCertificate=True\"",
-    "createHint": "ControlHome creates the database on first start when the login is allowed to.",
-    "later": "Connecting a database from this page arrives in a later version.",
+    "host": "Server",
+    "hostHelp": "Host name or IP address, as this ControlHome server reaches it. In Docker, prefer the IP address: .local names usually don't work there.",
+    "hostInvalid": "Enter a host name or an IP address.",
+    "port": "Port",
+    "portInvalid": "Use a port from 1 to 65535.",
+    "name": "Database",
+    "nameHelp": "ControlHome creates it if the login is allowed to.",
+    "nameInvalid": "Start with a letter and use only letters, digits and _.",
+    "userName": "Login",
+    "password": "Password",
+    "trust": "Trust the server's certificate",
+    "trustHelp": "The connection is always encrypted. Most home servers use SQL Server's own self-signed certificate, so leave this on unless yours has one your network trusts.",
+    "connect": "Connect",
+    "connectFailed": "Couldn't connect to the database",
+    "testing": "Testing the connection…",
     "checkAgain": "Check again",
     "checking": "Checking…",
-    "copy": "Copy",
-    "copied": "Copied to the clipboard.",
-    "stillMissing": "Still no database. Restart ControlHome after setting the variable."
+    "reasons": {
+      "login_failed": "SQL Server refused the login. Check the login and the password, and that SQL Server authentication is turned on.",
+      "certificate": "The server's certificate isn't trusted. Turn on “Trust the server's certificate”, or give SQL Server a certificate your network trusts.",
+      "unreachable": "Nothing answered at that address. Check the server and the port, and that SQL Server accepts TCP connections from this server.",
+      "no_database_access": "The database exists, but this login can't open it. Use a login that can, or give this one access.",
+      "other": "SQL Server refused the connection. The ControlHome log has the details."
+    },
+    "createDenied": {
+      "title": "Create the database first",
+      "description": "This login isn't allowed to create databases. Ask an administrator to run the script below, for example as sa in SQL Server Management Studio or sqlcmd, after replacing the password placeholder. It creates the database and a login, ControlHome_App, that can use only this database.",
+      "next": "Then enter ControlHome_App and its password above, and check again.",
+      "script": "Script to create the database",
+      "copy": "Copy script",
+      "copied": "Script copied."
+    },
+    "progress": {
+      "saved": "Connection tested and saved",
+      "connecting": "Connecting to SQL Server",
+      "preparing": "Creating and updating the database",
+      "ready": "Ready",
+      "hint": "The first time takes up to a minute. This page continues on its own.",
+      "failedTitle": "The database couldn't be prepared",
+      "failedDescription": "The connection is saved and ControlHome tries again every minute. Fix the problem on the SQL Server and this page continues on its own."
+    },
+    "connected": {
+      "title": "Database connected",
+      "description": "ControlHome is connected to its database and ready for the next step."
+    },
+    "ready": "The database is ready.",
+    "alreadySetUp": "This database already has a home that is set up. Sign in instead."
   },
   "waiting": {
     "title": "Getting the database ready",
     "description": "ControlHome is connecting to the database and preparing it. This page continues on its own.",
     "state": "Database: {state}",
     "failedTitle": "The database couldn't be prepared",
-    "failedDescription": "Check the connection string and the server log, then try again."
+    "failedDescription": "ControlHome tries again every minute. Check the database server and the ControlHome log; this page continues on its own."
   },
   "done": "Welcome home, {name}!"
 }

@@ -9,6 +9,10 @@ export interface Problem {
   errors?: Record<string, string[]>
   /** `auth.locked_out` and `request.rate_limited`. */
   retryAfterSeconds?: number
+  /** `db.connection_failed`: what went wrong (`login_failed`, `certificate`, `unreachable`, `no_database_access`, `other`). */
+  reason?: string
+  /** `db.create_denied`: the T-SQL an administrator can run to create the database and its login. */
+  script?: string
 }
 
 /** A failed API call: the ProblemDetails body (when there is one), the HTTP status and the original error. */

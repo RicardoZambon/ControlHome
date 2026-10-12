@@ -18,6 +18,8 @@ public sealed class SetupStatusTests(ControlHomeApiFactory factory) : IClassFixt
         status.GetProperty("setupCompleted").GetBoolean().ShouldBeFalse();
         status.GetProperty("databaseState").GetString().ShouldBe("Ready");
         status.GetProperty("databaseConfigured").GetBoolean().ShouldBeTrue();
+        status.GetProperty("databaseSource").GetString().ShouldBe("environment");
+        status.GetProperty("databaseError").ValueKind.ShouldBe(System.Text.Json.JsonValueKind.Null);
         status.GetProperty("version").GetString().ShouldBe(AppVersion.Informational);
     }
 }

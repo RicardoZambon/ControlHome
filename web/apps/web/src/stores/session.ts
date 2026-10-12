@@ -1,11 +1,13 @@
 import {
   completeSetup as apiCompleteSetup,
+  configureDatabase as apiConfigureDatabase,
   getMe,
   getSetupStatus,
   login as apiLogin,
   logout as apiLogout,
   updateProfile as apiUpdateProfile,
   type CompleteSetupRequest,
+  type DatabaseSetupRequest,
   type LoginRequest,
   type MeDto,
   type SetupStatusDto,
@@ -85,6 +87,17 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   /**
+   * Pre-database setup: tests and saves the SQL Server connection (`POST /api/setup/database`). The server then prepares
+   * the database in the background; the returned status (database configured, not ready yet) replaces the current one.
+   * Throws `ApiError`.
+   */
+  async function configureDatabase(request: DatabaseSetupRequest): Promise<SetupStatusDto> {
+    const data = unwrap(await apiConfigureDatabase({ body: request }))
+    status.value = data
+    return data
+  }
+
+  /**
    * Completes the first-run setup (the admin is signed in). The new account starts with the home's language and the
    * `system` theme; a theme chosen in this browser during setup is saved to the profile so it survives the next login.
    */
@@ -137,6 +150,7 @@ export const useSessionStore = defineStore('session', () => {
     login,
     logout,
     clear,
+    configureDatabase,
     completeSetup,
     updateProfile,
     savePreferences,

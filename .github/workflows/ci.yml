@@ -227,6 +227,47 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      # Second phase: pre-database setup mode. A fresh stack (volumes removed) whose app has NO connection string; the
+      # setup wizard's database step connects it. The app (not the browser) reaches SQL Server, so the wizard gets the
+      # address the app container resolves: the compose service mssql.
+      - name: "Pre-database setup: restart without a connection string"
+        run: |
+          docker compose $COMPOSE_ARGS down --volumes --remove-orphans
+          sed -i '/^CONTROLHOME_DB_CONNECTION=/d' deploy/.env
+          docker compose $COMPOSE_ARGS up -d --wait --wait-timeout 300 mssql controlhome
+
+      - name: "Pre-database setup: wait for /health/live and check that no database is configured"
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS -o /dev/null "$E2E_BASE_URL/health/live"; then break; fi
+            sleep 2
+          done
+          status="$(curl -fsS "$E2E_BASE_URL/api/setup/status")"
+          echo "$status"
+          echo "$status" | grep -q '"databaseConfigured":false'
+
+      - name: "Pre-database setup: E2E spec"
+        id: e2e-predb
+        working-directory: web
+        env:
+          E2E_DB_HOST: mssql
+          E2E_DB_PORT: "1433"
+          E2E_DB_USER: sa
+          E2E_DB_NAME: ControlHome_PreDb
+        run: |
+          E2E_DB_PASSWORD="$(grep '^MSSQL_SA_PASSWORD=' ../deploy/.env | cut -d= -f2-)"
+          export E2E_DB_PASSWORD
+          npm run e2e -- db-setup.spec.ts --project desktop
+
+      - name: "Pre-database setup: upload the Playwright report"
+        if: ${{ !cancelled() && (steps.e2e-predb.outcome == 'success' || steps.e2e-predb.outcome == 'failure') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report-predb
+          path: web/tests/e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Compose logs
         if: failure()
         run: docker compose $COMPOSE_ARGS logs --no-color --timestamps

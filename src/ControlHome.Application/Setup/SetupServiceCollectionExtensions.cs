@@ -8,6 +8,7 @@ public static class SetupServiceCollectionExtensions
     public static IServiceCollection AddSetup(this IServiceCollection services)
     {
         services.AddScoped<SetupService>();
+        services.AddScoped<DatabaseSetupService>();
         return services;
     }
 }

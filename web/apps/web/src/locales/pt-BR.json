@@ -119,6 +119,7 @@
     },
     "db": {
       "unavailable": "O banco de dados não está disponível agora. O ControlHome continua tentando sozinho.",
+      "already_configured": "Já há um banco de dados conectado. Recarregue a página para continuar.",
       "connection_failed": "Não foi possível conectar ao banco de dados. Verifique o endereço do servidor e as credenciais.",
       "create_denied": "O login do banco não tem permissão para criar o banco de dados. Crie-o com o script.",
       "migration_failed": "A atualização do banco de dados falhou. O log do servidor tem os detalhes.",

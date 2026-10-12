@@ -20,6 +20,7 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
     public static TheoryData<string, string, string, string, string?> Routes => new()
     {
         { "GET", "/api/setup/status", "getSetupStatus", Anonymous, null },
+        { "POST", "/api/setup/database", "configureDatabase", Anonymous, RateLimitPolicies.Setup },
         { "POST", "/api/setup/complete", "completeSetup", Anonymous, RateLimitPolicies.Setup },
         { "POST", "/api/auth/login", "login", Anonymous, RateLimitPolicies.Login },
         { "POST", "/api/auth/logout", "logout", Anonymous, null },

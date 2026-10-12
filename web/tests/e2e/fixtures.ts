@@ -257,8 +257,9 @@ export const test = base.extend<{ gates: Gates }>({
 
       await use({ check: (label) => checkPage(page, label) })
 
-      // The last page the test saw, unless the test already failed (its own error is the interesting one).
-      if (testInfo.status === testInfo.expectedStatus && !page.isClosed())
+      // The last page the test saw, unless the test already failed (its own error is the interesting one) or skipped
+      // itself before opening any page.
+      if (testInfo.status === testInfo.expectedStatus && testInfo.status !== 'skipped' && !page.isClosed())
         await checkPage(page, `${page.url()} (end of test)`)
       expect(problems, 'console errors, uncaught exceptions or missing i18n keys').toEqual([])
     },

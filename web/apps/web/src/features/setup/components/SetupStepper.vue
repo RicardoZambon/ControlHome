@@ -3,53 +3,58 @@ import { cn } from '@controlhome/ui'
 import { Check } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SETUP_STEPS, type SetupStepId } from '../setup'
+import type { SetupStepId } from '../setup'
 
 /**
- * Progress through the wizard. Completed steps can be revisited. Phones get a segmented bar with "Step 1 of 4 ·
- * Setup code"; wider screens numbered steps with their names (upcoming ones muted and inert).
+ * Progress through the wizard's `steps` (four, or five with the database step). Completed steps can be revisited. Phones
+ * get a segmented bar with "Step 1 of 5 · Setup code"; wider screens numbered steps with their names (upcoming ones muted
+ * and inert). Where the row is too narrow for every name (a container query: five names need 42rem, four 36rem), only
+ * the current step keeps its name on screen; the others keep it for screen readers and as a tooltip, never truncated.
  */
-const props = defineProps<{ current: SetupStepId; reached: number }>()
+const props = defineProps<{ steps: readonly SetupStepId[]; current: SetupStepId; reached: number }>()
 const emit = defineEmits<{ go: [step: SetupStepId] }>()
 const { t } = useI18n()
 
-const indexOf = (step: SetupStepId) => SETUP_STEPS.indexOf(step)
-const currentIndex = computed(() => indexOf(props.current))
+const currentIndex = computed(() => props.steps.indexOf(props.current))
+const otherLabelClass = computed(() =>
+  props.steps.length > 4 ? 'sr-only @2xl:not-sr-only' : 'sr-only @xl:not-sr-only',
+)
 </script>
 
 <template>
-  <nav :aria-label="t('setup.progress')">
+  <nav :aria-label="t('setup.progress')" class="@container">
     <!-- Phones: where you are, in words, over a thin segmented bar. -->
     <div class="grid gap-2.5 sm:hidden">
       <p class="text-sm">
         <span class="text-muted-foreground">{{
-          t('setup.stepOf', { current: currentIndex + 1, total: SETUP_STEPS.length })
+          t('setup.stepOf', { current: currentIndex + 1, total: props.steps.length })
         }}</span>
         <span class="text-muted-foreground"> · </span>
         <span class="font-medium">{{ t(`setup.steps.${props.current}.label`) }}</span>
       </p>
-      <div class="grid grid-cols-4 gap-1.5">
+      <div class="flex gap-1.5">
         <span
-          v-for="(step, index) in SETUP_STEPS"
+          v-for="(step, index) in props.steps"
           :key="step"
           aria-hidden="true"
-          :class="cn('h-1.5 rounded-full', index <= currentIndex ? 'bg-primary' : 'bg-border')"
+          :class="cn('h-1.5 flex-1 rounded-full', index <= currentIndex ? 'bg-primary' : 'bg-border')"
         />
       </div>
     </div>
 
     <ol class="hidden items-center gap-2 sm:flex">
       <li
-        v-for="(step, index) in SETUP_STEPS"
+        v-for="(step, index) in props.steps"
         :key="step"
         class="flex min-w-0 items-center gap-2"
-        :class="index < SETUP_STEPS.length - 1 ? 'flex-1' : ''"
+        :class="index < props.steps.length - 1 ? 'flex-auto' : ''"
       >
         <button
           type="button"
           :disabled="index > props.reached || step === props.current"
           :aria-current="step === props.current ? 'step' : undefined"
-          class="group flex min-w-0 items-center gap-2.5 rounded-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default"
+          :title="t(`setup.steps.${step}.label`)"
+          class="group flex min-w-0 items-center gap-2 rounded-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-default"
           @click="emit('go', step)"
         >
           <span
@@ -69,8 +74,10 @@ const currentIndex = computed(() => indexOf(props.current))
           <span
             :class="
               cn(
-                'truncate text-sm',
-                step === props.current ? 'font-medium text-foreground' : 'text-muted-foreground',
+                'text-sm whitespace-nowrap',
+                step === props.current
+                  ? 'truncate font-medium text-foreground'
+                  : cn('text-muted-foreground', otherLabelClass),
               )
             "
           >
@@ -79,9 +86,9 @@ const currentIndex = computed(() => indexOf(props.current))
           <span v-if="index < currentIndex" class="sr-only">({{ t('setup.completed') }})</span>
         </button>
         <span
-          v-if="index < SETUP_STEPS.length - 1"
+          v-if="index < props.steps.length - 1"
           aria-hidden="true"
-          :class="cn('h-px min-w-3 flex-1', index < currentIndex ? 'bg-primary/50' : 'bg-border')"
+          :class="cn('h-px min-w-2 flex-1', index < currentIndex ? 'bg-primary/50' : 'bg-border')"
         />
       </li>
     </ol>
