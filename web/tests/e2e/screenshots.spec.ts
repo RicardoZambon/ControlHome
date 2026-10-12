@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import type { Locator, Page } from '@playwright/test'
+import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import {
   SETUP_CODE,
   completeSetup,
   createUser,
+  dismissToasts,
   expect,
+  mutationHeaders,
   resetApp,
   savePreferences,
   signIn,
@@ -108,12 +111,137 @@ const signedInRoutes: Route[] = [
   },
 ]
 
+const PLAN_PNG = readFileSync(new URL('./fixtures/plan.png', import.meta.url))
+
+/**
+ * A floor traced over fixtures/plan.png (800 × 600 px at 2.5 cm/px = the 2000 × 1500 cm floor, walls at 100 cm from
+ * its edges) with three rooms named in `locale`, so the floor pages and the dashboard have something to show.
+ */
+async function seedFloor(request: APIRequestContext, locale: Locale): Promise<{ id: number; name: string }> {
+  const name = tr(locale, 'floors.level.ground')
+  const created = await request.post('/api/floors', {
+    headers: mutationHeaders(),
+    data: { name, level: 0, widthCm: 2000, heightCm: 1500 },
+  })
+  expect(created.status(), await created.text()).toBe(201)
+  let floor = (await created.json()) as { id: number; rowVersion: string }
+
+  const upload = await request.post('/api/files', {
+    headers: mutationHeaders(),
+    multipart: {
+      file: { name: 'plan.png', mimeType: 'image/png', buffer: PLAN_PNG },
+      purpose: 'floor-background',
+    },
+  })
+  expect(upload.status(), await upload.text()).toBe(201)
+  const file = (await upload.json()) as { id: string }
+  const updated = await request.put(`/api/floors/${floor.id}`, {
+    headers: mutationHeaders(),
+    data: {
+      name,
+      level: 0,
+      widthCm: 2000,
+      heightCm: 1500,
+      gridCm: 50,
+      background: { fileId: file.id, opacity: 0.35, offsetXCm: 0, offsetYCm: 0, cmPerPx: 2.5 },
+      rowVersion: floor.rowVersion,
+    },
+  })
+  expect(updated.status(), await updated.text()).toBe(200)
+  floor = (await updated.json()) as { id: number; rowVersion: string }
+
+  const rect = (x0: number, y0: number, x1: number, y1: number) => [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ]
+  const layout = await request.put(`/api/floors/${floor.id}/layout`, {
+    headers: mutationHeaders(),
+    data: {
+      rowVersion: floor.rowVersion,
+      rooms: [
+        {
+          id: null,
+          name: tr(locale, 'floors.editor.presets.living'),
+          icon: 'sofa',
+          colorToken: 'room-1',
+          polygon: rect(100, 100, 1000, 750),
+        },
+        {
+          id: null,
+          name: tr(locale, 'floors.editor.presets.kitchen'),
+          icon: 'cooking-pot',
+          colorToken: 'room-2',
+          polygon: rect(1000, 100, 1900, 900),
+        },
+        {
+          id: null,
+          name: tr(locale, 'floors.editor.presets.bedroom'),
+          icon: 'bed-double',
+          colorToken: 'room-3',
+          polygon: rect(100, 750, 1000, 1400),
+        },
+      ],
+    },
+  })
+  expect(layout.status(), await layout.text()).toBe(200)
+  return { id: floor.id, name }
+}
+
+/** The floor pages of the seeded floor. */
+function floorRoutes(floor: { id: number; name: string }): Route[] {
+  const room = (page: Page, locale: Locale) =>
+    page
+      .locator('[data-slot="floor-plan"] svg text')
+      .filter({ hasText: tr(locale, 'floors.editor.presets.kitchen') })
+      .first()
+  return [
+    {
+      path: '/floors',
+      name: 'floors',
+      ready: (page) => page.getByRole('link', { name: floor.name, exact: true }),
+    },
+    { path: `/floors/${floor.id}`, name: 'floor-view', ready: room },
+    { path: `/floors/${floor.id}/edit`, name: 'floor-edit', ready: room },
+  ]
+}
+
+/** Where floor point (x, y) cm is on the screen: from the plan SVG's viewBox (cm) and its box (px). */
+async function planPoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
+  const svg = page.locator('[data-slot="floor-plan"] svg').first()
+  const box = (await svg.boundingBox())!
+  const [vx, vy, vw, vh] = (await svg.getAttribute('viewBox'))!.split(' ').map(Number) as [
+    number,
+    number,
+    number,
+    number,
+  ]
+  const scale = Math.min(box.width / vw, box.height / vh)
+  // preserveAspectRatio xMidYMid meet: the view box is centred in the element.
+  const left = box.x + (box.width - vw * scale) / 2
+  const top = box.y + (box.height - vh * scale) / 2
+  return { x: left + (x - vx) * scale, y: top + (y - vy) * scale }
+}
+
+/** A tap on a touch screen (phones, `hasTouch`), a click elsewhere. */
+async function tapPlan(page: Page, x: number, y: number, touch: boolean): Promise<void> {
+  const point = await planPoint(page, x, y)
+  if (touch) await page.touchscreen.tap(point.x, point.y)
+  else await page.mouse.click(point.x, point.y)
+}
+
 // Interaction states (English, both widths and themes) into ./screenshots/state-<name>-<width>-<theme>.png: field errors,
-// keyboard focus, hover, a busy button, open dialogs, menus and sheets, and a toast. The gates check each one too.
+// keyboard focus, hover, a busy button, open dialogs, menus and sheets, and a toast. The gates check each one too. The
+// phone width runs as a touch screen, so the editor's touch flow (bigger handles, taps, the drawing bar) is captured.
 for (const width of WIDTHS) {
   for (const theme of THEMES) {
     test.describe(`states, ${width} px, ${theme}`, () => {
-      test.use({ viewport: { width, height: width < 768 ? 812 : 900 }, colorScheme: theme })
+      test.use({
+        viewport: { width, height: width < 768 ? 812 : 900 },
+        colorScheme: theme,
+        hasTouch: width < 768,
+      })
 
       test('interaction states', async ({ page, request, gates }) => {
         const phone = width < 768
@@ -126,7 +254,8 @@ for (const width of WIDTHS) {
           await page.evaluate(() => document.fonts.ready)
           await gates.check(`state ${name} (${width} px, ${theme})`)
           // Focus states: the first screen only (a full-page capture of the taller dashboard dropped the sidebar's ring).
-          const fullPage = !phone && !name.startsWith('focus-')
+          // The editor fills the screen: a full-page capture would resize the window and refit the plan mid-gesture.
+          const fullPage = !phone && !name.startsWith('focus-') && !name.startsWith('editor-')
           await page.screenshot({ path: `${outputDir}state-${name}-${width}-${theme}.png`, fullPage })
         }
 
@@ -275,7 +404,7 @@ for (const width of WIDTHS) {
           const navigation = page.getByRole('navigation', { name: t('shell.primaryNavigation') })
           await navigation.getByRole('link', { name: t('dashboard.nav'), exact: true }).focus()
           await page.keyboard.press('Tab')
-          await expect(navigation.getByRole('link', { name: t('users.nav'), exact: true })).toBeFocused()
+          await expect(navigation.getByRole('link', { name: t('floors.nav'), exact: true })).toBeFocused()
           await capture('focus-sidebar')
         }
 
@@ -316,8 +445,228 @@ for (const width of WIDTHS) {
           page.getByText(t('users.toast.disabled', { name: testData.member.displayName })),
         ).toBeVisible()
         await capture('toast')
+
+        // Floor-plan editor: a selected room (handles, wall lengths), then a room being drawn.
+        const floor = await seedFloor(page.request, 'en')
+        await page.goto(`/floors/${floor.id}/edit`)
+        const kitchen = page
+          .locator('[data-slot="floor-plan"] svg text')
+          .filter({ hasText: t('floors.editor.presets.kitchen') })
+          .first()
+        await expect(kitchen).toBeVisible()
+        await dismissToasts(page)
+        await tapPlan(page, 1450, 500, phone)
+        await capture('editor-room-selected')
+        if (!phone) {
+          // Hover is a small step up in fill; the selection is the outline ring.
+          const living = await planPoint(page, 500, 400)
+          await page.mouse.move(living.x, living.y)
+          await capture('editor-room-hover')
+        }
+
+        // Drawing: three corners placed, the first one ready to close the outline.
+        if (phone) {
+          await page
+            .getByRole('toolbar', { name: t('floors.editor.tools.label') })
+            .getByRole('button', { name: t('floors.editor.tools.draw') })
+            .click()
+        } else {
+          await page.keyboard.press('Escape')
+          await page.keyboard.press('r')
+        }
+        for (const [x, y] of [
+          [1050, 950],
+          [1850, 950],
+          [1850, 1350],
+        ] as const) {
+          await tapPlan(page, x, y, phone)
+        }
+        if (!phone) {
+          const cursor = await planPoint(page, 1300, 1250)
+          await page.mouse.move(cursor.x, cursor.y)
+          await expect(page.getByText(/^x \d/)).toBeVisible()
+        }
+        await expect(
+          page.getByRole('button', { name: t('floors.editor.drawing.finish', { count: 3 }) }),
+        ).toHaveCount(phone ? 1 : 0)
+        await capture('editor-drawing')
+        if (phone) {
+          await page.getByRole('button', { name: t('floors.editor.drawing.finish', { count: 3 }) }).click()
+        } else {
+          await page.keyboard.press('Enter')
+        }
+        await expect(
+          page.getByRole('button', { name: new RegExp(`^${t('floors.editor.save')}`) }),
+        ).toBeEnabled()
+
+        // Deleting a room (the new one is selected) offers to undo it.
+        if (phone) {
+          await page.getByRole('button', { name: new RegExp(t('floors.editor.openPanel')) }).click()
+          const sheet = page.getByRole('dialog', { name: t('floors.editor.properties') })
+          await sheet.getByRole('button', { name: t('floors.editor.room.delete') }).click()
+          await page.keyboard.press('Escape')
+          await expect(sheet).toBeHidden()
+        } else {
+          await page.keyboard.press('Delete')
+        }
+        await expect(
+          page.getByText(t('floors.editor.room.deleted', { name: `${t('floors.editor.roomBase')} 4` })),
+        ).toBeVisible()
+        await capture('editor-deleted-toast')
       })
     })
+  }
+}
+
+// Floor states in every width, theme and language into ./screenshots/floorstate-<name>-<width>-<theme>-<locale>.png: the
+// empty floors list, the add dialog, an empty floor in the editor and in view mode, the editor's Floor and Image tabs,
+// the calibration dialog, the 409 conflict dialog, the delete confirmation and the view with the original plan shown.
+for (const width of WIDTHS) {
+  for (const theme of THEMES) {
+    for (const locale of LOCALES) {
+      test.describe(`floor states, ${width} px, ${theme}, ${locale}`, () => {
+        test.use({
+          viewport: { width, height: width < 768 ? 812 : 900 },
+          colorScheme: theme,
+          locale: locale === 'en' ? 'en-US' : 'pt-BR',
+          hasTouch: width < 768,
+        })
+
+        test('floor states', async ({ page, request, gates }) => {
+          const phone = width < 768
+          const l = (key: string, params?: Record<string, string | number>) => tr(locale, key, params)
+          await page.addInitScript(
+            ([savedTheme, savedLocale]) => {
+              localStorage.setItem('ch.theme', savedTheme)
+              localStorage.setItem('ch.locale', savedLocale)
+            },
+            [theme, locale] as const,
+          )
+
+          async function capture(name: string, fullPage = !phone): Promise<void> {
+            await expect(page.locator('html')).toHaveAttribute('lang', locale)
+            await page.evaluate(() => document.fonts.ready)
+            await gates.check(`floor state ${name} (${width} px, ${theme}, ${locale})`)
+            await page.screenshot({
+              path: `${outputDir}floorstate-${name}-${width}-${theme}-${locale}.png`,
+              fullPage,
+            })
+          }
+
+          /** The editor's side panel: the aside, or on phones the sheet opened from the bar below the plan. */
+          async function panel() {
+            if (!phone) return page.getByRole('complementary', { name: l('floors.editor.properties') })
+            const sheet = page.getByRole('dialog', { name: l('floors.editor.properties') })
+            if (!(await sheet.isVisible())) {
+              await page.getByRole('button', { name: new RegExp(l('floors.editor.openPanel')) }).click()
+            }
+            await expect(sheet).toBeVisible()
+            return sheet
+          }
+
+          await resetApp(request)
+          await completeSetup(page.request, { locale })
+          await savePreferences(page.request, { displayName: testData.admin.displayName, locale, theme })
+
+          // No floors yet, and the add dialog.
+          await page.goto('/floors')
+          await expect(page.getByRole('heading', { name: l('floors.empty.title') })).toBeVisible()
+          await capture('floors-empty')
+          await page.getByRole('button', { name: l('floors.empty.cta') }).click()
+          const add = page.getByRole('dialog', { name: l('floors.form.createTitle') })
+          await expect(add).toBeVisible()
+          await capture('floors-add-dialog', false)
+          await add.getByLabel(l('floors.form.name')).fill(l('floors.level.above', { n: 1 }))
+          await add.getByLabel(l('floors.form.level')).fill('1')
+          await add.getByRole('button', { name: l('floors.form.create') }).click()
+
+          // An empty floor in the editor, its Floor tab, and the same floor in view mode.
+          await expect(page.getByRole('heading', { name: l('floors.editor.empty.title') })).toBeVisible()
+          await dismissToasts(page, locale)
+          await capture('floor-edit-empty', false)
+          let side = await panel()
+          await side.getByRole('tab', { name: l('floors.editor.tabs.floor') }).click()
+          await expect(side.getByLabel(l('floors.editor.floor.grid'))).toBeVisible()
+          await capture('floor-edit-tab-floor', false)
+          const emptyId = Number(/\/floors\/(\d+)\/edit/.exec(page.url())![1])
+          if (phone) await page.keyboard.press('Escape')
+          await page.goto(`/floors/${emptyId}`)
+          await expect(page.getByText(l('floors.view.noRoomsTitle'))).toBeVisible()
+          await capture('floor-view-empty')
+
+          // A traced floor with rooms: the Image tab, then calibration (two points on the plan).
+          const traced = await seedFloor(page.request, locale)
+          await page.goto(`/floors/${traced.id}/edit`)
+          await expect(page.locator('[data-slot="floor-background"] image')).toHaveCount(1)
+          side = await panel()
+          await side.getByRole('tab', { name: l('floors.editor.tabs.background') }).click()
+          await expect(side.getByTestId('background-scale')).toBeVisible()
+          await capture('floor-edit-tab-image', false)
+          await side.getByRole('button', { name: l('floors.editor.background.calibrate') }).click()
+          if (phone) {
+            await page.keyboard.press('Escape')
+            await expect(side).toBeHidden()
+          }
+          await tapPlan(page, 100, 1200, phone)
+          await tapPlan(page, 1900, 1200, phone)
+          const calibration = page.getByRole('dialog', { name: l('floors.editor.calibration.title') })
+          await expect(calibration).toBeVisible()
+          // The tap that opened the dialog must not also press its button ("Scale set" would follow).
+          const scaleSet = l('floors.editor.calibration.done', { scale: '' }).split(':')[0]!
+          await expect(page.getByText(scaleSet)).toHaveCount(0)
+          await capture('floor-edit-calibration', false)
+          await page.keyboard.press('Escape')
+          await expect(calibration).toBeHidden()
+
+          // Someone else saves the floor while it has unsaved changes here: the conflict dialog.
+          await page.keyboard.press('Escape')
+          await tapPlan(page, 1450, 500, phone)
+          await page.keyboard.press('ArrowLeft')
+          const current = (await (await page.request.get(`/api/floors/${traced.id}`)).json()) as {
+            rowVersion: string
+            rooms: { id: number; name: string; icon: string; colorToken: string; polygon: unknown[] }[]
+          }
+          const stale = await page.request.put(`/api/floors/${traced.id}/layout`, {
+            headers: mutationHeaders(),
+            data: {
+              rowVersion: current.rowVersion,
+              rooms: current.rooms.map(({ id, name, icon, colorToken, polygon }) => ({
+                id,
+                name,
+                icon,
+                colorToken,
+                polygon,
+              })),
+            },
+          })
+          expect(stale.status(), await stale.text()).toBe(200)
+          await page.getByRole('button', { name: new RegExp(`^${l('floors.editor.save')}`) }).click()
+          const conflict = page.getByRole('alertdialog')
+          await expect(conflict).toContainText(l('floors.editor.conflict.title'))
+          await capture('floor-edit-conflict', false)
+          await conflict.getByRole('button', { name: l('floors.editor.conflict.reload') }).click()
+          await expect(conflict).toBeHidden()
+
+          // The view with the original plan switched on.
+          await page.goto(`/floors/${traced.id}`)
+          await page.getByRole('switch', { name: l('floors.view.showOriginal') }).click()
+          await expect(page.locator('[data-slot="floor-background"] image')).toHaveCount(1)
+          await capture('floor-view-original')
+
+          // Two floors in the list, and the delete confirmation.
+          await page.goto('/floors')
+          const upper = l('floors.level.above', { n: 1 })
+          await page.getByRole('button', { name: l('floors.actions', { name: upper }) }).click()
+          await page.getByRole('menuitem', { name: l('common.delete') }).click()
+          const confirm = page.getByRole('alertdialog')
+          await expect(confirm).toContainText(l('floors.delete.title', { name: upper }))
+          await capture('floors-delete-confirm', false)
+          await confirm.getByRole('button', { name: l('floors.delete.confirm') }).click()
+          await expect(page.getByText(l('floors.toast.deleted', { name: upper }))).toBeVisible()
+          await capture('floors-deleted-toast')
+        })
+      })
+    }
   }
 }
 
@@ -375,7 +724,9 @@ for (const width of WIDTHS) {
             { userName: 'linus', displayName: 'Linus Torvalds', password: 'just for fun, really' },
             'Viewer',
           )
-          for (const route of signedInRoutes) await capture(route)
+          // A floor with rooms over a traced plan: the dashboard shows it, and the floor pages get captured too.
+          const floor = await seedFloor(page.request, locale)
+          for (const route of [...signedInRoutes, ...floorRoutes(floor)]) await capture(route)
         })
       })
     }

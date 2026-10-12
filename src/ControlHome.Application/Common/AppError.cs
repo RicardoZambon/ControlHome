@@ -11,8 +11,21 @@ public sealed record AppError(
     AppErrorKind Kind,
     IReadOnlyDictionary<string, object?>? Extensions = null)
 {
+    /// <summary>The extension holding field errors (same shape as a FluentValidation <c>validation.failed</c> problem).</summary>
+    public const string ErrorsExtension = "errors";
+
     public static AppError Validation(string code, string message, IReadOnlyDictionary<string, object?>? extensions = null) =>
         new(code, message, AppErrorKind.Validation, extensions);
+
+    /// <summary>
+    /// 400 <c>validation.failed</c> with an <c>errors</c> dictionary keyed by camelCase field path (e.g.
+    /// <c>rooms[2].polygon</c>), for checks that need the database and so cannot run in a FluentValidation validator.
+    /// </summary>
+    public static AppError FieldErrors(IReadOnlyDictionary<string, string[]> errors) =>
+        Validation(
+            ErrorCodes.ValidationFailed,
+            "One or more fields are invalid.",
+            new Dictionary<string, object?>(StringComparer.Ordinal) { [ErrorsExtension] = errors });
 
     public static AppError NotFound(string code, string message) => new(code, message, AppErrorKind.NotFound);
 

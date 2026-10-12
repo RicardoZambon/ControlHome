@@ -1,0 +1,253 @@
+{
+  "title": "Andares",
+  "nav": "Andares",
+  "eyebrow": "Sua casa",
+  "description": "Cada andar da sua casa, desenhado em escala, com seus cômodos.",
+  "add": "Adicionar andar",
+  "listLabel": "Andares",
+  "loadFailed": "Não foi possível carregar os andares.",
+  "roomCount": "Nenhum cômodo | 1 cômodo | {n} cômodos",
+  "editPlan": "Editar planta",
+  "actions": "Ações de {name}",
+  "level": {
+    "ground": "Térreo",
+    "above": "{n}º andar",
+    "below": "Subsolo {n}"
+  },
+  "empty": {
+    "title": "Desenhe o primeiro andar",
+    "description": "Comece pelo térreo: dê um tamanho a ele e contorne os cômodos sobre a grade ou sobre uma imagem da sua planta.",
+    "member": "Nenhum andar foi desenhado ainda. Um administrador pode adicioná-los.",
+    "cta": "Adicionar um andar"
+  },
+  "delete": {
+    "title": "Excluir {name}?",
+    "description": "O andar será excluído. Isso não pode ser desfeito. | O andar e o seu cômodo serão excluídos. Isso não pode ser desfeito. | O andar e os seus {n} cômodos serão excluídos. Isso não pode ser desfeito.",
+    "confirm": "Excluir andar",
+    "busy": "Excluindo…"
+  },
+  "toast": {
+    "created": "Andar “{name}” adicionado. Desenhe os cômodos agora.",
+    "deleted": "Andar “{name}” excluído.",
+    "saved": "Planta salva."
+  },
+  "validation": {
+    "range": "Use um número de {min} a {max}."
+  },
+  "form": {
+    "createTitle": "Adicionar um andar",
+    "createDescription": "Dê um nome e um tamanho. Você pode mudar os dois depois.",
+    "name": "Nome",
+    "namePlaceholder": "Térreo",
+    "level": "Nível",
+    "levelHelp": "0 é o térreo, 1 o andar de cima, -1 um subsolo.",
+    "width": "Largura (m)",
+    "height": "Profundidade (m)",
+    "sizeHelp": "O tamanho externo do andar; os cômodos são desenhados dentro dele.",
+    "create": "Criar e desenhar",
+    "creating": "Criando…"
+  },
+  "view": {
+    "title": "Planta",
+    "back": "Todos os andares",
+    "rooms": "Cômodos",
+    "switchFloor": "Andares",
+    "showOriginal": "Mostrar planta original",
+    "noRoomsTitle": "Nenhum cômodo ainda",
+    "noRooms": "Um administrador pode desenhar os cômodos deste andar.",
+    "noRoomsAdmin": "Abra o editor para desenhar os cômodos deste andar.",
+    "noRoomsShort": "Nenhum cômodo neste andar ainda.",
+    "drawRooms": "Desenhar cômodos"
+  },
+  "editor": {
+    "title": "Editar planta",
+    "eyebrow": "Editando a planta",
+    "unsaved": "Alterações não salvas",
+    "clean": "Sem alterações",
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "saveFailed": "Não foi possível salvar a planta.",
+    "nothingToSave": "Nada para salvar: a planta está como você deixou.",
+    "fixProblems": "Alguns cômodos precisam de atenção antes de salvar.",
+    "problems": "Corrija isto antes de salvar | Corrija isto antes de salvar | Corrija estes {count} problemas antes de salvar",
+    "roomBase": "Cômodo",
+    "properties": "Propriedades",
+    "propertiesDescription": "Cômodos, andar e imagem de fundo.",
+    "openPanel": "Mostrar cômodos e propriedades",
+    "undo": "Desfazer",
+    "redo": "Refazer",
+    "undoAction": "Desfazer: {action}",
+    "redoAction": "Refazer: {action}",
+    "coordinates": "x {x} m · y {y} m",
+    "tools": {
+      "label": "Ferramentas de edição",
+      "select": "Selecionar e mover",
+      "selectShort": "Selecionar",
+      "draw": "Desenhar cômodo",
+      "drawShort": "Desenhar cômodo"
+    },
+    "drawing": {
+      "label": "Desenhando um cômodo",
+      "start": "Desenhar",
+      "finish": "Concluir ({count} cantos)",
+      "undoCorner": "Desfazer canto",
+      "cancel": "Cancelar"
+    },
+    "hints": {
+      "select": "Arraste cômodos e cantos; o ponto da parede cria um canto.",
+      "selectShort": "Toque num cômodo para selecioná-lo.",
+      "draw": "Clique nos cantos ou arraste um retângulo; Alt ignora a grade.",
+      "drawShort": "Toque nos cantos; toque no primeiro para terminar.",
+      "drawNextShort": "{count} cantos. Toque no primeiro canto ou em Concluir.",
+      "drawNext": "{count} cantos · primeiro canto ou Enter termina · Esc cancela",
+      "calibrate": "Clique no primeiro de dois pontos de distância conhecida.",
+      "calibrateSecond": "Agora clique no segundo ponto.",
+      "background": "Arraste para mover a imagem sob a planta.",
+      "noBackground": "Primeiro envie uma imagem da planta na aba Imagem."
+    },
+    "history": {
+      "addRoom": "Adicionar cômodo",
+      "deleteRoom": "Excluir cômodo",
+      "moveRoom": "Mover cômodo",
+      "resizeRoom": "Redimensionar cômodo",
+      "nudge": "Mover cômodo",
+      "moveCorner": "Mover canto",
+      "addCorner": "Adicionar canto",
+      "placeCorner": "Marcar canto",
+      "removeCorner": "Remover canto",
+      "rename": "Renomear cômodo",
+      "color": "Mudar cor",
+      "icon": "Mudar ícone",
+      "floor": "Alterar andar",
+      "background": "Adicionar imagem",
+      "removeBackground": "Remover imagem",
+      "moveBackground": "Mover imagem",
+      "opacity": "Mudar opacidade",
+      "calibrate": "Calibrar escala"
+    },
+    "tabs": {
+      "rooms": "Cômodos",
+      "floor": "Andar",
+      "background": "Imagem"
+    },
+    "empty": {
+      "title": "Desenhe o primeiro cômodo",
+      "description": "Escolha Desenhar cômodo e clique nos cantos, ou arraste um retângulo. Os cômodos se alinham à grade e uns aos outros.",
+      "start": "Começar a desenhar",
+      "trace": "Contornar uma imagem"
+    },
+    "rooms": {
+      "empty": "Desenhe os cômodos deste andar; cada um ganha um nome, uma cor e um ícone.",
+      "draw": "Desenhar um cômodo",
+      "cancelDraw": "Cancelar desenho",
+      "invalid": "Precisa de atenção"
+    },
+    "room": {
+      "title": "Cômodo",
+      "back": "Todos os cômodos",
+      "untitled": "Cômodo sem nome",
+      "name": "Nome",
+      "presets": "Nomes rápidos",
+      "size": "Tamanho",
+      "width": "Largura (m)",
+      "depth": "Profundidade (m)",
+      "fromLeft": "Da esquerda (m)",
+      "fromTop": "Do topo (m)",
+      "color": "Cor",
+      "icon": "Ícone",
+      "cornerSelected": "Canto {n}",
+      "removeCorner": "Remover canto",
+      "minCorners": "Um cômodo precisa de pelo menos 3 cantos.",
+      "delete": "Excluir cômodo",
+      "deleted": "Cômodo “{name}” excluído."
+    },
+    "presets": {
+      "living": "Sala de estar",
+      "kitchen": "Cozinha",
+      "bedroom": "Quarto",
+      "bathroom": "Banheiro",
+      "office": "Escritório",
+      "dining": "Sala de jantar",
+      "laundry": "Lavanderia",
+      "hall": "Entrada",
+      "garage": "Garagem",
+      "garden": "Jardim"
+    },
+    "colors": {
+      "room-1": "Azul",
+      "room-2": "Areia",
+      "room-3": "Sálvia",
+      "room-4": "Rosa",
+      "room-5": "Azul-petróleo",
+      "room-6": "Coral",
+      "room-7": "Oliva",
+      "room-8": "Violeta"
+    },
+    "icons": {
+      "house": "Casa",
+      "sofa": "Sofá",
+      "tv": "TV",
+      "cooking-pot": "Cozinha",
+      "utensils": "Refeições",
+      "bed-double": "Cama de casal",
+      "bed-single": "Cama de solteiro",
+      "baby": "Quarto de bebê",
+      "bath": "Banheira",
+      "shower-head": "Chuveiro",
+      "toilet": "Lavabo",
+      "briefcase": "Trabalho",
+      "laptop": "Computador",
+      "washing-machine": "Lavanderia",
+      "shirt": "Closet",
+      "package": "Depósito",
+      "dumbbell": "Academia",
+      "door-open": "Entrada",
+      "car": "Garagem",
+      "trees": "Jardim",
+      "sun": "Varanda"
+    },
+    "floor": {
+      "grid": "Grade (cm)",
+      "gridHelp": "Os cantos se alinham a esta grade. Segure Alt ao arrastar para posicionar livremente."
+    },
+    "background": {
+      "title": "Imagem de fundo",
+      "description": "Contorne os cômodos sobre um scan ou uma foto da planta. Ela aparece suave sob os cômodos enquanto você edita.",
+      "upload": "Enviar uma imagem da planta",
+      "replace": "Trocar imagem",
+      "uploading": "Enviando…",
+      "formats": "PNG, JPEG ou WebP, até 10 MB.",
+      "opacity": "Opacidade",
+      "size": "{width} × {height} px",
+      "scaleValue": "1 px = {length}",
+      "calibrate": "Calibrar a escala",
+      "calibrateHelp": "Clique em dois pontos cuja distância real você conhece, como as pontas de uma parede.",
+      "move": "Mover a imagem",
+      "remove": "Remover imagem"
+    },
+    "calibration": {
+      "title": "Qual é a distância entre eles?",
+      "description": "Os dois pontos estão a {measured} na planta agora. Informe a distância real e a imagem é ajustada a ela.",
+      "distance": "Distância real",
+      "unit": "Unidade",
+      "meters": "m",
+      "centimeters": "cm",
+      "apply": "Aplicar escala",
+      "invalid": "Informe uma distância maior que zero.",
+      "outOfRange": "Assim a imagem fica grande ou pequena demais. Confira a distância e a unidade.",
+      "done": "Escala definida: {scale}."
+    },
+    "conflict": {
+      "title": "Outra pessoa alterou este andar",
+      "description": "Este andar foi salvo por outra pessoa enquanto você editava. Recarregue para ver a versão dela; suas alterações não salvas serão perdidas.",
+      "reload": "Recarregar andar",
+      "keep": "Manter meu rascunho"
+    },
+    "leave": {
+      "title": "Sair sem salvar?",
+      "description": "Suas alterações nesta planta não foram salvas e serão perdidas.",
+      "stay": "Continuar editando",
+      "discard": "Descartar alterações"
+    }
+  }
+}

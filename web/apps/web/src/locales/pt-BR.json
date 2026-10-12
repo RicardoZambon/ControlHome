@@ -31,6 +31,14 @@
     "en": "English",
     "ptBR": "Português (Brasil)"
   },
+  "floorplan": {
+    "planLabel": "Planta de {name}",
+    "planLabelUnnamed": "Planta",
+    "roomLabel": "{name}, {area}",
+    "zoomIn": "Aproximar",
+    "zoomOut": "Afastar",
+    "fit": "Ajustar à tela"
+  },
   "theme": {
     "label": "Tema",
     "light": "Claro",
@@ -111,7 +119,8 @@
       "missing_header": "A requisição foi bloqueada por uma verificação de segurança. Recarregue a página.",
       "network_denied": "O ControlHome só aceita conexões da sua rede doméstica.",
       "host_denied": "Este endereço não é permitido. Abra o ControlHome pelo IP ou pelo nome local, ou adicione este nome à lista de permitidos.",
-      "conflict": "Outra pessoa alterou isto ao mesmo tempo. Recarregue e tente novamente."
+      "conflict": "Outra pessoa alterou isto ao mesmo tempo. Recarregue e tente novamente.",
+      "too_large": "São dados demais para o ControlHome receber de uma só vez."
     },
     "validation": {
       "failed": "Alguns campos precisam de atenção."
@@ -150,6 +159,26 @@
       "last_admin": "A casa precisa de pelo menos um administrador ativo. Promova outra pessoa primeiro.",
       "cannot_delete_self": "Você não pode excluir a sua própria conta.",
       "duplicate_username": "Esse nome de usuário já está em uso."
+    },
+    "floors": {
+      "not_found": "Esse andar não existe mais.",
+      "concurrency": "Outra pessoa alterou este andar enquanto você editava. Recarregue para ver as alterações."
+    },
+    "rooms": {
+      "not_found": "Esse cômodo não está mais neste andar. Recarregue o andar e tente de novo."
+    },
+    "geometry": {
+      "too_few_points": "Um cômodo precisa de pelo menos 3 cantos.",
+      "too_many_points": "Este cômodo tem cantos demais. Simplifique o contorno.",
+      "self_intersecting": "As paredes do cômodo se cruzam ou se tocam. Mova os cantos para o contorno não se sobrepor.",
+      "out_of_bounds": "Parte do cômodo está fora do andar. Mova-o para dentro ou aumente o andar.",
+      "zero_area": "O cômodo não tem área. Afaste os cantos uns dos outros."
+    },
+    "files": {
+      "not_found": "Essa imagem não existe mais. Envie-a de novo.",
+      "unsupported_type": "Use uma imagem PNG, JPEG ou WebP.",
+      "too_large": "A imagem é grande demais. Use uma de até 10 MB e 40 megapixels.",
+      "invalid_image": "Não foi possível ler a imagem. Ela pode estar danificada; tente exportá-la de novo."
     }
   }
 }

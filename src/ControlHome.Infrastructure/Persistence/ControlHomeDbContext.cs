@@ -1,6 +1,7 @@
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Identity;
 using ControlHome.Domain.Auditing;
+using ControlHome.Domain.Files;
 using ControlHome.Domain.Homes;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
@@ -23,6 +24,12 @@ public sealed class ControlHomeDbContext(DbContextOptions<ControlHomeDbContext> 
     public DbSet<Home> Homes => Set<Home>();
 
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
+
+    public DbSet<Floor> Floors => Set<Floor>();
+
+    public DbSet<Room> Rooms => Set<Room>();
+
+    public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
 
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
