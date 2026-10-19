@@ -14,7 +14,7 @@
     "@controlhome/ui": "0.0.0",
     "@fontsource-variable/fraunces": "5.3.0",
     "@fontsource-variable/onest": "5.3.1",
-    "@lucide/vue": "1.49.0",
+    "@lucide/vue": "1.55.0",
     "@vueuse/core": "14.4.0",
     "pinia": "4.0.3",
     "reka-ui": "2.11.0",
