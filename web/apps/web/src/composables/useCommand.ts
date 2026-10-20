@@ -81,6 +81,24 @@ export function predictState(
   return predicted
 }
 
+/** The last request to each endpoint (settled or not), by endpoint id: see {@link inOrder}. */
+const lastRequest = new Map<string, Promise<unknown>>()
+
+/**
+ * Runs `request` once the previous request to the same endpoint has been answered, so the server gets an endpoint's
+ * commands in the order they were made. Two requests in flight together can arrive the other way round: two quick key
+ * presses on a slider (51, then 52) would leave the light at 51.
+ */
+function inOrder<T>(endpointId: string, request: () => Promise<T>): Promise<T> {
+  const next = (lastRequest.get(endpointId) ?? Promise.resolve()).then(request)
+  const settled = next.catch(() => undefined)
+  lastRequest.set(endpointId, settled)
+  void settled.then(() => {
+    if (lastRequest.get(endpointId) === settled) lastRequest.delete(endpointId)
+  })
+  return next
+}
+
 /** A new idempotency key (32 hex digits; `crypto.randomUUID` needs HTTPS, the home network often has plain HTTP). */
 export function newIdempotencyKey(): string {
   const bytes = new Uint8Array(16)
@@ -91,6 +109,7 @@ export function newIdempotencyKey(): string {
 /**
  * Sends commands to one endpoint (`POST /api/endpoints/{id}/commands`) the way every control does:
  * - the predicted values show at once (optimistic) and stay until the device confirms; a failure puts the real ones back;
+ * - an endpoint's requests go out one at a time, in the order they were made (the next waits for the previous answer);
  * - the outcome arrives over the hub (`CommandStatus`): failed, timed-out and (someone else's) superseded commands
  *   are reported in a toast;
  * - a safety-critical command answered with `safety.step_up_required` opens the PIN dialog and, once the PIN is
@@ -146,15 +165,17 @@ export function useCommand(endpointId: MaybeRefOrGetter<string>) {
     while (!accepted) {
       try {
         accepted = unwrap(
-          await sendCommand({
-            path: { id: endpoint },
-            body: {
-              capabilityId: capability.capabilityId,
-              command,
-              arguments: args ?? null,
-              idempotencyKey: key,
-            },
-          }),
+          await inOrder(endpoint, () =>
+            sendCommand({
+              path: { id: endpoint },
+              body: {
+                capabilityId: capability.capabilityId,
+                command,
+                arguments: args ?? null,
+                idempotencyKey: key,
+              },
+            }),
+          ),
         )
       } catch (error) {
         if (errorCodeOf(error) === 'safety.step_up_required' && !steppedUp) {

@@ -183,6 +183,49 @@ describe('useCommand', () => {
     expect(toast.info).toHaveBeenCalledWith('Someone else changed this device just now.')
   })
 
+  it('sends quick commands to an endpoint one at a time, in the order they were made', async () => {
+    // Two key presses on a slider: if both requests were in flight together, the server could get 52 before 51 and
+    // leave the light at 51.
+    const { sender, home, realtime } = await setup()
+    let answerFirst!: (value: unknown) => void
+    api.sendCommand
+      .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
+      .mockResolvedValueOnce(accepted('c2'))
+    const level = capabilityOf(home, 'd-light', 'level')
+    const first = sender.send(level, 'setLevel', { level: 51 })
+    const second = sender.send(level, 'setLevel', { level: 52 })
+    await flushPromises()
+    // Both show at once (the latest wins); the second request waits until the server has taken the first.
+    expect(realtime.valueOf(2)).toEqual(num(52))
+    expect(api.sendCommand).toHaveBeenCalledTimes(1)
+    expect(api.sendCommand.mock.calls[0]![0].body.arguments).toEqual({ level: 51 })
+
+    answerFirst(accepted('c1'))
+    await flushPromises()
+    expect(api.sendCommand).toHaveBeenCalledTimes(2)
+    expect(api.sendCommand.mock.calls[1]![0].body.arguments).toEqual({ level: 52 })
+    hub.send('CommandStatus', { commandId: 'c1', status: 'superseded', code: null })
+    hub.send('CommandStatus', { commandId: 'c2', status: 'confirmed', code: null })
+    await expect(first).resolves.toBe('superseded')
+    await expect(second).resolves.toBe('confirmed')
+    expect(toast.info).not.toHaveBeenCalled()
+  })
+
+  it('a refused request does not hold up the next one', async () => {
+    const { sender, home } = await setup()
+    api.sendCommand
+      .mockResolvedValueOnce(problem(400, 'commands.invalid_arguments'))
+      .mockResolvedValueOnce(accepted('c2'))
+    const level = capabilityOf(home, 'd-light', 'level')
+    const first = sender.send(level, 'setLevel', { level: 0 })
+    const second = sender.send(level, 'setLevel', { level: 40 })
+    await expect(first).resolves.toBe('rejected')
+    await flushPromises()
+    expect(api.sendCommand).toHaveBeenCalledTimes(2)
+    hub.send('CommandStatus', { commandId: 'c2', status: 'confirmed', code: null })
+    await expect(second).resolves.toBe('confirmed')
+  })
+
   it('a refused request puts the value back and shows why', async () => {
     const { sender, home, realtime } = await setup()
     api.sendCommand.mockResolvedValue(problem(400, 'commands.invalid_arguments'))
