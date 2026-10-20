@@ -1,0 +1,18 @@
+{
+  "sn": {
+    "Time": "2026-10-12T09:00:00",
+    "ENERGY": {
+      "TotalStartTime": "2026-01-01T00:00:00",
+      "Total": 12.345,
+      "Yesterday": 0.512,
+      "Today": 0.128,
+      "Power": 64,
+      "ApparentPower": 70,
+      "ReactivePower": 28,
+      "Factor": 0.91,
+      "Voltage": 227,
+      "Current": 0.31
+    }
+  },
+  "ver": 1
+}

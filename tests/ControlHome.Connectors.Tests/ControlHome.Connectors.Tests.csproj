@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
+    <PackageReference Include="Testcontainers" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
@@ -21,6 +22,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ControlHome.Connectors.Abstractions\ControlHome.Connectors.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\ControlHome.Connectors.Simulated\ControlHome.Connectors.Simulated.csproj" />
+    <ProjectReference Include="..\..\src\ControlHome.Connectors.Mqtt\ControlHome.Connectors.Mqtt.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

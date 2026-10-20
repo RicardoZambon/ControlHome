@@ -1,0 +1,142 @@
+{
+  "homeassistant/device/kitchen-climate/config": {
+    "dev": {
+      "ids": "ea334450945afc",
+      "name": "Kitchen climate",
+      "mf": "Bla electronics",
+      "mdl": "xya",
+      "sw": "1.0",
+      "sn": "ea334450945afc",
+      "hw": "1.0rev2",
+      "sa": "Kitchen"
+    },
+    "o": { "name": "bla2mqtt", "sw": "2.1", "url": "https://bla2mqtt.example.com/support" },
+    "cmps": {
+      "temp01ae_t": { "p": "sensor", "dev_cla": "temperature", "unit_of_meas": "°C", "val_tpl": "{{ value_json.temperature }}", "uniq_id": "temp01ae_t", "name": "Temperature" },
+      "temp01ae_h": { "p": "sensor", "dev_cla": "humidity", "unit_of_meas": "%", "val_tpl": "{{ value_json['humidity'] | float | round(1) }}", "uniq_id": "temp01ae_h", "name": "Humidity" },
+      "temp01ae_b": { "p": "sensor", "dev_cla": "battery", "unit_of_meas": "%", "val_tpl": "{{ value_json.battery | int }}", "uniq_id": "temp01ae_b", "ent_cat": "diagnostic" },
+      "temp01ae_lux": { "p": "sensor", "dev_cla": "illuminance", "unit_of_meas": "lx", "stat_cla": "measurement", "val_tpl": "{{ value_json.lux }}", "uniq_id": "temp01ae_lux", "name": "Light level" },
+      "temp01ae_dew": { "p": "sensor", "unit_of_meas": "°C", "val_tpl": "{{ (value_json.dew * 10) | round }}", "uniq_id": "temp01ae_dew", "name": "Dew point" },
+      "temp01ae_fw": { "p": "update", "uniq_id": "temp01ae_fw" }
+    },
+    "~": "kitchen/climate",
+    "stat_t": "~/state",
+    "avty_t": "~/availability",
+    "qos": 2
+  },
+  "homeassistant/binary_sensor/garden/motion/config": {
+    "name": null,
+    "device_class": "motion",
+    "state_topic": "homeassistant/binary_sensor/garden/state",
+    "unique_id": "motion01ad",
+    "device": { "identifiers": ["01ad"], "name": "Garden" }
+  },
+  "homeassistant/light/office_lamp/config": {
+    "~": "home/office/lamp",
+    "name": null,
+    "uniq_id": "office_lamp",
+    "cmd_t": "~/set",
+    "stat_t": "~/state",
+    "pl_on": "on",
+    "pl_off": "off",
+    "bri_cmd_t": "~/brightness/set",
+    "bri_stat_t": "~/brightness",
+    "bri_scl": 100,
+    "clr_temp_cmd_t": "~/ct/set",
+    "clr_temp_stat_t": "~/ct",
+    "min_mirs": 153,
+    "max_mirs": 370,
+    "hs_cmd_t": "~/hs/set",
+    "hs_stat_t": "~/hs",
+    "avty_t": "~/status",
+    "dev": { "ids": ["office-lamp-1"], "name": "Office lamp", "mf": "DIY" }
+  },
+  "homeassistant/light/esp-strip/strip/config": {
+    "name": "Strip",
+    "uniq_id": "esp-strip-light",
+    "schema": "json",
+    "cmd_t": "esp-strip/light/strip/command",
+    "stat_t": "esp-strip/light/strip/state",
+    "brightness": true,
+    "sup_clrm": ["rgb"],
+    "avty_t": "esp-strip/status",
+    "dev": {
+      "ids": "esp-strip",
+      "name": "ESP strip",
+      "sw": "esphome v2026.9.0",
+      "mdl": "esp32dev",
+      "mf": "Espressif",
+      "cns": [["mac", "24:0a:c4:00:00:01"]]
+    }
+  },
+  "homeassistant/button/esp-strip/restart/config": {
+    "name": "Restart",
+    "uniq_id": "esp-strip-restart",
+    "cmd_t": "esp-strip/button/restart/command",
+    "ent_cat": "config",
+    "avty_t": "esp-strip/status",
+    "dev": { "ids": "esp-strip" }
+  },
+  "homeassistant/switch/porch/config": {
+    "name": "Porch light",
+    "uniq_id": "porch-relay",
+    "cmd_t": "porch/relay/set",
+    "stat_t": "porch/relay/state",
+    "pl_on": "1",
+    "pl_off": "0",
+    "stat_on": "on",
+    "stat_off": "off",
+    "val_tpl": "{{ value_json.relay }}",
+    "dev_cla": "outlet",
+    "dev": { "ids": ["porch-1"], "name": "Porch relay" }
+  },
+  "homeassistant/cover/garage/config": {
+    "name": "Garage door",
+    "uniq_id": "garage-door",
+    "dev_cla": "garage",
+    "cmd_t": "garage/door/set",
+    "stat_t": "garage/door/state",
+    "pos_t": "garage/door/position",
+    "set_pos_t": "garage/door/position/set",
+    "set_pos_tpl": "{\"position\": {{ position }}}",
+    "pos_open": 255,
+    "pos_clsd": 0,
+    "pl_stop": null,
+    "dev": { "ids": ["garage-1"], "name": "Garage" }
+  },
+  "homeassistant/lock/front/config": {
+    "name": "Front door",
+    "uniq_id": "front-lock",
+    "cmd_t": "front/lock/set",
+    "stat_t": "front/lock/state",
+    "dev": { "ids": ["front-lock-1"], "name": "Front lock" }
+  },
+  "homeassistant/climate/living_ac/config": {
+    "name": "Living AC",
+    "uniq_id": "living-ac",
+    "modes": ["off", "cool", "heat", "fan_only", "heat_cool"],
+    "fan_modes": ["auto", "low", "high"],
+    "mode_cmd_t": "living/ac/mode/set",
+    "mode_stat_t": "living/ac/mode",
+    "temp_cmd_t": "living/ac/target/set",
+    "temp_stat_t": "living/ac/target",
+    "curr_temp_t": "living/ac/current",
+    "curr_temp_tpl": "{{ value_json.temperature }}",
+    "fan_mode_cmd_t": "living/ac/fan/set",
+    "fan_mode_stat_t": "living/ac/fan",
+    "min_temp": 16,
+    "max_temp": 30,
+    "temp_step": 0.5,
+    "dev": { "ids": ["living-ac-1"], "name": "Living room AC" }
+  },
+  "homeassistant/sensor/0x00158d0000000003/temperature/config": {
+    "name": "Temperature",
+    "uniq_id": "0x00158d0000000003_temperature_zigbee2mqtt",
+    "stat_t": "zigbee2mqtt/bedroom_climate",
+    "val_tpl": "{{ value_json.temperature }}",
+    "dev_cla": "temperature",
+    "unit_of_meas": "°C",
+    "o": { "name": "Zigbee2MQTT", "sw": "2.14.2", "url": "https://www.zigbee2mqtt.io" },
+    "dev": { "ids": ["zigbee2mqtt_0x00158d0000000003"], "name": "bedroom_climate", "mf": "Aqara" }
+  }
+}

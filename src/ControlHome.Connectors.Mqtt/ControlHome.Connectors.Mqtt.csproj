@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The MQTT connector: Zigbee2MQTT (native), Home Assistant MQTT discovery and Tasmota native discovery over one broker
+    connection. Like every connector it references Connectors.Abstractions only (enforced by the architecture tests).
+  -->
+  <PropertyGroup>
+    <RootNamespace>ControlHome.Connectors.Mqtt</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MQTTnet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ControlHome.Connectors.Abstractions\ControlHome.Connectors.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ControlHome.Connectors.Tests" />
+  </ItemGroup>
+
+</Project>
