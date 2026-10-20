@@ -80,8 +80,11 @@ test('sets the light level and the AC target temperature on their pages', async 
     .poll(() => attributeValue(page.request, SIMULATED.ac, 'thermostat', 'targetTemperature'))
     .toBe(before + 1)
 
-  // Mode: heat (its range tops at 26 °C on this AC).
-  await page.getByRole('radio', { name: t('device.values.mode.heat') }).click()
+  // Mode: heat (its range tops at 26 °C on this AC). The modes are a segmented choice of toggle buttons.
+  const modes = page.getByRole('group', { name: t('device.attributes.mode') })
+  const heat = modes.getByRole('button', { name: t('device.values.mode.heat'), exact: true })
+  await heat.click()
+  await expect(heat).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(() => attributeValue(page.request, SIMULATED.ac, 'thermostat', 'mode')).toBe('heat')
   await expect(dial).toHaveAttribute('aria-valuemax', '26')
   await gates.check('AC page')

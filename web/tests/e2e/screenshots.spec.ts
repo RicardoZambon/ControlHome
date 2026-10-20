@@ -4,6 +4,7 @@ import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import {
   SETUP_CODE,
   completeSetup,
+  createSimulatedHome,
   createUser,
   dismissToasts,
   expect,
@@ -204,6 +205,69 @@ function floorRoutes(floor: { id: number; name: string }): Route[] {
     },
     { path: `/floors/${floor.id}`, name: 'floor-view', ready: room },
     { path: `/floors/${floor.id}/edit`, name: 'floor-edit', ready: room },
+  ]
+}
+
+/** The devices and integrations pages before any integration exists (their empty states). */
+const emptyDeviceRoutes: Route[] = [
+  {
+    path: '/devices',
+    name: 'devices-empty',
+    ready: (page, locale) => page.getByRole('heading', { name: tr(locale, 'devices.empty.title') }),
+  },
+  {
+    path: '/integrations',
+    name: 'integrations-empty',
+    ready: (page, locale) => page.getByRole('heading', { name: tr(locale, 'integrations.empty.title') }),
+  },
+]
+
+type SimulatedHome = Awaited<ReturnType<typeof createSimulatedHome>>
+
+/**
+ * The Simulated connector's basic home, its devices spread over the seeded floor's rooms (the lock and the door sensor
+ * stay without a room, so the "No room" group shows too) and the light marked as a favorite.
+ */
+async function seedDevices(request: APIRequestContext): Promise<SimulatedHome> {
+  const home = await createSimulatedHome(request)
+  const rooms = (await (await request.get('/api/rooms')).json()) as { id: number }[]
+  const place = async (device: SimulatedHome[keyof SimulatedHome], roomId: number | undefined) => {
+    const response = await request.put(`/api/devices/${device.id}`, {
+      headers: mutationHeaders(),
+      data: { name: device.name, icon: null, roomId: roomId ?? null },
+    })
+    expect(response.status(), await response.text()).toBe(200)
+  }
+  await place(home.light, rooms[0]?.id)
+  await place(home.plug, rooms[1]?.id)
+  await place(home.ac, rooms[2]?.id)
+  const favorite = await request.put(`/api/endpoints/${home.light.endpoints[0]!.id}/favorite`, {
+    headers: mutationHeaders(),
+    data: { favorite: true },
+  })
+  expect(favorite.status(), await favorite.text()).toBe(200)
+  return home
+}
+
+/** The devices grid, a device page per kind of control, and the integrations list. */
+function deviceRoutes(home: SimulatedHome): Route[] {
+  const heading = (name: string) => (page: Page) => page.getByRole('heading', { level: 1, name })
+  return [
+    {
+      path: '/devices',
+      name: 'devices',
+      ready: (page) => page.locator('[data-slot="device-tile"]').filter({ hasText: home.lock.name }),
+    },
+    { path: `/devices/${home.light.id}`, name: 'device-light', ready: heading(home.light.name) },
+    { path: `/devices/${home.ac.id}`, name: 'device-ac', ready: heading(home.ac.name) },
+    { path: `/devices/${home.plug.id}`, name: 'device-plug', ready: heading(home.plug.name) },
+    { path: `/devices/${home.lock.id}`, name: 'device-lock', ready: heading(home.lock.name) },
+    { path: `/devices/${home.contact.id}`, name: 'device-contact', ready: heading(home.contact.name) },
+    {
+      path: '/integrations',
+      name: 'integrations',
+      ready: (page) => page.getByRole('heading', { name: 'Simulated home' }),
+    },
   ]
 }
 
@@ -513,6 +577,28 @@ for (const width of WIDTHS) {
           page.getByText(t('floors.editor.room.deleted', { name: `${t('floors.editor.roomBase')} 4` })),
         ).toBeVisible()
         await capture('editor-deleted-toast')
+
+        // Devices: a tile pressed (pending), and the safety PIN pad (empty, then after a wrong PIN).
+        const pin = await page.request.put('/api/auth/me/pin', {
+          headers: mutationHeaders(),
+          data: { currentPin: null, newPin: '4826' },
+        })
+        expect(pin.status(), await pin.text()).toBe(204)
+        const home = await seedDevices(page.request)
+        await page.goto(`/devices/${home.lock.id}`)
+        await expect(page.locator('[data-realtime-status="connected"]')).toBeAttached({ timeout: 15_000 })
+        await page.getByRole('button', { name: t('device.commands.unlock'), exact: true }).click()
+        const pad = page.getByRole('dialog', { name: t('safety.dialog.title') })
+        await expect(pad).toBeVisible()
+        await pad.getByRole('button', { name: '1', exact: true }).click()
+        await pad.getByRole('button', { name: '2', exact: true }).click()
+        await capture('pin-dialog')
+        for (const digit of '34') await pad.getByRole('button', { name: digit, exact: true }).click()
+        await pad.getByRole('button', { name: t('safety.dialog.confirm') }).click()
+        await expect(pad.locator('[data-slot="pin-error"]')).toHaveText(t('errors.safety.pin_incorrect'))
+        await capture('pin-dialog-error')
+        await page.keyboard.press('Escape')
+        await expect(pad).toBeHidden()
       })
     })
   }
@@ -719,14 +805,14 @@ for (const width of WIDTHS) {
           await signIn(page.request, testData.admin)
           await savePreferences(page.request, { displayName: testData.admin.displayName, locale, theme })
           await createUser(page.request, testData.member, 'Member')
-          await createUser(
-            page.request,
-            { userName: 'linus', displayName: 'Linus Torvalds', password: 'just for fun, really' },
-            'Viewer',
-          )
+          await createUser(page.request, testData.viewer, 'Viewer')
           // A floor with rooms over a traced plan: the dashboard shows it, and the floor pages get captured too.
           const floor = await seedFloor(page.request, locale)
-          for (const route of [...signedInRoutes, ...floorRoutes(floor)]) await capture(route)
+          // No integration yet: the empty devices and integrations pages. Then the simulated home in those rooms.
+          for (const route of emptyDeviceRoutes) await capture(route)
+          const home = await seedDevices(page.request)
+          for (const route of [...signedInRoutes, ...floorRoutes(floor), ...deviceRoutes(home)])
+            await capture(route)
         })
       })
     }

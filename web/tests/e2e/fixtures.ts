@@ -23,6 +23,7 @@ export interface TestUser {
 interface TestData {
   admin: TestUser
   member: TestUser
+  viewer: TestUser
   home: { name: string; timeZoneId: string; locale: string; currency: string }
 }
 
