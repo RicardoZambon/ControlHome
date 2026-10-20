@@ -33,7 +33,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------------------------------------------------
 # build: dotnet publish for the target architecture -> /out
 # ---------------------------------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.302-noble@sha256:72dd743782f2ae7e5476fd64f6a460045e3998dc862218b80e6944cba79a01b0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.402-noble@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa AS build
 ARG TARGETARCH
 WORKDIR /src
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
@@ -70,7 +70,7 @@ RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing
 # ---------------------------------------------------------------------------------------------------------------------
 # final: chiseled ASP.NET Core runtime (non-root, no shell or package manager; "extra" adds ICU and tzdata)
 # ---------------------------------------------------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra@sha256:00e0ad6a7ef8c0c1391b87f05c7ac757a15740455688f2bfcd146a3f4b987efd AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra@sha256:3ed6558056b54d5c9dfefb7ff473728e022ff2bf1d976cbf8ee07b05ec594374 AS final
 
 LABEL org.opencontainers.image.title="ControlHome" \
       org.opencontainers.image.description="Self-hosted home control and automation for the LAN (ASP.NET Core API + Vue SPA)." \
