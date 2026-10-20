@@ -264,9 +264,12 @@ function onDeleteOpenChange(open: boolean): void {
             <h2 class="truncate font-serif text-xl font-medium tracking-tight">
               {{ card.integration.name }}
             </h2>
-            <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <!-- Phones: one line each (a "·" left at the end of a wrapped line reads as a typo). -->
+            <p
+              class="grid gap-1 text-sm text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:gap-x-2"
+            >
               <span>{{ card.connectorName }}</span>
-              <span aria-hidden="true">·</span>
+              <span aria-hidden="true" class="max-sm:hidden">·</span>
               <span>{{
                 t('integrations.added', { date: formatDateTime(card.integration.createdAtUtc, locale) })
               }}</span>
