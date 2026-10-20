@@ -120,7 +120,7 @@ describe('SchemaField renders every ValueSchema type', () => {
       field({ type: 'number', unit: '°C' }, { modelValue: 21.5, readonly: true }, 'pt-BR')
         .get('[data-slot="schema-value"]')
         .text(),
-    ).toBe('21,5 °C')
+    ).toBe('21,5\u00a0°C')
     expect(
       field({ type: 'bool' }, { modelValue: true, readonly: true }).get('button[role="switch"]').attributes(),
     ).toHaveProperty('disabled')

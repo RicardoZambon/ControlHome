@@ -155,16 +155,14 @@ const iconTone = computed(() =>
         />
       </h3>
       <p class="truncate text-xs text-muted-foreground">{{ roomName ?? t('device.noRoom') }}</p>
-      <p class="flex min-w-0 items-center gap-1.5 text-sm" data-slot="tile-state">
+      <!-- The state wraps to a second line on narrow tiles ("Cooling to 24 °C · 27.9 °C") instead of being cut. -->
+      <p class="line-clamp-2 min-w-0 text-sm leading-snug break-words" data-slot="tile-state">
         <span
           aria-hidden="true"
-          :class="cn('inline-block size-2 shrink-0 rounded-full', TONES[summary.tone].dot)"
+          :class="cn('mr-1.5 inline-block size-2 rounded-full align-middle', TONES[summary.tone].dot)"
         />
-        <span class="truncate font-medium">{{ pending ? t('device.state.pending') : summary.label }}</span>
-        <span
-          v-if="summary.details.length > 0 && !pending"
-          class="truncate text-muted-foreground tabular-nums"
-        >
+        <span class="font-medium">{{ pending ? t('device.state.pending') : summary.label }}</span>
+        <span v-if="summary.details.length > 0 && !pending" class="text-muted-foreground tabular-nums">
           · {{ summary.details.join(' · ') }}
         </span>
       </p>

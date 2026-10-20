@@ -110,8 +110,8 @@ describe.each(['en', 'pt-BR'] as const)('devices page (%s)', (locale) => {
     expect(tiles).toHaveLength(5)
     const states = tiles.map((tile) => tile.get('[data-slot="tile-state"]').text())
     expect(states[0]).toContain(locale === 'en' ? 'On' : 'Ligado')
-    expect(states[0]).toContain('80 %')
-    expect(states[2]).toContain(locale === 'en' ? 'Cooling to 22 °C' : 'Resfriando até 22 °C')
+    expect(states[0]).toContain('80\u00a0%')
+    expect(states[2]).toContain(locale === 'en' ? 'Cooling to 22\u00a0°C' : 'Resfriando até 22\u00a0°C')
     expect(states[4]).toContain(locale === 'en' ? 'Locked' : 'Trancada')
     expect(tiles[0]!.attributes('data-tone')).toBe('on')
     // Each tile opens its device.

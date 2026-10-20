@@ -82,11 +82,14 @@ export function measurement(value: number, unit: string | null | undefined, loca
   }
 }
 
-/** "22,5 °C", "80 %", "1,25 kWh". */
+/** Between a number and its unit: a no-break space, so "24 °C" never wraps between the two. */
+export const UNIT_SPACE = ' '
+
+/** "22,5 °C", "80 %", "1,25 kWh" (with a no-break space before the unit). */
 export function formatMeasurement(value: number, unit: string | null | undefined, locale: string): string {
   const { value: number, unit: shown } = measurement(value, unit, locale)
   if (!shown) return number
-  return shown === '°' ? `${number}°` : `${number} ${shown}`
+  return shown === '°' ? `${number}°` : `${number}${UNIT_SPACE}${shown}`
 }
 
 /** Any attribute value as text (the attributes table, read-only generic values). */

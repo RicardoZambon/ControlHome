@@ -368,10 +368,10 @@ const info = computed(() => {
               <h3 class="eyebrow mb-5">{{ capabilityLabel(entry.capability.capabilityId, t, te) }}</h3>
               <CapabilityControl :device="summary" :endpoint="endpoint" :capability="entry.capability" />
             </section>
-            <!-- Readings in the free column beside a lone control -->
+            <!-- Readings in the free column beside a lone control, as tall as it (values sit at the bottom) -->
             <div
               v-if="layout.readingsBeside"
-              :class="cn('grid content-start gap-3', layout.readings.length > 1 && 'grid-cols-2')"
+              :class="cn('grid auto-rows-fr gap-3', layout.readings.length > 1 && 'grid-cols-2')"
               data-slot="readings"
             >
               <CapabilityControl
@@ -404,7 +404,7 @@ const info = computed(() => {
 
       <!-- Diagnostics -->
       <section
-        class="mt-14 grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)]"
+        class="mt-14 grid gap-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start"
         aria-labelledby="device-diagnostics"
       >
         <h2 id="device-diagnostics" class="font-serif text-2xl font-medium tracking-tight lg:col-span-2">

@@ -468,7 +468,7 @@ for (const width of WIDTHS) {
           const navigation = page.getByRole('navigation', { name: t('shell.primaryNavigation') })
           await navigation.getByRole('link', { name: t('dashboard.nav'), exact: true }).focus()
           await page.keyboard.press('Tab')
-          await expect(navigation.getByRole('link', { name: t('floors.nav'), exact: true })).toBeFocused()
+          await expect(navigation.getByRole('link', { name: t('devices.nav'), exact: true })).toBeFocused()
           await capture('focus-sidebar')
         }
 

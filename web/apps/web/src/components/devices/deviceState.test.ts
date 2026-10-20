@@ -31,7 +31,7 @@ describe('summarizeEndpoint', () => {
     expect(summary(['switch', 'level'], { 'switch.on': bool(true), 'level.level': num(80) })).toEqual({
       tone: 'on',
       label: 'On',
-      details: ['80 %'],
+      details: ['80\u00a0%'],
       active: true,
       capabilityId: 'switch',
     })
@@ -49,7 +49,7 @@ describe('summarizeEndpoint', () => {
       summary(['switch', 'power', 'energy'], { 'switch.on': bool(true), 'power.power': num(37.4) }),
     ).toMatchObject({
       label: 'On',
-      details: ['37 W'],
+      details: ['37\u00a0W'],
     })
   })
 
@@ -62,12 +62,12 @@ describe('summarizeEndpoint', () => {
     }
     expect(summary(['switch', 'thermostat'], cooling)).toEqual({
       tone: 'on',
-      label: 'Cooling to 22.5 °C',
-      details: ['26.4 °C'],
+      label: 'Cooling to 22.5\u00a0°C',
+      details: ['26.4\u00a0°C'],
       active: true,
       capabilityId: 'thermostat',
     })
-    expect(summary(['switch', 'thermostat'], cooling, { locale: 'pt-BR' }).details).toEqual(['26,4 °C'])
+    expect(summary(['switch', 'thermostat'], cooling, { locale: 'pt-BR' }).details).toEqual(['26,4\u00a0°C'])
     expect(summary(['switch', 'thermostat'], { ...cooling, 'switch.on': bool(false) })).toMatchObject({
       tone: 'off',
       label: 'Off',
@@ -99,7 +99,7 @@ describe('summarizeEndpoint', () => {
       summary(['cover'], { 'cover.position': num(40), 'cover.coverState': str('stopped') }),
     ).toMatchObject({
       tone: 'on',
-      label: '40 % open',
+      label: '40\u00a0% open',
     })
     expect(summary(['cover'], { 'cover.coverState': str('open') }, { deviceClass: 'gate' })).toMatchObject({
       tone: 'warn',
@@ -121,7 +121,7 @@ describe('summarizeEndpoint', () => {
     ).toMatchObject({
       tone: 'off',
       label: 'Closed',
-      details: ['Battery 9 %'],
+      details: ['Battery 9\u00a0%'],
     })
     expect(summary(['motion'], { 'motion.motion': bool(true) })).toMatchObject({
       tone: 'info',
@@ -137,8 +137,8 @@ describe('summarizeEndpoint', () => {
         'temperature.temperature': num(21),
         'humidity.humidity': num(55),
       }),
-    ).toMatchObject({ tone: 'neutral', label: '21 °C', details: ['55 %'] })
-    expect(summary(['energy'], { 'energy.energy': num(12_500) })).toMatchObject({ label: '12.50 kWh' })
+    ).toMatchObject({ tone: 'neutral', label: '21\u00a0°C', details: ['55\u00a0%'] })
+    expect(summary(['energy'], { 'energy.energy': num(12_500) })).toMatchObject({ label: '12.50\u00a0kWh' })
     expect(summary(['button'], { 'button.press': str('double') })).toMatchObject({ label: 'Double press' })
     expect(summary(['button'], {})).toMatchObject({ label: 'Not pressed yet' })
   })

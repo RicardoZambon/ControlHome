@@ -142,7 +142,7 @@ const readText = computed(() => {
     case 'number': {
       const unit = bounds.value?.unit
       return typeof value === 'number'
-        ? `${numberFormat.value.format(value)}${unit ? ` ${unit}` : ''}`
+        ? `${numberFormat.value.format(value)}${unit ? ` ${unit}` : ''}`
         : String(value)
     }
     case 'enum':
