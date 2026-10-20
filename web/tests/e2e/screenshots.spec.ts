@@ -577,28 +577,6 @@ for (const width of WIDTHS) {
           page.getByText(t('floors.editor.room.deleted', { name: `${t('floors.editor.roomBase')} 4` })),
         ).toBeVisible()
         await capture('editor-deleted-toast')
-
-        // Devices: a tile pressed (pending), and the safety PIN pad (empty, then after a wrong PIN).
-        const pin = await page.request.put('/api/auth/me/pin', {
-          headers: mutationHeaders(),
-          data: { currentPin: null, newPin: '4826' },
-        })
-        expect(pin.status(), await pin.text()).toBe(204)
-        const home = await seedDevices(page.request)
-        await page.goto(`/devices/${home.lock.id}`)
-        await expect(page.locator('[data-realtime-status="connected"]')).toBeAttached({ timeout: 15_000 })
-        await page.getByRole('button', { name: t('device.commands.unlock'), exact: true }).click()
-        const pad = page.getByRole('dialog', { name: t('safety.dialog.title') })
-        await expect(pad).toBeVisible()
-        await pad.getByRole('button', { name: '1', exact: true }).click()
-        await pad.getByRole('button', { name: '2', exact: true }).click()
-        await capture('pin-dialog')
-        for (const digit of '34') await pad.getByRole('button', { name: digit, exact: true }).click()
-        await pad.getByRole('button', { name: t('safety.dialog.confirm') }).click()
-        await expect(pad.locator('[data-slot="pin-error"]')).toHaveText(t('errors.safety.pin_incorrect'))
-        await capture('pin-dialog-error')
-        await page.keyboard.press('Escape')
-        await expect(pad).toBeHidden()
       })
     })
   }
@@ -785,6 +763,14 @@ for (const width of WIDTHS) {
             await screenshotWholePage(page, `${outputDir}${route.name}-${width}-${theme}-${locale}.png`)
           }
 
+          /** The screen as it is now (an open dialog), into ./screenshots/<name>-<width>-<theme>-<locale>.png. */
+          async function captureScreen(name: string): Promise<void> {
+            await expect(page.locator('html')).toHaveAttribute('lang', locale)
+            await page.evaluate(() => document.fonts.ready)
+            await gates.check(`${name} (${width} px, ${theme}, ${locale})`)
+            await page.screenshot({ path: `${outputDir}${name}-${width}-${theme}-${locale}.png` })
+          }
+
           await resetApp(request)
           await capture(anonymousRoutes[0]!)
 
@@ -813,6 +799,35 @@ for (const width of WIDTHS) {
           const home = await seedDevices(page.request)
           for (const route of [...signedInRoutes, ...floorRoutes(floor), ...deviceRoutes(home)])
             await capture(route)
+
+          // The safety PIN: the profile section once a PIN is set, then the PIN pad on the lock (two digits typed, then
+          // after a wrong PIN). The pad is a dialog: the screen as it is, not the whole page.
+          const pin = await page.request.put('/api/auth/me/pin', {
+            headers: mutationHeaders(),
+            data: { currentPin: null, newPin: '4826' },
+          })
+          expect(pin.status(), await pin.text()).toBe(204)
+          await capture({
+            path: '/profile#safety-pin',
+            name: 'profile-pin',
+            ready: (page) => page.locator('#safety-pin').getByText(tr(locale, 'profile.pin.isSet')),
+          })
+          await page.goto(`/devices/${home.lock.id}`)
+          await expect(page.getByRole('heading', { level: 1, name: home.lock.name })).toBeVisible()
+          await expect(page.locator('[data-realtime-status="connected"]')).toBeAttached({ timeout: 15_000 })
+          await page.getByRole('button', { name: tr(locale, 'device.commands.unlock'), exact: true }).click()
+          const pad = page.getByRole('dialog', { name: tr(locale, 'safety.dialog.title') })
+          await expect(pad).toBeVisible()
+          for (const digit of '12') await pad.getByRole('button', { name: digit, exact: true }).click()
+          await captureScreen('pin-dialog')
+          for (const digit of '34') await pad.getByRole('button', { name: digit, exact: true }).click()
+          await pad.getByRole('button', { name: tr(locale, 'safety.dialog.confirm') }).click()
+          await expect(pad.locator('[data-slot="pin-error"]')).toHaveText(
+            tr(locale, 'errors.safety.pin_incorrect'),
+          )
+          await captureScreen('pin-dialog-error')
+          await page.keyboard.press('Escape')
+          await expect(pad).toBeHidden()
         })
       })
     }

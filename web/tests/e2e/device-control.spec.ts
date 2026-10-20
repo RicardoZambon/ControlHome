@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test'
 import {
   SIMULATED,
   attributeValue,
@@ -11,10 +12,16 @@ import {
 import { t } from './i18n'
 
 // Task 1.2-E: the Simulated connector's basic home, controlled from the device tiles and the device pages. Every change
-// is checked twice: on the page at once (optimistic, then confirmed) and on the server (GET /api/devices).
+// is checked three times: on the page at once (optimistic, then confirmed), on the server (GET /api/devices), and on the
+// page again after a reload (the state the server keeps, not what the browser remembered).
 
-const tile = (page: import('@playwright/test').Page, name: string) =>
-  page.locator('[data-slot="device-tile"]').filter({ hasText: name })
+const tile = (page: Page, name: string) => page.locator('[data-slot="device-tile"]').filter({ hasText: name })
+
+/** Reloads the page and waits until it is live again. */
+async function reload(page: Page): Promise<void> {
+  await page.reload()
+  await waitForLive(page)
+}
 
 test.beforeEach(async ({ page, request }) => {
   await resetApp(request)
@@ -32,14 +39,18 @@ test('switches the light from its tile', async ({ page, gates }) => {
 
   const power = light.getByRole('switch', { name: t('device.switch.label', { name: SIMULATED.light }) })
   const wasOn = (await power.getAttribute('aria-checked')) === 'true'
+  const nowState = wasOn ? t('device.state.off') : t('device.state.on')
   await power.click()
   // Optimistic: the switch flips at once, and stays once the device confirms.
   await expect(power).toHaveAttribute('aria-checked', String(!wasOn))
   await expect.poll(() => attributeValue(page.request, SIMULATED.light, 'switch', 'on')).toBe(!wasOn)
-  await expect(light.locator('[data-slot="tile-state"]')).toContainText(
-    wasOn ? t('device.state.off') : t('device.state.on'),
-  )
+  await expect(light.locator('[data-slot="tile-state"]')).toContainText(nowState)
   await expect(power).toHaveAttribute('aria-checked', String(!wasOn))
+
+  // After a reload the tile still shows the new state.
+  await reload(page)
+  await expect(power).toHaveAttribute('aria-checked', String(!wasOn))
+  await expect(light.locator('[data-slot="tile-state"]')).toContainText(nowState)
 })
 
 test('sets the light level and the AC target temperature on their pages', async ({ page, gates }) => {
@@ -58,6 +69,11 @@ test('sets the light level and the AC target temperature on their pages', async 
   await page.keyboard.press('ArrowRight')
   await expect.poll(() => attributeValue(page.request, SIMULATED.light, 'level', 'level')).toBe(52)
   await gates.check('light page')
+
+  // After a reload the slider is where it was left.
+  await reload(page)
+  await expect(slider).toHaveAttribute('aria-valuenow', '52')
+  await expect(page.getByRole('button', { name: '50 %' })).toHaveAttribute('aria-pressed', 'false')
 
   // The AC: two steps up on the dial's + button (sent once, after the taps).
   await page.goto('/devices')
@@ -88,4 +104,10 @@ test('sets the light level and the AC target temperature on their pages', async 
   await expect.poll(() => attributeValue(page.request, SIMULATED.ac, 'thermostat', 'mode')).toBe('heat')
   await expect(dial).toHaveAttribute('aria-valuemax', '26')
   await gates.check('AC page')
+
+  // After a reload: the new target, in heat mode, with heat's range.
+  await reload(page)
+  await expect(dial).toHaveAttribute('aria-valuenow', String(before + 1))
+  await expect(heat).toHaveAttribute('aria-pressed', 'true')
+  await expect(dial).toHaveAttribute('aria-valuemax', '26')
 })

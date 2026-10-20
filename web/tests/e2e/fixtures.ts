@@ -184,6 +184,26 @@ export async function attributeValue(
   return value?.b ?? value?.n ?? value?.s
 }
 
+/**
+ * Sends a command to a device's first endpoint (`POST /api/endpoints/{id}/commands`, as an automation or another app
+ * would) and expects it to be accepted (202). Returns the device's endpoint id.
+ */
+export async function sendCommand(
+  request: APIRequestContext,
+  device: SimulatedDevice,
+  capabilityId: string,
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<string> {
+  const endpointId = device.endpoints[0]!.id
+  const response = await request.post(`/api/endpoints/${endpointId}/commands`, {
+    headers: mutationHeaders(),
+    data: { capabilityId, command, arguments: args, idempotencyKey: null },
+  })
+  expect(response.status(), `POST ${capabilityId}.${command}: ${await response.text()}`).toBe(202)
+  return endpointId
+}
+
 /** The AttributeId of `capability.attribute` of a device. */
 export function attributeIdOf(device: SimulatedDevice, capabilityId: string, key: string): number {
   const attribute = device.endpoints
@@ -263,6 +283,11 @@ export interface Gates {
    * checked when it ends; the final page is checked automatically too.
    */
   check(label?: string): Promise<void>
+  /**
+   * From now on, console errors matching `pattern` are expected (the test takes the network down on purpose, so the
+   * browser reports the requests and sockets that fail meanwhile). Every other console error still fails the test.
+   */
+  expectConsoleErrors(pattern: RegExp): void
 }
 
 /** Width at or below which the page must not scroll sideways. */
@@ -346,15 +371,23 @@ export const test = base.extend<{ gates: Gates }>({
   gates: [
     async ({ page }, use, testInfo) => {
       const problems: string[] = []
+      const expectedErrors: RegExp[] = []
       page.on('console', (message) => {
         const text = message.text()
-        if (message.type() === 'error' && !isExpectedApiAnswer(message))
+        if (
+          message.type() === 'error' &&
+          !isExpectedApiAnswer(message) &&
+          !expectedErrors.some((pattern) => pattern.test(text))
+        )
           problems.push(`console error: ${text} (${message.location().url})`)
         else if (MISSING_KEY.test(text)) problems.push(`missing i18n key: ${text}`)
       })
       page.on('pageerror', (error) => problems.push(`uncaught exception: ${error.message}`))
 
-      await use({ check: (label) => checkPage(page, label) })
+      await use({
+        check: (label) => checkPage(page, label),
+        expectConsoleErrors: (pattern) => void expectedErrors.push(pattern),
+      })
 
       // The last page the test saw, unless the test already failed (its own error is the interesting one) or skipped
       // itself before opening any page.
