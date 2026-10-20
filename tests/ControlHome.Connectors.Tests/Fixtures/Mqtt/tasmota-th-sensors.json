@@ -1,0 +1,9 @@
+{
+  "sn": {
+    "Time": "2026-10-12T09:00:00",
+    "AM2301": { "Temperature": 24.1, "Humidity": 61.2, "DewPoint": 16.1 },
+    "DS18B20": { "Id": "01144A0CB2AA", "Temperature": 19.5 },
+    "TempUnit": "C"
+  },
+  "ver": 1
+}

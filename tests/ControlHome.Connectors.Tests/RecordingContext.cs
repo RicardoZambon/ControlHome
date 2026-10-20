@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace ControlHome.Connectors.Tests;
 
 /// <summary>An <see cref="IConnectorContext"/> that records everything a runtime reports (thread-safe).</summary>
-internal sealed class RecordingContext(TimeProvider time) : IConnectorContext
+internal sealed class RecordingContext(TimeProvider time, ILogger? logger = null) : IConnectorContext
 {
     private readonly Lock _lock = new();
     private readonly List<StateReport> _states = [];
@@ -20,7 +20,7 @@ internal sealed class RecordingContext(TimeProvider time) : IConnectorContext
 
     public TimeProvider Time { get; } = time;
 
-    public ILogger Logger { get; } = NullLogger.Instance;
+    public ILogger Logger { get; } = logger ?? NullLogger.Instance;
 
     public IReadOnlyList<StateReport> States => Snapshot(_states);
 

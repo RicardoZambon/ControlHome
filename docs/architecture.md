@@ -260,6 +260,21 @@ a point-in-polygon test.
   Ticks every 5 s of the context's `TimeProvider`; commands apply after 150 ms; idempotency keys are remembered for
   10 min (a repeated key → `duplicate`; a safety-critical batch without a key → `idempotency_required`). Deterministic
   for a seed and clock.
+- **MQTT connector** (`mqtt`, 1.4; setup in [`docs/connectors/mqtt.md`](connectors/mqtt.md)): one MQTTnet 5.2 broker
+  connection per integration (password is a secret field) with its own reconnect loop — exponential back-off 1 s → 60 s
+  with ±20 % jitter, re-subscribing every adapter filter and device topic after each reconnect; devices are `Unknown`
+  while the broker is down (a lost broker never orphans them), rejected credentials → `NeedsReauth`. Only MQTT topic
+  names from discovery are subscribed or published to (wildcard/malformed topics are ignored, so no discovery payload
+  can get the connection dropped or subscribe it to everything), and retained messages (replays) never produce events.
+  Setup is a flow (form → connection test with a throw-away client id → done); for an existing integration the same
+  flow edits the settings (the stored password is reused only for the same host, port, TLS mode and user) or opens
+  Zigbee2MQTT's permit-join window (progress step). Three adapters share the connection:
+  Zigbee2MQTT native (retained `bridge/devices` → devices by IEEE address from `exposes` + access bits; the bridge is
+  their parent; renames via `bridge/event`), Home Assistant discovery as an intake format only (device-based and
+  single-component configs, abbreviations, `~`, a small `value_template` subset — unsupported templates are listed in a
+  diagnostic `unsupportedTemplates` attribute), and Tasmota native discovery (relays, `ENERGY`, sensors). A retained
+  empty config, or a device missing from a newer `bridge/devices`, orphans the device. Vendor properties without a
+  catalogue capability (illuminance, voltage, current, …) go to the endpoint's `generic` capability.
 
 ---
 
@@ -730,7 +745,8 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
 - **Dev compose:** `docker-compose.dev.yml` overrides to a bridge network, published ports (`8080:8711`), local build
   and `bundled-db` with its own `ControlHome_Compose` database.
 - **Umbrel**
-  - On Umbrel, reuse its Mosquitto, Zigbee2MQTT and SQL Server through their host ports.
+  - On Umbrel, reuse its Mosquitto, Zigbee2MQTT and SQL Server through their host ports (MQTT: `127.0.0.1:1883`, see
+    `docs/connectors/mqtt.md`).
   - Umbrel packaging lives in a separate public `controlhome-umbrel-store` repo (created by the owner): app_proxy
     follows Umbrel's home-assistant app pattern; `PROXY_AUTH_ADD=false`, `user: 1000:1000`,
     `${APP_DATA_DIR}/data:/data`, `Setup__Code=${APP_PASSWORD}` with `deterministicPassword: true`; the port is chosen
