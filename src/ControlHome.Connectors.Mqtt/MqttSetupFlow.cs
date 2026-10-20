@@ -14,7 +14,8 @@ namespace ControlHome.Connectors.Mqtt;
 /// The MQTT connector's flow. Setup: a form with the connection settings → a connection test with a throw-away client id
 /// (the form comes back with field errors when the broker cannot be reached or rejects the credentials) → done (the
 /// password goes to the secrets, never the config). For an existing integration the flow first asks what to do: change the
-/// connection settings (blank password keeps the stored one) or let Zigbee devices join — it opens Zigbee2MQTT's
+/// connection settings (a blank password keeps the stored one while host, port, TLS and user name stay the same — it is
+/// never sent to another broker) or let Zigbee devices join — it opens Zigbee2MQTT's
 /// permit-join window (<c>bridge/request/permit_join</c> with <c>time</c>) and shows a progress step listing the devices
 /// that joined until the window closes.
 /// </summary>
@@ -135,9 +136,12 @@ internal sealed class MqttSetupFlow(MqttTransportFactory transports, MqttRuntime
             return ConnectionForm(values, errors);
         }
 
+        // A blank password keeps the stored one only for the same broker and user: admins never see it, so pointing the
+        // settings elsewhere (another host or port, TLS off, another user) must not hand it over. Without it the test
+        // connects without a password, and a broker that needs one answers with an error on the password field.
         var secret = input.Str(MqttSettings.PasswordField) is { Length: > 0 } given
             ? given
-            : context.Existing is { } existing
+            : context.Existing is { } existing && TryParse(existing.Config) is { } stored && SameBrokerAndUser(stored, settings)
                 ? await existing.Secrets.GetAsync(MqttSettings.PasswordField, cancellationToken).ConfigureAwait(false)
                 : null;
 
@@ -370,6 +374,12 @@ internal sealed class MqttSetupFlow(MqttTransportFactory transports, MqttRuntime
         secret is null
             ? done
             : done with { Secrets = new Dictionary<string, string>(StringComparer.Ordinal) { [MqttSettings.PasswordField] = secret } };
+
+    private static bool SameBrokerAndUser(MqttSettings stored, MqttSettings submitted) =>
+        string.Equals(stored.Host, submitted.Host, StringComparison.OrdinalIgnoreCase)
+        && stored.Port == submitted.Port
+        && stored.UseTls == submitted.UseTls
+        && string.Equals(stored.Username, submitted.Username, StringComparison.Ordinal);
 
     private static MqttSettings? TryParse(JsonElement config)
     {

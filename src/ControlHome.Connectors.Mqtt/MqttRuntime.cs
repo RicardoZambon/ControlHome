@@ -16,9 +16,12 @@ namespace ControlHome.Connectors.Mqtt;
 /// One MQTT integration: a broker connection with its own reconnect loop (exponential back-off with jitter; MQTTnet v5 has
 /// no managed client) that re-subscribes every adapter filter and device topic after each reconnect. Messages are queued
 /// and handled in order on one loop: adapters turn discovery into devices, then the message is routed to the devices that
-/// listen on its topic. Retained messages that arrive before their device is known are kept and replayed once it is.
-/// While the broker is unreachable every device is reported <see cref="Availability.Unknown"/>. A bad message is logged and
-/// skipped; a device the host cannot save fails the run (the supervisor restarts it, and the retained discovery is replayed).
+/// listen on its topic. Retained messages that arrive before their device is known are kept (until the next connection,
+/// which receives them again) and replayed once it is; retained messages never produce events (they are replays). Only MQTT
+/// topic names from discovery are subscribed or published to: wildcards and malformed topics are ignored, so no discovery
+/// payload can make the broker drop the connection or subscribe the runtime to everything. While the broker is
+/// unreachable every device is reported <see cref="Availability.Unknown"/>. A bad message is logged and skipped; a device
+/// the host cannot save fails the run (the supervisor restarts it, and the retained discovery is replayed).
 /// </summary>
 internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
 {
@@ -26,6 +29,12 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
     internal const int MaxUnclaimedRetained = 10_000;
 
     private const int InboxCapacity = 10_000;
+
+    /// <summary>
+    /// Queued after every successful connect, before subscribing: the messages before it are from the previous connection.
+    /// The broker then sends every retained message again, so those kept from earlier (possibly deleted since) are dropped.
+    /// </summary>
+    private static readonly MqttMessage _newConnection = new("$controlhome/new-connection", ReadOnlyMemory<byte>.Empty, Retain: false);
 
     private readonly IntegrationInstance _instance;
     private readonly MqttSettings _settings;
@@ -273,20 +282,25 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
             }
         }
 
+        // Only topic names are routed and subscribed: a wildcard or malformed topic from discovery is ignored.
+        var topics = device.Topics.Where(MqttTopic.IsValidName).ToList();
         List<string> subscribe;
         List<MqttMessage> replay = [];
         bool refresh;
+        bool topicsChanged;
         IMqttTransport? transport;
         lock (_lock)
         {
             _upserted[id] = inventory;
+            topicsChanged = true;
             if (_devices.TryGetValue(id, out var previous))
             {
+                topicsChanged = !previous.Topics.SequenceEqual(device.Topics, StringComparer.Ordinal);
                 Unindex(previous);
             }
 
             _devices[id] = device;
-            foreach (var topic in device.Topics)
+            foreach (var topic in topics)
             {
                 if (!_byTopic.TryGetValue(topic, out var ids))
                 {
@@ -302,8 +316,13 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
             }
 
             transport = _transport;
-            subscribe = transport is null ? [] : [.. device.Topics.Where(t => !_subscribed.Contains(t) && !CoveredByFilter(t))];
+            subscribe = transport is null ? [] : [.. topics.Where(t => !_subscribed.Contains(t) && !CoveredByFilter(t))];
             refresh = transport is not null && _refreshed.Add(id);
+        }
+
+        if (topicsChanged && topics.Count < device.Topics.Count)
+        {
+            LogInvalidTopics(context.Logger, id, device.Topics.Count - topics.Count);
         }
 
         Report(device, device.InitialReadings);
@@ -326,7 +345,7 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
 
         foreach (var message in replay)
         {
-            Report(device, device.Read(message));
+            Report(device, Read(device, message));
         }
 
         if (refresh)
@@ -424,6 +443,12 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
             return false;
         }
 
+        if (!MqttTopic.IsValidName(message.Topic))
+        {
+            LogInvalidPublishTopic(Logger, message.Topic);
+            return false;
+        }
+
         try
         {
             await transport.PublishAsync(message.Topic, message.Payload, message.Retain, cancellationToken).ConfigureAwait(false);
@@ -482,6 +507,9 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
             {
                 await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
                 wasConnected = true;
+
+                // Clean session: nothing arrives before the subscriptions below, so the marker separates the connections.
+                await inbox.WriteAsync(_newConnection, cancellationToken).ConfigureAwait(false);
                 List<string> topics;
                 List<MqttDevice> known;
                 lock (_lock)
@@ -623,6 +651,18 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
     {
         await foreach (var message in inbox.ReadAllAsync(cancellationToken).ConfigureAwait(false))
         {
+            if (ReferenceEquals(message, _newConnection))
+            {
+                // Everything retained is about to be sent again: what was kept from the previous connection may have been
+                // deleted meanwhile (a deletion is never re-sent), so it must not be replayed later.
+                lock (_lock)
+                {
+                    _unclaimed.Clear();
+                }
+
+                continue;
+            }
+
             try
             {
                 await DispatchAsync(message, cancellationToken).ConfigureAwait(false);
@@ -673,8 +713,21 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
 
         foreach (var device in targets)
         {
-            Report(device, device.Read(message));
+            Report(device, Read(device, message));
         }
+    }
+
+    /// <summary>
+    /// What <paramref name="message"/> means for <paramref name="device"/>. A retained message is a replay (the broker sends
+    /// it because a subscription was made, e.g. after every reconnect): its states are current, but its events happened
+    /// in the past — a retained Zigbee2MQTT state still carrying the last <c>action</c> must not press the button again.
+    /// </summary>
+    private static IReadOnlyList<MqttReading> Read(MqttDevice device, MqttMessage message)
+    {
+        var readings = device.Read(message);
+        return message.Retain && readings.Any(r => r is MqttReading.Event)
+            ? [.. readings.Where(r => r is not MqttReading.Event)]
+            : readings;
     }
 
     private void MarkAllUnknown(IConnectorContext context)
@@ -747,6 +800,12 @@ internal sealed partial class MqttRuntime : IConnectorRuntime, IMqttAdapterHost
 
     [LoggerMessage(Level = LogLevel.Error, Message = "MQTT device {ExternalId} was rejected by the inventory (skipped)")]
     private static partial void LogUpsertRejected(ILogger logger, Exception exception, string externalId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "MQTT device {ExternalId}: ignored {Count} topics that are not MQTT topic names (wildcards or malformed)")]
+    private static partial void LogInvalidTopics(ILogger logger, string externalId, int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "MQTT: did not publish to {Topic}: not an MQTT topic name (wildcards or malformed)")]
+    private static partial void LogInvalidPublishTopic(ILogger logger, string topic);
 }
 
 /// <summary>The host could not save (or orphan) a device: the run fails so the supervisor restarts it.</summary>

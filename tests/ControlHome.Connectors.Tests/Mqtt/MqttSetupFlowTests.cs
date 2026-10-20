@@ -106,6 +106,45 @@ public sealed class MqttSetupFlowTests
         done.Secrets["password"].ShouldBe("stored-secret");
     }
 
+    [Theory]
+    [InlineData("""{"host":"attacker.example","username":"ch"}""")]
+    [InlineData("""{"host":"umbrel.local","port":1884,"username":"ch"}""")]
+    [InlineData("""{"host":"umbrel.local","username":"someone-else"}""")]
+    [InlineData("""{"host":"umbrel.local","username":"ch","useTls":true}""")]
+    public async Task The_stored_password_is_never_sent_to_another_broker_or_user(string changed)
+    {
+        // Admins never see the stored password: pointing the settings at another host (or port, user, TLS mode) with the
+        // password left blank must not hand it to that broker. The connection is tested without it instead.
+        var broker = new FakeBroker();
+        await using var flow = Factory(broker).CreateSetupFlow()!;
+        var existing = Existing("""{"host":"umbrel.local","username":"ch"}""", "stored-secret");
+        await flow.StartAsync(Context(existing), Ct);
+        await flow.ContinueAsync(MqttSetupFlow.ActionStep, MqttFixtures.Parse("""{"choice":"settings"}"""), Ct);
+
+        var done = (DoneStep)await flow.ContinueAsync(MqttSetupFlow.ConnectionStep, MqttFixtures.Parse(changed), Ct);
+
+        broker.Attempts.ShouldHaveSingleItem().Password.ShouldBeNull();
+        done.Secrets.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_broker_that_needs_the_password_asks_for_it_again_after_the_host_changed()
+    {
+        var broker = new FakeBroker { Credentials = ("ch", "stored-secret") };
+        await using var flow = Factory(broker).CreateSetupFlow()!;
+        await flow.StartAsync(Context(Existing("""{"host":"umbrel.local","username":"ch"}""", "stored-secret")), Ct);
+        await flow.ContinueAsync(MqttSetupFlow.ActionStep, MqttFixtures.Parse("""{"choice":"settings"}"""), Ct);
+
+        var form = (FormStep)await flow.ContinueAsync(MqttSetupFlow.ConnectionStep, MqttFixtures.Parse("""{"host":"192.168.1.10","username":"ch"}"""), Ct);
+
+        form.Errors.Keys.ShouldBe(["password"]);
+        var done = (DoneStep)await flow.ContinueAsync(
+            MqttSetupFlow.ConnectionStep,
+            MqttFixtures.Parse("""{"host":"192.168.1.10","username":"ch","password":"stored-secret"}"""),
+            Ct);
+        done.Secrets["password"].ShouldBe("stored-secret");
+    }
+
     [Fact]
     public async Task Permit_join_publishes_the_request_and_waits_until_the_window_closes()
     {

@@ -49,7 +49,9 @@ ControlHome reuses Umbrel's own **Mosquitto** and **Zigbee2MQTT** apps instead o
    | Tasmota discovery | on | Listens on `tasmota/discovery/#`. |
 
    The setup flow **tests the connection** (with a throw-away client id) before saving: an unreachable broker comes
-   back as an error on *Broker host*, rejected credentials as an error on *Password*.
+   back as an error on *Broker host*, rejected credentials as an error on *Password*. When you change the settings of
+   an existing integration, a blank password keeps the stored one only while host, port, TLS and user name stay the
+   same: the stored password is never sent to another broker (enter it again after changing them).
 5. **Pair Zigbee devices from ControlHome:** open the integration's flow again and choose *Pair Zigbee devices*. It
    publishes `zigbee2mqtt/bridge/request/permit_join` with `{"time": <seconds>}` (1–254 s, default 254) and shows a
    progress step that lists the devices that joined (`bridge/event` `device_joined` / `device_interview`) until the
@@ -67,6 +69,14 @@ connection, and ControlHome publishes the Home Assistant birth message (`homeass
   successful connection.
 - After every (re)connection it **re-subscribes** the adapters' wildcard filters plus every device topic outside them
   (e.g. an HA device's `kitchen/climate/state`), then asks devices without an availability topic for their state.
+- **Only topic names from discovery are used.** Any client of the broker can publish discovery, so a state, availability
+  or command topic with a wildcard (`+`, `#`) or otherwise malformed is ignored (logged): it is never subscribed (a
+  malformed filter makes the broker drop the connection, `#` would subscribe to everything) and a command to it is
+  rejected as `unsupported_command`.
+- **Retained messages are replays.** The broker sends them again on every (re)connection: their states are reported,
+  but they never produce events (a retained Zigbee2MQTT state that still carries the last `action` does not press the
+  button again). Retained messages kept for devices not discovered yet are dropped at each new connection, because the
+  broker sends the current ones again (a message deleted while disconnected never comes back).
 - While the broker is unreachable the integration is `Degraded` (message names `host:port`, never credentials) and every
   device is `Unknown`. Rejected credentials (`bad user name or password`, `not authorized`) set `NeedsReauth`; the loop
   keeps retrying, so fixing the broker's users is enough.

@@ -350,6 +350,119 @@ public sealed class MqttRuntimeTests
         mqtt.Context.Events.ShouldContain(e => e.ExternalDeviceId == "0x00158d000000000a" && e.CapabilityId == "button" && e.Event == "double");
     }
 
+    [Fact]
+    public async Task Wildcards_or_malformed_topics_from_discovery_never_reach_a_subscription_or_a_publish()
+    {
+        // Discovery payloads come from any client of the broker (Umbrel's Mosquitto allows anonymous clients). One bad
+        // config must neither get the connection dropped over and over (a malformed SUBSCRIBE is a protocol error) nor
+        // subscribe the runtime to the whole broker ('#').
+        var broker = new FakeBroker();
+        await broker.PublishAsync(
+            "homeassistant/sensor/bad/malformed/config",
+            """{"name":"Malformed","uniq_id":"bad-1","stat_t":"bad/#/state","dev_cla":"temperature","dev":{"ids":"bad"}}""",
+            retain: true);
+        await broker.PublishAsync(
+            "homeassistant/sensor/bad/everything/config",
+            """{"name":"Everything","uniq_id":"bad-2","stat_t":"#","avty_t":"+/status","dev":{"ids":"bad"}}""",
+            retain: true);
+        await broker.PublishAsync(
+            "homeassistant/switch/bad/relay/config",
+            """{"name":"Relay","uniq_id":"bad-3","stat_t":"bad/relay/state","cmd_t":"bad/+/set","dev":{"ids":"bad"}}""",
+            retain: true);
+        await broker.PublishAsync(
+            "homeassistant/sensor/good/t/config",
+            """{"name":"Temperature","uniq_id":"good-t","stat_t":"good/t","dev_cla":"temperature","unit_of_meas":"°C","dev":{"ids":"good"}}""",
+            retain: true);
+        var tasmota = System.Text.Json.Nodes.JsonNode.Parse(MqttFixtures.Text("tasmota-plug-config.json"))!.AsObject();
+        tasmota["t"] = "plug/#";
+        await broker.PublishAsync("tasmota/discovery/DC4F22A1B2C3/config", tasmota.ToJsonString(), retain: true);
+
+        await using var mqtt = await MqttHarness.StartAsync(broker, MqttHarness.Config(zigbee2Mqtt: false));
+        await mqtt.WaitUntilAsync(
+            () => new[] { "ha:bad", "ha:good", "tasmota:DC4F22A1B2C3" }.All(id => mqtt.Context.Devices.Any(d => d.ExternalId == id)),
+            "every device is discovered");
+        await mqtt.WaitUntilAsync(() => mqtt.Runtime.Subscriptions.Contains("good/t"), "the valid topics are subscribed");
+        await mqtt.SettleAsync();
+
+        mqtt.Runtime.Connections.ShouldBe(1);
+        broker.Clients.ShouldHaveSingleItem();
+        mqtt.Context.Statuses[^1].Status.ShouldBe(IntegrationStatus.Ok);
+        mqtt.Runtime.Subscriptions.Where(t => t.Contains('#', StringComparison.Ordinal) || t.Contains('+', StringComparison.Ordinal))
+            .ShouldBe(["homeassistant/#", "tasmota/discovery/#"], ignoreOrder: true);
+        mqtt.Runtime.Subscriptions.ShouldContain("bad/relay/state"); // the bad device's valid topics still work
+
+        await broker.PublishAsync("good/t", "21.5");
+        await mqtt.WaitForStateAsync("ha:good", "main", CapabilityIds.Temperature, "temperature", StateValue.Number(21.5));
+        await broker.PublishAsync("bad/relay/state", "ON");
+        await mqtt.WaitForStateAsync("ha:bad", "main", CapabilityIds.Switch, "on", StateValue.True);
+
+        // A command whose topic is not a topic name is refused before anything is published (the key is not used up).
+        Code(await mqtt.ExecuteAsync("ha:bad", CapabilityIds.Switch, "turnOn", key: "k")).ShouldBe(CommandRejectionCodes.UnsupportedCommand);
+        Code(await mqtt.ExecuteAsync("tasmota:DC4F22A1B2C3", CapabilityIds.Switch, "turnOn")).ShouldBe(CommandRejectionCodes.UnsupportedCommand);
+        broker.Published.ShouldNotContain(p => p.Topic.Contains('+', StringComparison.Ordinal) || p.Topic.Contains('#', StringComparison.Ordinal));
+
+        // A reconnect subscribes every known device topic again: still only the valid ones.
+        await broker.StopAsync(keepRetained: true);
+        await mqtt.WaitUntilAsync(() => mqtt.Context.Statuses[^1].Status == IntegrationStatus.Degraded, "disconnected");
+        broker.Start();
+        mqtt.Time.Advance(TimeSpan.FromSeconds(1));
+        await mqtt.WaitUntilAsync(() => mqtt.Runtime.Connections == 2 && mqtt.Context.Statuses[^1].Status == IntegrationStatus.Ok, "reconnected");
+        await mqtt.SettleAsync();
+        mqtt.Runtime.Connections.ShouldBe(2);
+        broker.Clients.ShouldHaveSingleItem().Filters.ShouldAllBe(f => FakeTransport.IsValidFilter(f));
+    }
+
+    [Fact]
+    public async Task A_retained_state_message_never_replays_a_button_press()
+    {
+        // Zigbee2MQTT puts "action" into the device's state message. With the device's retain option on, the last press
+        // stays on the broker and is sent again on every (re)connection: its state is current, its event is history.
+        const string Remote = "0x00158d000000000a";
+        var broker = await BrokerWithZigbee2MqttAsync();
+        await broker.PublishAsync("zigbee2mqtt/desk_remote", """{"action":"single","battery":90}""", retain: true);
+
+        await using var mqtt = await MqttHarness.StartAsync(broker, MqttHarness.Config(homeAssistant: false, tasmota: false));
+        await mqtt.WaitForStateAsync(Remote, "main", CapabilityIds.Battery, "battery", StateValue.Number(90));
+        await mqtt.SettleAsync();
+        mqtt.Context.Events.ShouldBeEmpty();
+
+        await broker.PublishAsync("zigbee2mqtt/desk_remote", """{"action":"double","battery":89}""", retain: true);
+        await mqtt.WaitUntilAsync(() => mqtt.Context.Events.Count == 1, "the live press is an event");
+        mqtt.Context.Events[0].Event.ShouldBe("double");
+
+        await broker.StopAsync(keepRetained: true);
+        await mqtt.WaitUntilAsync(() => mqtt.Context.Statuses[^1].Status == IntegrationStatus.Degraded, "disconnected");
+        broker.Start();
+        mqtt.Time.Advance(TimeSpan.FromSeconds(1));
+        await mqtt.WaitUntilAsync(() => mqtt.Runtime.Connections == 2, "reconnected");
+        await mqtt.WaitForStateAsync(Remote, "main", CapabilityIds.Battery, "battery", StateValue.Number(89));
+        await mqtt.SettleAsync();
+        mqtt.Context.Events.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_retained_message_deleted_while_disconnected_is_not_replayed_later()
+    {
+        // The broker sends every retained message again after a reconnect (clean session), so messages kept for devices
+        // not known yet are from the previous connection only until then: one deleted meanwhile must not come back.
+        var broker = new FakeBroker();
+        await broker.PublishAsync("zigbee2mqtt/kitchen_plug", """{"state":"ON","power":50}""", retain: true);
+        await using var mqtt = await MqttHarness.StartAsync(broker, MqttHarness.Config(homeAssistant: false, tasmota: false));
+        await mqtt.SettleAsync();
+
+        await broker.StopAsync(keepRetained: true);
+        await mqtt.WaitUntilAsync(() => mqtt.Context.Statuses[^1].Status == IntegrationStatus.Degraded, "disconnected");
+        await broker.PublishAsync("zigbee2mqtt/kitchen_plug", string.Empty, retain: true);
+        broker.Start();
+        mqtt.Time.Advance(TimeSpan.FromSeconds(1));
+        await mqtt.WaitUntilAsync(() => mqtt.Runtime.Connections == 2, "reconnected");
+
+        await broker.PublishAsync("zigbee2mqtt/bridge/devices", MqttFixtures.Text("z2m-bridge-devices.json"), retain: true);
+        await mqtt.WaitUntilAsync(() => mqtt.Context.Devices.Any(d => d.ExternalId == Plug), "the plug is discovered");
+        await mqtt.SettleAsync();
+        mqtt.Context.States.ShouldNotContain(s => s.ExternalDeviceId == Plug);
+    }
+
     private static async Task<FakeBroker> BrokerWithZigbee2MqttAsync()
     {
         var broker = new FakeBroker();

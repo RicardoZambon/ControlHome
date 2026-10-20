@@ -142,8 +142,11 @@ internal abstract class MqttDevice(DiscoveredDevice discovered)
             validated.Add(new ValidatedCommand(command, commandDefinition, binding));
         }
 
+        // A command topic from discovery that is not a topic name (wildcards) can never be published: unsupported.
         var plan = PlanCommands(validated);
-        return plan is null ? (null, Unsupported(), safetyCritical) : (plan, null, safetyCritical);
+        return plan is null || plan.Publishes.Any(p => !MqttTopic.IsValidName(p.Topic))
+            ? (null, Unsupported(), safetyCritical)
+            : (plan, null, safetyCritical);
     }
 
     /// <summary>The publishes for already validated commands, or <c>null</c> when one of them is not supported by the device.</summary>

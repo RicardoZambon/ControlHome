@@ -262,9 +262,12 @@ a point-in-polygon test.
 - **MQTT connector** (`mqtt`, 1.4; setup in [`docs/connectors/mqtt.md`](connectors/mqtt.md)): one MQTTnet 5.2 broker
   connection per integration (password is a secret field) with its own reconnect loop — exponential back-off 1 s → 60 s
   with ±20 % jitter, re-subscribing every adapter filter and device topic after each reconnect; devices are `Unknown`
-  while the broker is down (a lost broker never orphans them), rejected credentials → `NeedsReauth`. Setup is a flow
-  (form → connection test with a throw-away client id → done); for an existing integration the same flow edits the
-  settings or opens Zigbee2MQTT's permit-join window (progress step). Three adapters share the connection:
+  while the broker is down (a lost broker never orphans them), rejected credentials → `NeedsReauth`. Only MQTT topic
+  names from discovery are subscribed or published to (wildcard/malformed topics are ignored, so no discovery payload
+  can get the connection dropped or subscribe it to everything), and retained messages (replays) never produce events.
+  Setup is a flow (form → connection test with a throw-away client id → done); for an existing integration the same
+  flow edits the settings (the stored password is reused only for the same host, port, TLS mode and user) or opens
+  Zigbee2MQTT's permit-join window (progress step). Three adapters share the connection:
   Zigbee2MQTT native (retained `bridge/devices` → devices by IEEE address from `exposes` + access bits; the bridge is
   their parent; renames via `bridge/event`), Home Assistant discovery as an intake format only (device-based and
   single-component configs, abbreviations, `~`, a small `value_template` subset — unsupported templates are listed in a

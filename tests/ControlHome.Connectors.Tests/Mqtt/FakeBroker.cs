@@ -209,6 +209,14 @@ internal sealed class FakeTransport(FakeBroker broker, MqttConnectionOptions opt
 
     public async Task SubscribeAsync(IReadOnlyCollection<string> topicFilters, CancellationToken cancellationToken)
     {
+        // Like Mosquitto: a malformed topic filter is a protocol error that drops the connection.
+        if (topicFilters.FirstOrDefault(f => !IsValidFilter(f)) is { } malformed)
+        {
+            broker.Disconnect(this);
+            await DropAsync($"malformed subscription '{malformed}'");
+            throw new InvalidOperationException($"The broker dropped the connection (malformed subscription '{malformed}').");
+        }
+
         lock (_lock)
         {
             if (!_connected)
@@ -232,7 +240,35 @@ internal sealed class FakeTransport(FakeBroker broker, MqttConnectionOptions opt
             throw new InvalidOperationException("Not connected.");
         }
 
+        // Like MQTTnet: a topic name with wildcards is refused before anything is sent.
+        if (topic.Length == 0 || topic.AsSpan().IndexOfAny('+', '#', '\0') >= 0)
+        {
+            throw new ArgumentException($"'{topic}' is not a valid topic name.", nameof(topic));
+        }
+
         return broker.RouteAsync(this, topic, payload, retain);
+    }
+
+    /// <summary>MQTT 3.1.1 §4.7: non-empty, no NUL, <c>+</c> alone in its level, <c>#</c> alone in the last level.</summary>
+    public static bool IsValidFilter(string filter)
+    {
+        if (filter.Length == 0 || filter.Contains('\0', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var levels = filter.Split('/');
+        for (var i = 0; i < levels.Length; i++)
+        {
+            var level = levels[i];
+            if ((level.Contains('+', StringComparison.Ordinal) && level != "+")
+                || (level.Contains('#', StringComparison.Ordinal) && (level != "#" || i != levels.Length - 1)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public Task DisconnectAsync(CancellationToken cancellationToken)

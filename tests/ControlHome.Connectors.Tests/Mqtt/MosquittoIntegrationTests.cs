@@ -157,6 +157,39 @@ public sealed class MosquittoIntegrationTests(MosquittoFixture broker)
     }
 
     [Fact]
+    public async Task A_discovery_config_with_a_malformed_topic_never_breaks_the_connection()
+    {
+        // Any client of the broker can publish discovery: a malformed or wildcard state topic in it must neither reach a
+        // SUBSCRIBE (Mosquitto drops the connection; MQTTnet refuses it) nor poison the topics re-subscribed after a
+        // reconnect.
+        var prefix = "ha-" + Unique();
+        var goodTopic = $"devices-{Unique()}/temperature";
+        var badConfig = $"{prefix}/sensor/bad/temperature/config";
+        var goodConfig = $"{prefix}/sensor/good/temperature/config";
+        await using (var publisher = await broker.ClientAsync())
+        {
+            await publisher.PublishAsync(badConfig, """{"name":"Bad","uniq_id":"bad-t","stat_t":"bad/#/temperature","avty_t":"#","dev_cla":"temperature","dev":{"ids":"bad-1"}}""", retain: true);
+            await publisher.PublishAsync(goodConfig, $$$"""{"name":"Good","uniq_id":"good-t","stat_t":"{{{goodTopic}}}","dev_cla":"temperature","unit_of_meas":"°C","dev":{"ids":"good-1"}}""", retain: true);
+        }
+
+        await using var run = await RunAsync($$"""{"zigbee2mqttBaseTopic":"","discoveryPrefix":"{{prefix}}","tasmotaDiscovery":false}""");
+        await run.WaitUntilAsync(() => run.Context.Devices.Any(d => d.ExternalId == "ha:bad-1"), "the device with the bad topics is discovered");
+        await run.WaitUntilAsync(() => run.Runtime.Subscriptions.Contains(goodTopic), "the good device's state topic is subscribed");
+        run.Runtime.Subscriptions.ShouldBe([$"{prefix}/#", goodTopic], ignoreOrder: true);
+
+        await broker.RestartAsync(); // forces a reconnect that re-subscribes every known device topic
+
+        await run.WaitUntilAsync(
+            () => run.Runtime.Connections >= 2 && run.Context.Statuses[^1].Status == IntegrationStatus.Ok,
+            "the runtime reconnected and re-subscribed",
+            TimeSpan.FromSeconds(30));
+        await using var observer = await broker.ClientAsync();
+        await observer.PublishAsync(goodTopic, "21.5");
+        await run.WaitUntilAsync(() => Equals(run.Latest("ha:good-1", CapabilityIds.Temperature, "temperature"), StateValue.Number(21.5)), "the good sensor still reports");
+        run.Context.Statuses[^1].Status.ShouldBe(IntegrationStatus.Ok);
+    }
+
+    [Fact]
     public async Task Wrong_credentials_need_reauth_and_the_setup_flow_reports_them_on_the_password()
     {
         var wrong = "wrong-" + Unique();

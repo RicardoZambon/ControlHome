@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using ControlHome.Connectors.Abstractions;
+using ControlHome.Connectors.Mqtt.Transport;
 
 namespace ControlHome.Connectors.Mqtt;
 
@@ -104,7 +105,7 @@ public sealed record MqttSettings(
             return null;
         }
 
-        if (topic.Contains('+', StringComparison.Ordinal) || topic.Contains('#', StringComparison.Ordinal) || topic.Contains("//", StringComparison.Ordinal))
+        if (!MqttTopic.IsValidName(topic) || topic.Contains("//", StringComparison.Ordinal))
         {
             throw new InvalidMqttSettingsException(field, $"Invalid MQTT configuration ({field}: wildcards and empty levels are not allowed).");
         }

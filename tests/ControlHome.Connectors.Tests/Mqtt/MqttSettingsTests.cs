@@ -144,6 +144,31 @@ public sealed class MqttSettingsTests
         TopicFilter.Matches(filter, topic).ShouldBe(matches);
     }
 
+    [Theory]
+    [InlineData("kitchen/climate/state", true)]
+    [InlineData("zigbee2mqtt/living room/ceiling", true)]
+    [InlineData("$SYS/broker/uptime", true)]
+    [InlineData("/leading/slash", true)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    [InlineData("#", false)]
+    [InlineData("bad/#/state", false)]
+    [InlineData("home/+/temp", false)]
+    [InlineData("plug+1/state", false)]
+    public void Only_topic_names_are_valid_device_topics(string? topic, bool valid)
+    {
+        MqttTopic.IsValidName(topic).ShouldBe(valid);
+    }
+
+    [Fact]
+    public void A_topic_name_has_no_nul_and_is_at_most_65535_utf8_bytes()
+    {
+        MqttTopic.IsValidName("nul\0char").ShouldBeFalse();
+        MqttTopic.IsValidName(new string('a', MqttTopic.MaxLength)).ShouldBeTrue();
+        MqttTopic.IsValidName(new string('a', MqttTopic.MaxLength + 1)).ShouldBeFalse();
+        MqttTopic.IsValidName(new string('é', (MqttTopic.MaxLength / 2) + 1)).ShouldBeFalse(); // 2 bytes each
+    }
+
     [Fact]
     public void Generic_writable_attributes_get_setters_bound_to_them()
     {
