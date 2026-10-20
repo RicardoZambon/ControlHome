@@ -153,7 +153,11 @@ public sealed class DeviceCommandService(
             endpointId,
             request.CapabilityId,
             command,
-            capability.Attributes.Select(a => a.Id).ToList(),
+            CommandConfirmation.For(
+                definition!,
+                command,
+                arguments,
+                capability.Attributes.ToDictionary(a => a.Key, a => a.Id, StringComparer.Ordinal)),
             new DeviceCommandBatch(
                 target.ExternalId,
                 [new DeviceCommand(target.EndpointKey, request.CapabilityId, command.Name, arguments)],

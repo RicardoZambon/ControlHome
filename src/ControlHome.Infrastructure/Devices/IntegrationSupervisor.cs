@@ -22,6 +22,12 @@ namespace ControlHome.Infrastructure.Devices;
 /// While a runtime is down its devices are <see cref="Availability.Unknown"/>. Statuses (runtime-reported or its own) are
 /// redacted (<see cref="KnownSecrets"/>), saved and pushed to clients. Also the command dispatcher: commands reach a
 /// runtime only through <see cref="DispatchAsync"/>, exactly once.
+/// <para>
+/// Never two runtimes of one integration: a run is fenced the moment its stop is requested (its context and secret store
+/// refuse everything), a runtime that does not finish within <see cref="DeviceRuntimeOptions.StopTimeout"/> is kept as
+/// "stopping" and its successor starts only once it has finished, and once <see cref="StopAllAsync"/> ran (lease lost,
+/// shutdown) nothing starts until <see cref="StartAllAsync"/>.
+/// </para>
 /// </summary>
 public sealed partial class IntegrationSupervisor(
     IServiceScopeFactory scopes,
@@ -39,11 +45,18 @@ public sealed partial class IntegrationSupervisor(
     IOptions<DeviceRuntimeOptions> options,
     ILoggerFactory loggerFactory) : ICommandDispatcher, IIntegrationRuntimeControl, IAsyncDisposable
 {
-    private static readonly TimeSpan _stopTimeout = TimeSpan.FromSeconds(30);
-
     private readonly ILogger _logger = loggerFactory.CreateLogger<IntegrationSupervisor>();
     private readonly ConcurrentDictionary<Guid, RunningIntegration> _running = new();
+
+    /// <summary>Runs that did not finish within the stop timeout (fenced, still running).</summary>
+    private readonly ConcurrentDictionary<Guid, RunningIntegration> _stopping = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    /// <summary>Whether starts are accepted (guarded by <see cref="_gate"/>): opened by StartAllAsync, closed by StopAllAsync.</summary>
+    private bool _accepting;
+
+    /// <summary>The integrations whose runtime did not stop in time and is still running (fenced).</summary>
+    public IReadOnlyCollection<Guid> Stopping => [.. _stopping.Keys];
 
     /// <summary>The integrations with a supervised run loop.</summary>
     public IReadOnlyCollection<Guid> Supervised => [.. _running.Keys];
@@ -68,6 +81,16 @@ public sealed partial class IntegrationSupervisor(
     /// <summary>Starts every enabled integration (registering their secrets for log redaction first).</summary>
     public async Task StartAllAsync(CancellationToken cancellationToken)
     {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _accepting = true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
         List<(Guid Id, string? Secrets)> integrations;
         await using (var scope = scopes.CreateAsyncScope())
         {
@@ -107,9 +130,24 @@ public sealed partial class IntegrationSupervisor(
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            // Checked again under the gate: a start that queued behind StopAllAsync (lease lost, shutdown) must not run
+            // after it. The mode alone is not enough: it changes only once the whole runtime has stopped.
+            if (!_accepting || runtimeStatus.Mode != RuntimeMode.Active)
+            {
+                return;
+            }
+
             if (_running.TryRemove(integrationId, out var previous))
             {
                 await StopLoopAsync(previous).ConfigureAwait(false);
+            }
+
+            if (_stopping.TryGetValue(integrationId, out var stopping))
+            {
+                // Its previous runtime is still running (fenced): start once it has finished, never next to it.
+                stopping.RestartWhenStopped = true;
+                LogStartDeferred(integrationId);
+                return;
             }
 
             var running = new RunningIntegration(integrationId);
@@ -127,6 +165,11 @@ public sealed partial class IntegrationSupervisor(
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (_stopping.TryGetValue(integrationId, out var stopping))
+            {
+                stopping.RestartWhenStopped = false;
+            }
+
             if (_running.TryRemove(integrationId, out var running))
             {
                 await StopLoopAsync(running).ConfigureAwait(false);
@@ -144,12 +187,25 @@ public sealed partial class IntegrationSupervisor(
         cache.Remove(registry.RemoveIntegration(integrationId));
     }
 
-    /// <summary>Stops every runtime (lease lost, shutdown, test reset).</summary>
-    public async Task StopAllAsync()
+    /// <summary>
+    /// Stops every runtime (lease lost, shutdown, test reset). Afterwards no integration starts until
+    /// <see cref="StartAllAsync"/>, unless <paramref name="keepAccepting"/> (test reset: the runtime stays active).
+    /// </summary>
+    public async Task StopAllAsync(bool keepAccepting = false)
     {
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (!keepAccepting)
+            {
+                _accepting = false;
+            }
+
+            foreach (var stopping in _stopping.Values)
+            {
+                stopping.RestartWhenStopped = false;
+            }
+
             var all = _running.Values.ToList();
             _running.Clear();
             await Task.WhenAll(all.Select(StopLoopAsync)).ConfigureAwait(false);
@@ -163,20 +219,57 @@ public sealed partial class IntegrationSupervisor(
     /// <summary>Stops every runtime. Safe to call more than once (the container disposes each registration of it).</summary>
     public async ValueTask DisposeAsync() => await StopAllAsync().ConfigureAwait(false);
 
+    /// <summary>Stops a run loop (under the gate); one that does not finish in time stays fenced in <see cref="_stopping"/>.</summary>
     private async Task StopLoopAsync(RunningIntegration running)
     {
         await running.Stop.CancelAsync().ConfigureAwait(false);
         try
         {
-            await running.Loop.WaitAsync(_stopTimeout).ConfigureAwait(false);
+            await running.Loop.WaitAsync(options.Value.StopTimeout, timeProvider).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
-            LogStopTimedOut(running.IntegrationId);
+            LogStopTimedOut(running.IntegrationId, options.Value.StopTimeout.TotalSeconds);
+            _stopping[running.IntegrationId] = running;
+            _ = running.Loop.ContinueWith(
+                    _ => OnStoppedLateAsync(running),
+                    CancellationToken.None,
+                    TaskContinuationOptions.None,
+                    TaskScheduler.Default)
+                .Unwrap();
         }
         catch (OperationCanceledException)
         {
             // Stopped.
+        }
+    }
+
+    /// <summary>A run that did not stop in time has finished: forget it and start its successor if one was asked for.</summary>
+    private async Task OnStoppedLateAsync(RunningIntegration running)
+    {
+        bool restart;
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _stopping.TryRemove(new KeyValuePair<Guid, RunningIntegration>(running.IntegrationId, running));
+            restart = running.RestartWhenStopped && _accepting;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        LogStoppedLate(running.IntegrationId);
+        if (restart)
+        {
+            try
+            {
+                await StartAsync(running.IntegrationId, CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogRuntimeFailed(running.IntegrationId, ex.GetType().FullName ?? ex.GetType().Name, knownSecrets.Redact(ex.Message));
+            }
         }
     }
 
@@ -204,8 +297,9 @@ public sealed partial class IntegrationSupervisor(
                 LogRuntimeFailed(id, ex.GetType().FullName ?? ex.GetType().Name, knownSecrets.Redact(ex.Message));
             }
 
-            if (failure is null)
+            if (failure is null || stop.IsCancellationRequested)
             {
+                // A run that failed only after it was asked to stop must not overwrite its successor's status.
                 return;
             }
 
@@ -256,15 +350,12 @@ public sealed partial class IntegrationSupervisor(
             return null;
         }
 
+        var secrets = new SecretStore(id, scopes, secretProtector);
         IConnectorRuntime runtime;
         try
         {
             using var config = JsonDocument.Parse(integration.ConfigJson);
-            runtime = factory.CreateRuntime(new IntegrationInstance(
-                id,
-                integration.Name,
-                config.RootElement.Clone(),
-                new SecretStore(id, scopes, secretProtector)));
+            runtime = factory.CreateRuntime(new IntegrationInstance(id, integration.Name, config.RootElement.Clone(), secrets));
         }
         catch (Exception ex) when (ex is ArgumentException or JsonException)
         {
@@ -272,8 +363,17 @@ public sealed partial class IntegrationSupervisor(
             return null;
         }
 
-        var logger = loggerFactory.CreateLogger($"ControlHome.Connectors.{factory.Descriptor.Key}");
+        // Exceptions a connector logs are redacted too (the Serilog redactor only rewrites property values).
+        var logger = new RedactingLogger(loggerFactory.CreateLogger($"ControlHome.Connectors.{factory.Descriptor.Key}"), knownSecrets);
         var context = new ConnectorContext(id, clock.Time, logger, processor, inventory, (s, m) => SetStatus(running, s, m));
+
+        // Fenced the moment a stop is requested, not when RunAsync returns: a runtime that ignores cancellation may keep
+        // running for a while, but nothing it reports, upserts or saves is accepted any more.
+        using var fence = stop.Register(() =>
+        {
+            context.Close();
+            secrets.Close();
+        });
         SetStatus(running, IntegrationStatus.Connecting, null);
         running.Runtime = runtime;
         try
@@ -283,6 +383,11 @@ public sealed partial class IntegrationSupervisor(
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
+            return null;
+        }
+        catch (ObjectDisposedException) when (stop.IsCancellationRequested)
+        {
+            // It used its context or secret store after its stop was requested: fenced, as it should be.
             return null;
         }
         catch (Exception ex)
@@ -295,8 +400,14 @@ public sealed partial class IntegrationSupervisor(
         {
             running.Runtime = null;
             context.Close();
+            secrets.Close();
             await DisposeQuietlyAsync(id, runtime).ConfigureAwait(false);
-            MarkUnknown(id);
+
+            // Unless a newer run of this integration exists (its devices are its business now).
+            if (!_running.TryGetValue(id, out var current) || ReferenceEquals(current, running))
+            {
+                MarkUnknown(id);
+            }
         }
     }
 
@@ -381,8 +492,14 @@ public sealed partial class IntegrationSupervisor(
     [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: saving its status failed ({ExceptionType})")]
     private partial void LogStatusSaveFailed(Guid integrationId, string exceptionType);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: the connector did not stop within 30 s")]
-    private partial void LogStopTimedOut(Guid integrationId);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: the connector did not stop within {Seconds} s; it is fenced until it does")]
+    private partial void LogStopTimedOut(Guid integrationId, double seconds);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Integration {IntegrationId}: the connector that did not stop in time has finished")]
+    private partial void LogStoppedLate(Guid integrationId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: its previous connector is still stopping; it starts once that has finished")]
+    private partial void LogStartDeferred(Guid integrationId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: disposing the connector failed ({ExceptionType})")]
     private partial void LogDisposeFailed(Guid integrationId, string exceptionType);
@@ -414,5 +531,8 @@ public sealed partial class IntegrationSupervisor(
         public string? StatusMessage { get; set; }
 
         public Task StatusWrite { get; set; } = Task.CompletedTask;
+
+        /// <summary>For a run that did not stop in time: start the integration again once it has (guarded by the gate).</summary>
+        public bool RestartWhenStopped { get; set; }
     }
 }

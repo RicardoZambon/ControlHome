@@ -12,7 +12,7 @@ public sealed class SafetyGrantStoreTests
     public void A_grant_allows_exactly_one_command()
     {
         var store = new SafetyGrantStore(_time);
-        store.Grant(_user);
+        store.TryGrant(_user).ShouldBeTrue();
 
         store.TryConsume(_user).ShouldBeTrue();
         store.TryConsume(_user).ShouldBeFalse();
@@ -22,7 +22,7 @@ public sealed class SafetyGrantStoreTests
     public void A_grant_expires_after_sixty_seconds()
     {
         var store = new SafetyGrantStore(_time);
-        store.Grant(_user);
+        store.TryGrant(_user).ShouldBeTrue();
 
         _time.Advance(SafetyGrantStore.GrantLifetime);
 
@@ -33,7 +33,7 @@ public sealed class SafetyGrantStoreTests
     public void Grants_are_per_user()
     {
         var store = new SafetyGrantStore(_time);
-        store.Grant(_user);
+        store.TryGrant(_user).ShouldBeTrue();
 
         store.TryConsume(Guid.CreateVersion7()).ShouldBeFalse();
         store.TryConsume(_user).ShouldBeTrue();
@@ -72,6 +72,43 @@ public sealed class SafetyGrantStoreTests
     }
 
     [Fact]
+    public void No_grant_is_given_while_locked_out_and_forgetting_the_user_clears_the_lockout()
+    {
+        var store = new SafetyGrantStore(_time);
+        for (var i = 0; i < SafetyGrantStore.MaxFailures; i++)
+        {
+            store.RecordFailure(_user);
+        }
+
+        store.TryGrant(_user).ShouldBeFalse();
+        store.TryConsume(_user).ShouldBeFalse();
+
+        store.Forget(_user);
+
+        store.LockedFor(_user).ShouldBeNull();
+        store.TryGrant(_user).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Pin_checks_of_one_user_run_one_at_a_time()
+    {
+        var store = new SafetyGrantStore(_time);
+        var ct = TestContext.Current.CancellationToken;
+        var first = await store.BeginAttemptAsync(_user, ct);
+        var second = store.BeginAttemptAsync(_user, ct);
+        using (await store.BeginAttemptAsync(Guid.CreateVersion7(), ct))
+        {
+            // Another user's check is not held up.
+        }
+
+        await Task.Delay(50, ct);
+        second.IsCompleted.ShouldBeFalse();
+
+        first.Dispose();
+        (await second.WaitAsync(TimeSpan.FromSeconds(5), ct)).Dispose();
+    }
+
+    [Fact]
     public void A_successful_step_up_forgets_earlier_failures_and_a_lockout_drops_the_grant()
     {
         var store = new SafetyGrantStore(_time);
@@ -80,7 +117,7 @@ public sealed class SafetyGrantStoreTests
             store.RecordFailure(_user);
         }
 
-        store.Grant(_user);
+        store.TryGrant(_user).ShouldBeTrue();
         store.RecordFailure(_user).ShouldBeNull();
 
         for (var i = 0; i < SafetyGrantStore.MaxFailures - 1; i++)

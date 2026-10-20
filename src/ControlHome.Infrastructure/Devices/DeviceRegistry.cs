@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using ControlHome.Application.Devices;
+using ControlHome.Application.Runtime;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Devices;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +21,10 @@ public sealed record AttributeInfo(
     int EndpointCapabilityId,
     AttributeDefinition? Definition);
 
+/// <summary>A known endpoint capability (bound by its connector, possibly retired) with its definition.</summary>
+/// <param name="Definition">The catalogue's definition, or the connector-supplied one for <c>generic</c>; <c>null</c> when unknown.</param>
+public sealed record CapabilityEntry(Guid DeviceId, Guid EndpointId, int EndpointCapabilityId, CapabilityDefinition? Definition);
+
 /// <summary>A known device and its live availability.</summary>
 public sealed class DeviceEntry(Guid deviceId, Guid integrationId, string externalId, string? deviceClass, Availability availability)
 {
@@ -32,6 +38,9 @@ public sealed class DeviceEntry(Guid deviceId, Guid integrationId, string extern
 
     /// <summary>The last availability the pipeline saw (only the processing loop changes it).</summary>
     public Availability Availability { get; set; } = availability;
+
+    /// <summary>When the device last reported anything (live; the database copy is written at most every minute).</summary>
+    public DateTimeOffset? LastSeenAtUtc { get; set; }
 
     /// <summary>When <c>LastSeenAtUtc</c> was last queued for the database.</summary>
     public DateTimeOffset? LastSeenQueuedAtUtc { get; set; }
@@ -48,6 +57,7 @@ public sealed class DeviceRegistry
     private readonly ConcurrentDictionary<int, AttributeInfo> _byId = new();
     private readonly ConcurrentDictionary<(Guid IntegrationId, string ExternalId), DeviceEntry> _devices = new();
     private readonly ConcurrentDictionary<Guid, DeviceEntry> _devicesById = new();
+    private readonly ConcurrentDictionary<(Guid IntegrationId, string Device, string Endpoint, string Capability), CapabilityEntry> _capabilities = new();
 
     public int AttributeCount => _byId.Count;
 
@@ -80,7 +90,10 @@ public sealed class DeviceRegistry
         var key = (device.IntegrationId, device.ExternalId);
         var entry = _devices.AddOrUpdate(
             key,
-            _ => new DeviceEntry(device.Id, device.IntegrationId, device.ExternalId, device.DeviceClass, device.Availability),
+            _ => new DeviceEntry(device.Id, device.IntegrationId, device.ExternalId, device.DeviceClass, device.Availability)
+            {
+                LastSeenAtUtc = device.LastSeenAtUtc,
+            },
             (_, existing) =>
             {
                 existing.DeviceClass = device.DeviceClass;
@@ -94,11 +107,18 @@ public sealed class DeviceRegistry
             _byAddress.TryRemove(stale.Address, out _);
         }
 
+        foreach (var stale in _capabilities.Where(c => c.Value.DeviceId == device.Id).ToList())
+        {
+            _capabilities.TryRemove(stale.Key, out _);
+        }
+
         foreach (var endpoint in device.Endpoints)
         {
             foreach (var capability in endpoint.Capabilities)
             {
                 var definition = DefinitionOf(capability);
+                _capabilities[(device.IntegrationId, device.ExternalId, endpoint.Key, capability.CapabilityId)] =
+                    new CapabilityEntry(device.Id, endpoint.Id, capability.Id, definition);
                 foreach (var attribute in capability.Attributes)
                 {
                     Add(new AttributeInfo(
@@ -125,6 +145,10 @@ public sealed class DeviceRegistry
 
     public bool TryGet(int attributeId, out AttributeInfo attribute) => _byId.TryGetValue(attributeId, out attribute!);
 
+    /// <summary>The endpoint capability <paramref name="address"/> belongs to (its attribute key is ignored), or <c>null</c>.</summary>
+    public CapabilityEntry? FindCapability(AttributeAddress address) =>
+        _capabilities.GetValueOrDefault((address.IntegrationId, address.Device, address.Endpoint, address.Capability));
+
     public DeviceEntry? FindDevice(Guid integrationId, string externalId) => _devices.GetValueOrDefault((integrationId, externalId));
 
     public DeviceEntry? FindDevice(Guid deviceId) => _devicesById.GetValueOrDefault(deviceId);
@@ -149,6 +173,11 @@ public sealed class DeviceRegistry
             _devices.TryRemove((device.IntegrationId, device.ExternalId), out _);
         }
 
+        foreach (var capability in _capabilities.Keys.Where(k => k.IntegrationId == integrationId).ToList())
+        {
+            _capabilities.TryRemove(capability, out _);
+        }
+
         return removed;
     }
 
@@ -158,6 +187,7 @@ public sealed class DeviceRegistry
         _byId.Clear();
         _devices.Clear();
         _devicesById.Clear();
+        _capabilities.Clear();
     }
 
     /// <summary>The capability's definition: the catalogue's, or the connector-supplied one for <c>generic</c>.</summary>
@@ -179,5 +209,33 @@ public sealed class DeviceRegistry
         {
             return null;
         }
+    }
+}
+
+/// <summary>
+/// <see cref="IDeviceStatusReader"/> of the runtime: while this process is the active runtime, availability and last-seen
+/// come from the <see cref="DeviceRegistry"/> (what the pipeline and the hub see right now), not from the write-behind's
+/// database copy.
+/// </summary>
+public sealed class RuntimeDeviceStatusReader(DeviceRegistry registry, IRuntimeStatus status) : IDeviceStatusReader
+{
+    public IReadOnlyDictionary<Guid, DeviceLiveStatus> Get(IReadOnlyCollection<Guid> deviceIds)
+    {
+        ArgumentNullException.ThrowIfNull(deviceIds);
+        var result = new Dictionary<Guid, DeviceLiveStatus>();
+        if (status.Mode != RuntimeMode.Active)
+        {
+            return result;
+        }
+
+        foreach (var id in deviceIds)
+        {
+            if (registry.FindDevice(id) is { } device)
+            {
+                result[id] = new DeviceLiveStatus(device.Availability, device.LastSeenAtUtc);
+            }
+        }
+
+        return result;
     }
 }

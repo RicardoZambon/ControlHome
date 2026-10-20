@@ -37,6 +37,12 @@ public sealed class DeviceRuntimeOptions
     /// <summary>A runtime that ran at least this long before failing restarts with <see cref="RestartInitialDelay"/> again.</summary>
     public TimeSpan RestartResetAfter { get; set; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// How long stopping an integration waits for its runtime to finish. One that takes longer is fenced (nothing it reports
+    /// or saves is accepted) and no new runtime starts for that integration until it has finished.
+    /// </summary>
+    public TimeSpan StopTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     /// <summary>A device's <c>LastSeenAtUtc</c> is persisted at most this often.</summary>
     public TimeSpan LastSeenPersistInterval { get; set; } = TimeSpan.FromSeconds(60);
 }

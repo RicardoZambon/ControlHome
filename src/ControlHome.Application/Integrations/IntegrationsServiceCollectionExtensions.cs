@@ -1,4 +1,5 @@
 using ControlHome.Application.Devices;
+using ControlHome.Application.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -14,6 +15,7 @@ public static class IntegrationsServiceCollectionExtensions
     {
         services.TryAddSingleton<ConnectorCatalog>();
         services.TryAddSingleton<IIntegrationRuntimeControl>(NoDeviceRuntime.Instance);
+        services.TryAddSingleton<IRuntimeStatus>(NoDeviceRuntime.Instance);
         services.AddScoped<IntegrationService>();
         return services;
     }

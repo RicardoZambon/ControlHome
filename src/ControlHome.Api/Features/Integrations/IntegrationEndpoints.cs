@@ -39,16 +39,25 @@ public static class IntegrationEndpoints
             .WithSummary("Creates an integration from a connector key and its config; its runtime starts right away.")
             .WithDescription(
                 "400 validation.failed (errors.connectorKey = connectors.not_found for an unknown connector) or " +
-                "integrations.invalid_config (errors['config.<key>'] = commands.argument_* codes). Secret config fields are " +
-                "stored encrypted and never returned.")
+                "integrations.invalid_config (errors['config.<key>'] = commands.argument_* codes); 409 runtime.standby (this " +
+                "instance is a read-only standby: make the change on the active one); 503 runtime.starting (this instance " +
+                "is still deciding whether it runs the devices: try again in a moment). Secret config fields are stored " +
+                "encrypted and never returned.")
             .RequireAuthorization(AuthorizationPolicies.Admin)
-            .WithValidation<CreateIntegrationRequest>();
+            .WithValidation<CreateIntegrationRequest>()
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         integrations.MapDelete("/{id:guid}", DeleteAsync)
             .WithName("deleteIntegration")
             .WithSummary("Stops the integration and deletes it with all its devices and their state.")
+            .WithDescription(
+                "404 integrations.not_found; 409 runtime.standby (this instance is a read-only standby); 503 " +
+                "runtime.starting (still deciding whether it runs the devices).")
             .RequireAuthorization(AuthorizationPolicies.Admin)
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         return app;
     }

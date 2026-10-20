@@ -71,6 +71,26 @@ public sealed class DevicePipelineTests(DevicesApiFactory factory) : DevicesTest
     }
 
     [Fact]
+    public async Task Device_reads_serve_the_live_availability_not_the_written_behind_copy()
+    {
+        var (admin, _, viewer) = await SignInAllAsync();
+        await CreateIntegrationAsync(admin);
+        var light = DeviceOfClass(await WaitForDevicesAsync(viewer, 5), DeviceClasses.Light);
+        await RecordingRealtimePublisher.WaitUntilAsync(
+            async () => await QueryDbAsync(db => db.Devices.AsNoTracking().CountAsync(d => d.Availability == Availability.Online, Ct)) == 5,
+            "the availability is written behind");
+
+        // The database copy lags (up to a flush interval, or a whole outage): what a resyncing client gets must not.
+        await UpdateDbAsync(db => db.Devices.Where(d => d.Id == light.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.Availability, Availability.Unknown), Ct));
+
+        var listed = (await viewer.GetFromJsonAsync<DeviceSummaryDto[]>("/api/devices", Ct))!.Single(d => d.Id == light.Id);
+        listed.Availability.ShouldBe(nameof(Availability.Online));
+        listed.LastSeenAtUtc.ShouldNotBeNull();
+        (await viewer.GetFromJsonAsync<DeviceDetailDto>($"/api/devices/{light.Id}", Ct))!.Availability.ShouldBe(nameof(Availability.Online));
+    }
+
+    [Fact]
     public async Task An_injected_state_flows_to_the_cache_the_hub_and_the_database()
     {
         var (admin, _, viewer) = await SignInAllAsync();

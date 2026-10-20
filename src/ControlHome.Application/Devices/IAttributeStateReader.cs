@@ -17,6 +17,27 @@ public interface IAttributeStateReader
     Task<IReadOnlyList<AttributeStateDto>> GetAllAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>A device's live availability and last-seen time.</summary>
+public sealed record DeviceLiveStatus(Domain.Devices.Availability Availability, DateTimeOffset? LastSeenAtUtc);
+
+/// <summary>
+/// Where live device availability comes from. The database copy is written behind (every few seconds, and not at all while
+/// the database is down), so while this process is the active runtime the device runtime's own view is served instead
+/// (Infrastructure replaces <see cref="NoLiveDeviceStatus"/>); devices it does not return use the database values.
+/// </summary>
+public interface IDeviceStatusReader
+{
+    IReadOnlyDictionary<Guid, DeviceLiveStatus> Get(IReadOnlyCollection<Guid> deviceIds);
+}
+
+/// <summary>No live view (no device runtime, standby): the database values are used.</summary>
+public sealed class NoLiveDeviceStatus : IDeviceStatusReader
+{
+    public static NoLiveDeviceStatus Instance { get; } = new();
+
+    public IReadOnlyDictionary<Guid, DeviceLiveStatus> Get(IReadOnlyCollection<Guid> deviceIds) => new Dictionary<Guid, DeviceLiveStatus>();
+}
+
 /// <summary>Reads current values from the database; all of them are <see cref="AttributeStateDto.Restored"/>.</summary>
 public sealed class DbAttributeStateReader(IControlHomeDb db) : IAttributeStateReader
 {

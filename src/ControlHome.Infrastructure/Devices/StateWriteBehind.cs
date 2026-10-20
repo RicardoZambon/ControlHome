@@ -217,6 +217,28 @@ public sealed partial class StateWriteBehind(
         }
     }
 
+    /// <summary>
+    /// Forgets the device availabilities still waiting (last-seen times are kept). Called before the runtime (re)starts, which
+    /// resets every device to Unknown: availability left over from a failed final flush must not override that.
+    /// </summary>
+    public void DropPendingAvailability()
+    {
+        lock (_lock)
+        {
+            foreach (var update in _devices.Values.Where(d => d.Availability is not null).ToList())
+            {
+                if (update.LastSeenAtUtc is null)
+                {
+                    _devices.Remove(update.DeviceId);
+                }
+                else
+                {
+                    _devices[update.DeviceId] = update with { Availability = null };
+                }
+            }
+        }
+    }
+
     /// <summary>Drops everything pending (test reset).</summary>
     public void Clear()
     {

@@ -33,6 +33,12 @@ public interface IRuntimeStatus
     RuntimeMode Mode { get; }
 
     bool HistoryPaused { get; }
+
+    /// <summary>
+    /// Whether this process runs a device runtime at all. Without one (none registered, or <c>DeviceRuntime:Enabled</c> is
+    /// <c>false</c>) <see cref="Mode"/> stays <see cref="RuntimeMode.Starting"/> for good.
+    /// </summary>
+    bool Enabled { get; }
 }
 
 public static class RuntimeStatusExtensions

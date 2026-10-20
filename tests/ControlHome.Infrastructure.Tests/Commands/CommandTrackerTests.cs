@@ -83,10 +83,10 @@ public sealed class CommandTrackerTests : IDisposable
     }
 
     [Fact]
-    public async Task An_accepted_await_state_command_is_confirmed_by_a_report_of_its_capability()
+    public async Task An_accepted_await_state_command_is_confirmed_by_a_report_of_its_target_state()
     {
         _dispatcher.Outcome = _ => CommandOutcome.AcceptedOutcome;
-        var command = Command(CapabilityIds.Switch, "turnOn", attributeIds: [41]);
+        var command = Command(CapabilityIds.Switch, "turnOn", _onAttribute);
 
         _tracker.Submit(command);
         await RecordingPublisher.WaitUntilAsync(() => _dispatcher.Batches.Count == 1, "the command is dispatched");
@@ -101,10 +101,113 @@ public sealed class CommandTrackerTests : IDisposable
     }
 
     [Fact]
+    public async Task An_accepted_lock_is_not_confirmed_by_the_old_state_and_times_out()
+    {
+        _dispatcher.Outcome = _ => CommandOutcome.AcceptedOutcome;
+        var command = Command(CapabilityIds.Lock, "lock", _lockStateAttribute) with { Timeout = TimeSpan.FromSeconds(5) };
+
+        await SubmitAndWaitForDispatchAsync(command);
+        await ReportAsync(new AttributeStateChange(51, StateValue.String("unlocked"), StateValue.String("unlocked"), _t0, Changed: false, IsEvent: false));
+        await ReportAsync(new AttributeStateChange(51, StateValue.String("unlocked"), StateValue.String("unknown"), _t0, Changed: true, IsEvent: false));
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        StatusesOf(command.CommandId).ShouldBe([CommandStatuses.Pending]);
+
+        _time.Advance(TimeSpan.FromSeconds(5));
+
+        (await WaitForStatusAsync(command.CommandId, CommandStatuses.TimedOut)).Code.ShouldBe(ErrorCodes.CommandsTimedOut);
+    }
+
+    [Fact]
+    public async Task An_accepted_lock_fails_when_the_lock_reports_jammed()
+    {
+        _dispatcher.Outcome = _ => CommandOutcome.AcceptedOutcome;
+        var command = Command(CapabilityIds.Lock, "lock", _lockStateAttribute);
+
+        await SubmitAndWaitForDispatchAsync(command);
+        await ReportAsync(new AttributeStateChange(51, StateValue.String("unlocked"), StateValue.String("jammed"), _t0, Changed: true, IsEvent: false));
+
+        (await WaitForStatusAsync(command.CommandId, CommandStatuses.Failed)).Code.ShouldBe(ErrorCodes.CommandsNotConfirmed);
+        await RecordingPublisher.WaitUntilAsync(() => _audit.Events.Count == 1, "the command is audited");
+        var details = JsonSerializer.SerializeToElement(_audit.Events[0].Details, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        details.GetProperty("detail").GetString().ShouldBe("jammed");
+    }
+
+    [Fact]
+    public async Task A_report_of_the_target_state_confirms_even_when_unchanged()
+    {
+        _dispatcher.Outcome = _ => CommandOutcome.AcceptedOutcome;
+        var command = Command(CapabilityIds.Lock, "lock", _lockStateAttribute);
+
+        await SubmitAndWaitForDispatchAsync(command);
+        await ReportAsync(new AttributeStateChange(51, StateValue.String("locked"), StateValue.String("locked"), _t0, Changed: false, IsEvent: false));
+
+        await WaitForStatusAsync(command.CommandId, CommandStatuses.Confirmed);
+    }
+
+    [Fact]
+    public async Task A_setter_is_confirmed_by_its_own_attribute_reaching_the_value_not_by_other_attributes()
+    {
+        _dispatcher.Outcome = _ => CommandOutcome.AcceptedOutcome;
+        var attributes = new Dictionary<string, int> { ["mode"] = 61, ["targetTemperature"] = 62, ["currentTemperature"] = 63, ["fanMode"] = 64 };
+        var command = Command(
+            CapabilityIds.Thermostat,
+            "setTargetTemperature",
+            attributes,
+            JsonDocument.Parse("""{"targetTemperature":21}""").RootElement);
+
+        await SubmitAndWaitForDispatchAsync(command);
+        await ReportAsync(new AttributeStateChange(63, StateValue.Number(24), StateValue.Number(23.5), _t0, Changed: true, IsEvent: false));
+        await ReportAsync(new AttributeStateChange(62, StateValue.Number(24), StateValue.Number(24), _t0, Changed: false, IsEvent: false));
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        StatusesOf(command.CommandId).ShouldBe([CommandStatuses.Pending]);
+
+        await ReportAsync(new AttributeStateChange(62, StateValue.Number(24), StateValue.Number(21), _t0, Changed: true, IsEvent: false));
+
+        await WaitForStatusAsync(command.CommandId, CommandStatuses.Confirmed);
+    }
+
+    [Fact]
+    public async Task A_command_without_a_target_is_confirmed_by_a_change_not_by_an_unchanged_report()
+    {
+        _dispatcher.Outcome = _ => CommandOutcome.AcceptedOutcome;
+        var command = Command(CapabilityIds.Switch, "toggle", _onAttribute);
+
+        await SubmitAndWaitForDispatchAsync(command);
+        await ReportAsync(new AttributeStateChange(41, StateValue.False, StateValue.False, _t0, Changed: false, IsEvent: false));
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        StatusesOf(command.CommandId).ShouldBe([CommandStatuses.Pending]);
+
+        await ReportAsync(new AttributeStateChange(41, StateValue.False, StateValue.True, _t0, Changed: true, IsEvent: false));
+
+        await WaitForStatusAsync(command.CommandId, CommandStatuses.Confirmed);
+    }
+
+    [Fact]
+    public async Task A_later_command_for_the_same_control_supersedes_the_setter_still_waiting()
+    {
+        var endpointId = Guid.CreateVersion7();
+        var first = CoverSetter(endpointId, 60);
+        var held = CoverSetter(endpointId, 80);
+        var close = Command(CapabilityIds.Cover, "close") with { EndpointId = endpointId };
+
+        _tracker.Submit(first);
+        await RecordingPublisher.WaitUntilAsync(() => _dispatcher.Batches.Count == 1, "the first setter is sent at once");
+        _tracker.Submit(held);
+        _tracker.Submit(close);
+
+        await WaitForStatusAsync(held.CommandId, CommandStatuses.Superseded);
+        await RecordingPublisher.WaitUntilAsync(() => _dispatcher.Batches.Count == 2, "close is sent at once");
+        _time.Advance(CommandTracker.CoalesceWindow);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+
+        _dispatcher.Batches.Select(b => b.Commands[0].Command).ShouldBe(["setPosition", "close"]);
+    }
+
+    [Fact]
     public async Task An_accepted_command_without_a_report_times_out()
     {
         _dispatcher.Outcome = _ => CommandOutcome.AcceptedOutcome;
-        var command = Command(CapabilityIds.Switch, "turnOn", attributeIds: [41]) with { Timeout = TimeSpan.FromSeconds(5) };
+        var command = Command(CapabilityIds.Switch, "turnOn", _onAttribute) with { Timeout = TimeSpan.FromSeconds(5) };
 
         _tracker.Submit(command);
         await RecordingPublisher.WaitUntilAsync(() => _dispatcher.Batches.Count == 1, "the command is dispatched");
@@ -184,22 +287,50 @@ public sealed class CommandTrackerTests : IDisposable
         _tracker.TryReserveKey("k1").ShouldBeTrue();
     }
 
-    private static TrackedCommand Command(string capabilityId, string name, IReadOnlyList<int>? attributeIds = null, JsonElement? arguments = null)
+    /// <param name="attributes">The endpoint capability's attribute ids by key (default: 1, 2, … in catalogue order).</param>
+    private static TrackedCommand Command(
+        string capabilityId,
+        string name,
+        IReadOnlyDictionary<string, int>? attributes = null,
+        JsonElement? arguments = null)
     {
-        var definition = CapabilityCatalog.Find(capabilityId)!.FindCommand(name)!;
+        var capability = CapabilityCatalog.Find(capabilityId)!;
+        var definition = capability.FindCommand(name)!;
+        var args = arguments ?? JsonDocument.Parse("{}").RootElement;
+        var ids = attributes ?? capability.Attributes.Select((a, i) => (a.Key, Id: i + 1)).ToDictionary(x => x.Key, x => x.Id);
         return new TrackedCommand(
             Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             capabilityId,
             definition,
-            attributeIds ?? [1],
-            new DeviceCommandBatch("dev-1", [new DeviceCommand("main", capabilityId, name, arguments ?? JsonDocument.Parse("{}").RootElement)], Guid.NewGuid().ToString("N")),
+            CommandConfirmation.For(capability, definition, args, ids),
+            new DeviceCommandBatch("dev-1", [new DeviceCommand("main", capabilityId, name, args)], Guid.NewGuid().ToString("N")),
             TimeSpan.FromSeconds(5),
             Coalescable: false,
             _actor,
             AuditArguments: true);
     }
+
+    private static readonly Dictionary<string, int> _onAttribute = new() { ["on"] = 41 };
+
+    private static readonly Dictionary<string, int> _lockStateAttribute = new() { ["lockState"] = 51 };
+
+    private async Task SubmitAndWaitForDispatchAsync(TrackedCommand command)
+    {
+        _tracker.Submit(command);
+        await RecordingPublisher.WaitUntilAsync(() => _dispatcher.Batches.Count == 1, "the command is dispatched");
+    }
+
+    private ValueTask ReportAsync(AttributeStateChange change) =>
+        _tracker.OnStateChangedAsync([change], TestContext.Current.CancellationToken);
+
+    private static TrackedCommand CoverSetter(Guid endpointId, int position) =>
+        Command(CapabilityIds.Cover, "setPosition", arguments: JsonDocument.Parse($$"""{"position":{{position}}}""").RootElement) with
+        {
+            EndpointId = endpointId,
+            Coalescable = true,
+        };
 
     private static TrackedCommand Setter(Guid endpointId, int level) =>
         Command(CapabilityIds.Level, "setLevel", arguments: JsonDocument.Parse($$"""{"level":{{level}}}""").RootElement) with

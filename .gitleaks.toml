@@ -47,6 +47,8 @@ keywords = ["password", "pwd"]
     '''(?i)(?:password|pwd)\s+=\s+[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$]|\(|\[|!|-[A-Za-z])''',
     # a bare identifier that itself names a password variable/property (e.g. `Password = newPassword,`)
     '''(?i)(?:password|pwd)\s+=\s+(?:[A-Za-z_$][\w$]*)?(?:password|pwd)[\w$]*[,)\]}]*$''',
+    # a language keyword / literal, e.g. `string? CurrentPassword = null)`, `var wrongPassword = await ...`
+    '''(?i)(?:password|pwd)\s+=\s+(?:null|default|await|new|true|false|nameof|typeof)\b''',
     # a TypeScript generic arrow function, e.g. the generated API client's
     # `export const changePassword = <ThrowOnError extends boolean = false>(...) => ...`
     '''(?i)(?:password|pwd)\s+=\s+<[A-Za-z_$][\w$]*$''',

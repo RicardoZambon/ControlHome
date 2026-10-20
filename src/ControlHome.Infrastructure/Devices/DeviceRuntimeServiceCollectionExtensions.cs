@@ -16,7 +16,7 @@ public static class DeviceRuntimeServiceCollectionExtensions
     /// <summary>
     /// The device runtime: registry, state cache, state processor, write-behind, inventory, integration supervisor (also the
     /// <see cref="ICommandDispatcher"/> and <see cref="IIntegrationRuntimeControl"/>), runtime lease and secret protection.
-    /// Replaces the Application defaults (database state reader, no-op dispatcher). Nothing starts until
+    /// Replaces the Application defaults (database state and device-status readers, no-op dispatcher). Nothing starts until
     /// <see cref="AddDeviceRuntimeHost"/>'s host does. Connectors are registered separately with <see cref="AddConnector{T}"/>.
     /// </summary>
     public static IServiceCollection AddDeviceRuntime(this IServiceCollection services)
@@ -56,6 +56,7 @@ public static class DeviceRuntimeServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<ICommandDispatcher>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
         services.Replace(ServiceDescriptor.Singleton<IIntegrationRuntimeControl>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
         services.Replace(ServiceDescriptor.Scoped<IAttributeStateReader, RuntimeAttributeStateReader>());
+        services.Replace(ServiceDescriptor.Singleton<IDeviceStatusReader, RuntimeDeviceStatusReader>());
         services.TryAddSingleton<RuntimeLease>();
         services.TryAddSingleton<DeviceRuntime>();
         return services;

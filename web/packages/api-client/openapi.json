@@ -350,6 +350,16 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -534,8 +544,8 @@
         "tags": [
           "Auth"
         ],
-        "summary": "Sets the safety PIN (4–8 digits) for safety-critical commands, or changes it (currentPin required).",
-        "description": "400 validation.failed or safety.pin_incorrect (wrong currentPin; counts as a failed attempt); 423 safety.locked (retryAfterSeconds) after 5 wrong PINs within 15 minutes.",
+        "summary": "Sets the safety PIN (4–8 digits) for safety-critical commands: the first one with the account password (currentPassword), a change with the current PIN (currentPin) or, if forgotten, the account password.",
+        "description": "400 validation.failed; safety.password_required (no PIN set yet, or neither currentPin nor currentPassword); safety.pin_incorrect (wrong currentPin; counts as a failed attempt); auth.password_incorrect (wrong currentPassword; counts towards the account lockout); 423 safety.locked (retryAfterSeconds) after 5 wrong PINs within 15 minutes, or auth.locked_out.",
         "operationId": "setSafetyPin",
         "requestBody": {
           "content": {
@@ -573,6 +583,16 @@
           },
           "423": {
             "description": "Locked",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -913,6 +933,61 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}/safety-pin": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Clears the account's safety PIN and any safety lockout; the user sets a new PIN with their password.",
+        "operationId": "resetUserSafetyPin",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
           },
           "404": {
             "description": "Not Found",
@@ -1763,7 +1838,7 @@
         "operationId": "listDevices",
         "parameters": [
           {
-            "name": "RoomId",
+            "name": "roomId",
             "in": "query",
             "description": "Devices with at least one endpoint in the room (an endpoint's own room, else the device's).",
             "schema": {
@@ -1772,7 +1847,7 @@
             }
           },
           {
-            "name": "IntegrationId",
+            "name": "integrationId",
             "in": "query",
             "description": "Devices of one integration.",
             "schema": {
@@ -1781,7 +1856,7 @@
             }
           },
           {
-            "name": "Capability",
+            "name": "capability",
             "in": "query",
             "description": "Devices with an endpoint that has this (non-retired) capability, e.g. `switch`.",
             "schema": {
@@ -1789,7 +1864,7 @@
             }
           },
           {
-            "name": "Q",
+            "name": "q",
             "in": "query",
             "description": "Text contained in the name, manufacturer or model.",
             "schema": {
@@ -2391,7 +2466,7 @@
           "Integrations"
         ],
         "summary": "Creates an integration from a connector key and its config; its runtime starts right away.",
-        "description": "400 validation.failed (errors.connectorKey = connectors.not_found for an unknown connector) or integrations.invalid_config (errors['config.<key>'] = commands.argument_* codes). Secret config fields are stored encrypted and never returned.",
+        "description": "400 validation.failed (errors.connectorKey = connectors.not_found for an unknown connector) or integrations.invalid_config (errors['config.<key>'] = commands.argument_* codes); 409 runtime.standby (this instance is a read-only standby: make the change on the active one); 503 runtime.starting (this instance is still deciding whether it runs the devices: try again in a moment). Secret config fields are stored encrypted and never returned.",
         "operationId": "createIntegration",
         "requestBody": {
           "content": {
@@ -2443,6 +2518,26 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -2453,6 +2548,7 @@
           "Integrations"
         ],
         "summary": "Stops the integration and deletes it with all its devices and their state.",
+        "description": "404 integrations.not_found; 409 runtime.standby (this instance is a read-only standby); 503 runtime.starting (still deciding whether it runs the devices).",
         "operationId": "deleteIntegration",
         "parameters": [
           {
@@ -2491,6 +2587,26 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4380,11 +4496,18 @@
               "null",
               "string"
             ],
-            "description": "The PIN in use; required when one is set."
+            "description": "The PIN in use, to change it (wrong ones count towards the safety lockout)."
           },
           "newPin": {
             "type": "string",
             "description": "4–8 digits."
+          },
+          "currentPassword": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The account password: required to set the first PIN, and to replace a PIN without CurrentPin (a\nforgotten one). Checked like a sign-in (wrong ones count towards the account lockout)."
           }
         },
         "description": "Sets or changes the signed-in user's safety PIN (`PUT /api/auth/me/pin`)."
@@ -4455,11 +4578,7 @@
       },
       "StateValue": {
         "required": [
-          "kind",
-          "b",
-          "n",
-          "s",
-          "j"
+          "kind"
         ],
         "type": "object",
         "properties": {
@@ -4467,25 +4586,16 @@
             "$ref": "#/components/schemas/StateValueKind"
           },
           "b": {
-            "type": [
-              "null",
-              "boolean"
-            ],
+            "type": "boolean",
             "description": "Set when StateValueKind StateValue.Kind is StateValueKind.Bool."
           },
           "n": {
-            "type": [
-              "null",
-              "number"
-            ],
+            "type": "number",
             "description": "Set (finite) when StateValueKind StateValue.Kind is StateValueKind.Number.",
             "format": "double"
           },
           "s": {
-            "type": [
-              "null",
-              "string"
-            ],
+            "type": "string",
             "description": "Set when StateValueKind StateValue.Kind is StateValueKind.String."
           },
           "j": {

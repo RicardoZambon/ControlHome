@@ -32,6 +32,25 @@ public sealed class StateWriteBehindTests
     }
 
     [Fact]
+    public async Task Availability_left_over_from_a_failed_flush_is_dropped_before_a_restart_but_last_seen_is_kept()
+    {
+        await using var pipeline = new PipelineHarness();
+        var writeBehind = pipeline.WriteBehind;
+        var online = Guid.CreateVersion7();
+        var seen = Guid.CreateVersion7();
+        pipeline.Store.Fail = true;
+        writeBehind.EnqueueDevice(new PendingDeviceUpdate(online, Availability.Online, null));
+        writeBehind.EnqueueDevice(new PendingDeviceUpdate(seen, Availability.Offline, T0));
+        (await writeBehind.FlushAsync(Ct)).ShouldBeFalse();
+
+        writeBehind.DropPendingAvailability();
+
+        pipeline.Store.Fail = false;
+        (await writeBehind.FlushAsync(Ct)).ShouldBeTrue();
+        pipeline.Store.Batches.ShouldHaveSingleItem().Devices.ShouldBe([new PendingDeviceUpdate(seen, null, T0)]);
+    }
+
+    [Fact]
     public async Task While_the_database_is_down_everything_stays_buffered_and_is_written_once_it_is_back()
     {
         await using var pipeline = new PipelineHarness();

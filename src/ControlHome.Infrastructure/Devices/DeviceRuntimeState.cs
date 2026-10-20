@@ -1,16 +1,23 @@
 using ControlHome.Application.Realtime;
 using ControlHome.Application.Runtime;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace ControlHome.Infrastructure.Devices;
 
 /// <summary>The runtime's mode and health (<see cref="IRuntimeStatus"/>); every change is pushed as hub <c>SystemStatusChanged</c>.</summary>
-public sealed partial class DeviceRuntimeState(IRealtimePublisher publisher, ILogger<DeviceRuntimeState> logger) : IRuntimeStatus
+public sealed partial class DeviceRuntimeState(
+    IRealtimePublisher publisher,
+    IOptions<DeviceRuntimeOptions> options,
+    ILogger<DeviceRuntimeState> logger) : IRuntimeStatus
 {
     private readonly Lock _lock = new();
     private RuntimeMode _mode = RuntimeMode.Starting;
     private bool _historyPaused;
     private Task _publishing = Task.CompletedTask;
+
+    /// <inheritdoc />
+    public bool Enabled => options.Value.Enabled;
 
     public RuntimeMode Mode
     {

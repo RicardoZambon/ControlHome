@@ -86,10 +86,16 @@ public sealed class IntegrationSecretProtector(IDataProtectionProvider provider,
 /// <summary>
 /// <see cref="ISecretStore"/> of one integration: reads and writes <c>Integration.SecretsProtected</c> through
 /// <see cref="IntegrationSecretProtector"/>. Writes are saved before they return (a rotated refresh token is never lost).
+/// Once the run it belongs to is stopped (<see cref="Close"/>) writes are refused, so a runtime that does not stop in time
+/// cannot overwrite what its successor saved.
 /// </summary>
 public sealed class SecretStore(Guid integrationId, IServiceScopeFactory scopes, IntegrationSecretProtector protector) : ISecretStore
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private volatile bool _closed;
+
+    /// <summary>Refuses every later write (<see cref="ObjectDisposedException"/>).</summary>
+    public void Close() => _closed = true;
 
     public async ValueTask<string?> GetAsync(string key, CancellationToken cancellationToken)
     {
@@ -101,9 +107,11 @@ public sealed class SecretStore(Guid integrationId, IServiceScopeFactory scopes,
     public async ValueTask SetAsync(string key, string? value, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(key);
+        ObjectDisposedException.ThrowIf(_closed, this);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            ObjectDisposedException.ThrowIf(_closed, this);
             await using var scope = scopes.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<IControlHomeDb>();
             var integration = await db.Integrations.SingleOrDefaultAsync(i => i.Id == integrationId, cancellationToken).ConfigureAwait(false)
@@ -119,6 +127,7 @@ public sealed class SecretStore(Guid integrationId, IServiceScopeFactory scopes,
             }
 
             integration.SecretsProtected = bag.Values.Count == 0 && bag.Devices.Count == 0 ? null : protector.Protect(bag);
+            ObjectDisposedException.ThrowIf(_closed, this);
             await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         finally

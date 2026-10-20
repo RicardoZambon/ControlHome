@@ -44,6 +44,9 @@ public sealed class CanaryTests(DevicesApiFactory factory) : DevicesTestBase(fac
         logs.ShouldContain(e => e.Contains("Canary connecting with token \"***\"", StringComparison.Ordinal));
         logs.ShouldContain(e => e.Contains("access_token=***", StringComparison.Ordinal));
         logs.ShouldContain(e => e.Contains("Login failed for token ***", StringComparison.Ordinal));
+        logs.ShouldContain(e => e.Contains("Canary login rejected", StringComparison.Ordinal)
+            && e.Contains("Vendor rejected token ***", StringComparison.Ordinal)
+            && e.Contains("401 for ***", StringComparison.Ordinal));
         Factory.Realtime.IntegrationStatuses.ShouldContain(s => s.Message == "Using token ***");
 
         logs.ShouldNotContain(e => e.Contains(canary, StringComparison.Ordinal));

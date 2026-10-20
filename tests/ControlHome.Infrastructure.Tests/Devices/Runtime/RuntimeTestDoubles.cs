@@ -96,23 +96,33 @@ internal sealed class FakeStateStore : IStateStore
     }
 }
 
-/// <summary>An inventory that knows nothing (or what the test hands it) and counts lookups.</summary>
+/// <summary>An inventory that knows nothing (or what the test hands it) and counts lookups and removals.</summary>
 internal sealed class FakeInventory : IDeviceInventory
 {
     private readonly ConcurrentQueue<AttributeAddress> _lookups = new();
+    private readonly ConcurrentQueue<string> _removed = new();
 
     public Func<AttributeAddress, AttributeInfo?> Resolve { get; set; } = _ => null;
 
+    /// <summary>When set, answers lookups instead of <see cref="Resolve"/> (e.g. throws, or never completes).</summary>
+    public Func<AttributeAddress, CancellationToken, Task<AttributeInfo?>>? ResolveAsync { get; set; }
+
     public IReadOnlyList<AttributeAddress> Lookups => [.. _lookups];
+
+    public IReadOnlyList<string> Removed => [.. _removed];
 
     public Task UpsertAsync(Guid integrationId, DiscoveredDevice device, CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public Task RemoveAsync(Guid integrationId, string externalDeviceId, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task RemoveAsync(Guid integrationId, string externalDeviceId, CancellationToken cancellationToken)
+    {
+        _removed.Enqueue(externalDeviceId);
+        return Task.CompletedTask;
+    }
 
     public Task<AttributeInfo?> EnsureAttributeAsync(AttributeAddress address, CancellationToken cancellationToken)
     {
         _lookups.Enqueue(address);
-        return Task.FromResult(Resolve(address));
+        return ResolveAsync is { } resolve ? resolve(address, cancellationToken) : Task.FromResult(Resolve(address));
     }
 }
 
@@ -147,7 +157,7 @@ internal sealed class PipelineHarness : IAsyncDisposable
         Options = Microsoft.Extensions.Options.Options.Create(options);
         Time = new FakeTimeProvider(T0);
         Clock = new RuntimeClock(Time);
-        RuntimeState = new DeviceRuntimeState(Publisher, NullLogger<DeviceRuntimeState>.Instance);
+        RuntimeState = new DeviceRuntimeState(Publisher, Options, NullLogger<DeviceRuntimeState>.Instance);
         Store = new FakeStateStore();
         WriteBehind = new StateWriteBehind(Store, RuntimeState, Time, Options, NullLogger<StateWriteBehind>.Instance);
         Batcher = new RealtimeBatcher(Publisher, Time, Options, NullLogger<RealtimeBatcher>.Instance);

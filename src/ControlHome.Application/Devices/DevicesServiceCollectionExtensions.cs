@@ -24,6 +24,7 @@ public static class DevicesServiceCollectionExtensions
         services.TryAddSingleton<ICommandDispatcher>(NoDeviceRuntime.Instance);
         services.TryAddSingleton<IRealtimePublisher>(NullRealtimePublisher.Instance);
         services.TryAddScoped<IAttributeStateReader, DbAttributeStateReader>();
+        services.TryAddSingleton<IDeviceStatusReader>(NoLiveDeviceStatus.Instance);
 
         services.AddScoped<DeviceQueryService>();
         services.AddScoped<DeviceAdminService>();

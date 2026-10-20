@@ -11,8 +11,8 @@ namespace ControlHome.Infrastructure.Devices;
 
 /// <summary>
 /// The state pipeline's single processing loop. Connector reports (<see cref="ReportState"/>, <see cref="ReportEvent"/>,
-/// <see cref="ReportAvailability"/>) never block: they land in a coalescing queue — one slot per attribute, the latest
-/// report wins — bounded to <see cref="DeviceRuntimeOptions.QueueCapacity"/> distinct attributes (beyond that the oldest
+/// <see cref="ReportAvailability"/>) never block: they land in a coalescing queue — one slot per attribute, the newest
+/// observation wins — bounded to <see cref="DeviceRuntimeOptions.QueueCapacity"/> distinct attributes (beyond that the oldest
 /// waiting report is dropped), so a flooding connector can neither exhaust memory nor delay other devices for long.
 /// For each report the loop, in order:
 /// <list type="number">
@@ -24,11 +24,29 @@ namespace ControlHome.Infrastructure.Devices;
 /// (current value, history row for recorded attributes and events, device last-seen);</item>
 /// <item>hands the batch to every <see cref="IStateChangeSubscriber"/> (command confirmations; automations later).</item>
 /// </list>
-/// Momentary events are never coalesced or deduplicated.
+/// Momentary events are never coalesced or deduplicated. While a report waits, a newer one for the same attribute replaces
+/// it, but an older observation never replaces a newer one (it counts as out of order).
+/// <para>
+/// The loop never waits on the database for long: an address the registry does not know is looked up through the
+/// inventory at most once per <see cref="UnknownRetryAfter"/> (unknown) or per back-off window (the lookup failed or took
+/// longer than <see cref="ResolveTimeout"/>), so an outage or a busy inventory cannot stall every other report.
+/// </para>
 /// </summary>
 public sealed partial class StateProcessor : IAsyncDisposable
 {
     private const int MaxBatch = 1_000;
+
+    /// <summary>How long an address the inventory does not know is dropped without asking again.</summary>
+    public static readonly TimeSpan UnknownRetryAfter = TimeSpan.FromMinutes(1);
+
+    /// <summary>The longest the loop waits for the inventory to resolve an address (then it counts as a failed lookup).</summary>
+    public static readonly TimeSpan ResolveTimeout = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// After a failed (or timed out) lookup the address is dropped for this long, doubling per failure in a row up to
+    /// <see cref="UnknownRetryAfter"/>.
+    /// </summary>
+    public static readonly TimeSpan ResolveFailureBackoff = TimeSpan.FromSeconds(5);
 
     private readonly DeviceRegistry _registry;
     private readonly StateCache _cache;
@@ -43,7 +61,7 @@ public sealed partial class StateProcessor : IAsyncDisposable
     private readonly Lock _lock = new();
     private readonly Dictionary<ChangeKey, PendingChange> _pending = [];
     private readonly Channel<ChangeKey> _keys;
-    private readonly Dictionary<AttributeAddress, DateTimeOffset> _unknown = [];
+    private readonly Dictionary<AttributeAddress, UnknownAddress> _unknown = [];
     private long _sequence;
     private long _received;
     private long _dropped;
@@ -104,7 +122,7 @@ public sealed partial class StateProcessor : IAsyncDisposable
     /// <summary>Reports replaced by a newer one for the same attribute while waiting.</summary>
     public long Coalesced => Interlocked.Read(ref _coalesced);
 
-    /// <summary>Reports older than the cached observation.</summary>
+    /// <summary>Reports older than the cached observation, or than the report waiting for the same attribute.</summary>
     public long OutOfOrder => Interlocked.Read(ref _outOfOrder);
 
     /// <summary>Reports taken off the queue and processed.</summary>
@@ -204,11 +222,13 @@ public sealed partial class StateProcessor : IAsyncDisposable
         {
             _pending.Clear();
             _unknown.Clear();
-        }
 
-        while (_keys.Reader.TryRead(out _))
-        {
-            // Drain.
+            // Drained under the lock (Enqueue adds its pending entry under it too): a pending entry whose key was drained
+            // would never be read again, and every later report for it would only coalesce into it.
+            while (_keys.Reader.TryRead(out _))
+            {
+                // Drain.
+            }
         }
     }
 
@@ -240,8 +260,15 @@ public sealed partial class StateProcessor : IAsyncDisposable
         Interlocked.Increment(ref _received);
         lock (_lock)
         {
-            if (_pending.ContainsKey(key))
+            if (_pending.TryGetValue(key, out var waiting))
             {
+                if (key.Kind is ChangeKind.State or ChangeKind.Injected && change.ObservedAtUtc < waiting.ObservedAtUtc)
+                {
+                    // Older than the report already waiting: the newer observation stays (as the cache would decide).
+                    Interlocked.Increment(ref _outOfOrder);
+                    return;
+                }
+
                 _pending[key] = change;
                 Interlocked.Increment(ref _coalesced);
                 return;
@@ -404,38 +431,65 @@ public sealed partial class StateProcessor : IAsyncDisposable
         }
 
         var now = _clock.Time.GetUtcNow();
+        int failures;
         lock (_lock)
         {
-            if (_unknown.TryGetValue(change.Address, out var until) && until > now)
+            _unknown.TryGetValue(change.Address, out var entry);
+            if (entry.Until > now)
             {
                 return null;
             }
+
+            failures = entry.Failures;
         }
 
+        // Bounded: this loop serves every integration, so a slow or hanging lookup must not hold up the others.
+        using var timeout = new CancellationTokenSource(ResolveTimeout, _clock.Time);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         try
         {
-            var created = await _inventory.EnsureAttributeAsync(change.Address, cancellationToken).ConfigureAwait(false);
+            var created = await _inventory.EnsureAttributeAsync(change.Address, linked.Token)
+                .WaitAsync(linked.Token)
+                .ConfigureAwait(false);
             if (created is null)
+            {
+                // Do not ask again for a minute about an address nobody knows.
+                RememberUnknown(change.Address, new UnknownAddress(now + UnknownRetryAfter, 0));
+                LogUnknownAttribute(change.Address.Device, change.Address.Endpoint, change.Address.Capability, change.Address.Attribute);
+            }
+            else if (failures > 0)
             {
                 lock (_lock)
                 {
-                    // Do not ask the database again for a minute about an address nobody knows.
-                    _unknown[change.Address] = now + TimeSpan.FromMinutes(1);
-                    if (_unknown.Count > 10_000)
-                    {
-                        _unknown.Clear();
-                    }
+                    _unknown.Remove(change.Address);
                 }
-
-                LogUnknownAttribute(change.Address.Device, change.Address.Endpoint, change.Address.Capability, change.Address.Attribute);
             }
 
             return created;
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            LogResolveFailed(change.Address.Device, change.Address.Capability, change.Address.Attribute, ex.GetType().Name);
+            // Failed or timed out (database down, inventory busy): back off before asking again, doubling per failure.
+            var backoff = TimeSpan.FromTicks(Math.Min(ResolveFailureBackoff.Ticks << Math.Min(failures, 8), UnknownRetryAfter.Ticks));
+            RememberUnknown(change.Address, new UnknownAddress(now + backoff, failures + 1));
+            LogResolveFailed(
+                change.Address.Device,
+                change.Address.Capability,
+                change.Address.Attribute,
+                timeout.IsCancellationRequested ? "Timeout" : ex.GetType().Name);
             return null;
+        }
+    }
+
+    private void RememberUnknown(AttributeAddress address, UnknownAddress entry)
+    {
+        lock (_lock)
+        {
+            _unknown[address] = entry;
+            if (_unknown.Count > 10_000)
+            {
+                _unknown.Clear();
+            }
         }
     }
 
@@ -448,6 +502,11 @@ public sealed partial class StateProcessor : IAsyncDisposable
         }
 
         device.Availability = change.Availability;
+        if (change.Availability == Availability.Online)
+        {
+            device.LastSeenAtUtc = change.ObservedAtUtc;
+        }
+
         _writeBehind.EnqueueDevice(new PendingDeviceUpdate(
             device.DeviceId,
             change.Availability,
@@ -463,6 +522,7 @@ public sealed partial class StateProcessor : IAsyncDisposable
         }
 
         var now = _clock.Time.GetUtcNow();
+        device.LastSeenAtUtc = now;
         if (device.LastSeenQueuedAtUtc is { } last && now - last < _options.LastSeenPersistInterval)
         {
             return;
@@ -488,6 +548,9 @@ public sealed partial class StateProcessor : IAsyncDisposable
     private partial void LogResolveFailed(string device, string capability, string attribute, string exceptionType);
 
     private readonly record struct ChangeKey(ChangeKind Kind, AttributeAddress Address, long Sequence);
+
+    /// <summary>An address the inventory did not resolve: dropped until <see cref="Until"/>; <see cref="Failures"/> failed lookups in a row.</summary>
+    private readonly record struct UnknownAddress(DateTimeOffset Until, int Failures);
 
     private sealed record PendingChange(
         ChangeKind Kind,

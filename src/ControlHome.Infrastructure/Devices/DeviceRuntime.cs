@@ -37,6 +37,8 @@ public sealed partial class DeviceRuntime(
                 return;
             }
 
+            // Availability buffered by an earlier run (a failed final flush) would override the reset to Unknown below.
+            writeBehind.DropPendingAvailability();
             await using (var scope = scopes.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<IControlHomeDb>();
@@ -97,7 +99,7 @@ public sealed partial class DeviceRuntime(
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            await supervisor.StopAllAsync().ConfigureAwait(false);
+            await supervisor.StopAllAsync(keepAccepting: true).ConfigureAwait(false);
             processor.Clear();
             await processor.WhenIdleAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
             writeBehind.Clear();

@@ -164,6 +164,63 @@ public sealed class RuntimeDatabaseTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task The_state_store_never_changes_the_availability_of_an_orphaned_device()
+    {
+        await using var database = await CreateAsync(sql, Ct);
+        var integration = Integration();
+        var plug = Device(integration.Id, "plug-1", "Plug", CapabilityIds.Switch);
+        plug.IsOrphaned = true;
+        plug.Availability = Availability.Unknown;
+        integration.Devices.Add(plug);
+        await database.WithDbAsync(async db =>
+        {
+            db.Integrations.Add(integration);
+            await db.SaveChangesAsync(Ct);
+        });
+        var store = new SqlStateStore(database.Services.GetRequiredService<IDatabaseConnectionProvider>(), new FakeTimeProvider(Now));
+
+        // A buffered Online that reaches the database after the device was orphaned.
+        await store.WriteAsync(new StateWriteBatch([], [], [new PendingDeviceUpdate(plug.Id, Availability.Online, Now)]), Ct);
+
+        var stored = await database.WithDbAsync(db => db.Devices.AsNoTracking().SingleAsync(d => d.Id == plug.Id, Ct));
+        stored.Availability.ShouldBe(Availability.Unknown);
+        stored.LastSeenAtUtc.ShouldBe(Now);
+    }
+
+    [Fact]
+    public async Task The_inventory_creates_an_attribute_its_definition_has_but_the_database_lacks()
+    {
+        await using var database = await CreateAsync(sql, Ct);
+        var integration = Integration();
+        var plug = Device(integration.Id, "plug-1", "Plug", CapabilityIds.Switch, CapabilityIds.Power);
+        integration.Devices.Add(plug);
+        await database.WithDbAsync(async db =>
+        {
+            db.Integrations.Add(integration);
+            await db.SaveChangesAsync(Ct);
+
+            // As if the catalogue gained "power" after the last import.
+            await db.DeviceAttributes.Where(a => a.Key == "power").ExecuteDeleteAsync(Ct);
+        });
+        var registry = new DeviceRegistry();
+        await database.WithDbAsync(db => registry.LoadAsync(db.Devices, Ct));
+        using var batcher = new RealtimeBatcher(NullRealtimePublisher.Instance, TimeProvider.System, Options.Create(new DeviceRuntimeOptions()), NullLogger<RealtimeBatcher>.Instance);
+        var inventory = new DeviceInventoryService(
+            database.Services.GetRequiredService<IServiceScopeFactory>(),
+            registry,
+            batcher,
+            new RuntimeClock(new FakeTimeProvider(Now)),
+            NullLogger<DeviceInventoryService>.Instance);
+        var address = new AttributeAddress(integration.Id, "plug-1", Endpoint.MainKey, CapabilityIds.Power, "power");
+
+        var created = await inventory.EnsureAttributeAsync(address, Ct);
+
+        created.ShouldNotBeNull();
+        registry.TryResolve(address, out _).ShouldBeTrue();
+        (await database.WithDbAsync(db => db.DeviceAttributes.AnyAsync(a => a.Id == created.AttributeId && a.Key == "power", Ct))).ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task The_inventory_rejects_malformed_devices()
     {
         await using var database = await CreateAsync(sql, Ct);

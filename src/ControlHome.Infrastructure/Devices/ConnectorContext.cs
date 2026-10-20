@@ -6,8 +6,9 @@ namespace ControlHome.Infrastructure.Devices;
 
 /// <summary>
 /// The host side of one run of an integration's runtime: reports go to the <see cref="StateProcessor"/>, inventory changes
-/// to the <see cref="IDeviceInventory"/>, statuses to the supervisor. Once the run ends (<see cref="Close"/>) everything the
-/// runtime still reports is ignored, so a stopped runtime can never overwrite the next one's state.
+/// to the <see cref="IDeviceInventory"/>, statuses to the supervisor. Once the run is asked to stop (<see cref="Close"/>,
+/// called as soon as its stop token is cancelled, not when <c>RunAsync</c> finally returns) everything the runtime still
+/// reports is ignored, so a stopped runtime can never overwrite the next one's state.
 /// </summary>
 internal sealed class ConnectorContext(
     Guid integrationId,
@@ -61,11 +62,18 @@ internal sealed class ConnectorContext(
         return inventory.UpsertAsync(IntegrationId, device, cancellationToken);
     }
 
-    public Task RemoveDeviceAsync(string externalDeviceId, CancellationToken cancellationToken)
+    public async Task RemoveDeviceAsync(string externalDeviceId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(externalDeviceId);
         ObjectDisposedException.ThrowIf(_closed, this);
-        return inventory.RemoveAsync(IntegrationId, externalDeviceId, cancellationToken);
+        await inventory.RemoveAsync(IntegrationId, externalDeviceId, cancellationToken).ConfigureAwait(false);
+
+        // Through the pipeline, in the device's availability slot: an Online/Offline report still waiting is replaced, and
+        // one already applied is overwritten in the write-behind before it reaches the database.
+        if (!_closed)
+        {
+            processor.ReportAvailability(IntegrationId, externalDeviceId, Availability.Unknown);
+        }
     }
 
     public void SetStatus(IntegrationStatus status, string? message)

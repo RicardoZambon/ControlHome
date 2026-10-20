@@ -10,9 +10,11 @@ namespace ControlHome.Application.Devices;
 
 /// <summary>
 /// Read side of the device model: the device list and detail with endpoints, capabilities, attribute ids and current
-/// values (from <see cref="IAttributeStateReader"/>), the full state for client resyncs, and the integrations list.
+/// values (from <see cref="IAttributeStateReader"/>) and live availability / last-seen (from <see cref="IDeviceStatusReader"/>,
+/// so a client resyncing after a hub reconnect never gets the write-behind's older copy), the full state for client
+/// resyncs, and the integrations list.
 /// </summary>
-public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader states)
+public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader states, IDeviceStatusReader statuses)
 {
     /// <summary>The devices matching <paramref name="query"/>, by name.</summary>
     public async Task<IReadOnlyList<DeviceSummaryDto>> ListAsync(DeviceListQuery query, CancellationToken cancellationToken)
@@ -49,18 +51,23 @@ public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader 
 
         var list = await WithInventory(devices).OrderBy(d => d.Name).ThenBy(d => d.Id).ToListAsync(cancellationToken);
         var values = await ValuesAsync(list, cancellationToken);
-        return list.Select(device => new DeviceSummaryDto(
-                device.Id,
-                device.IntegrationId,
-                device.ParentDeviceId,
-                device.Name,
-                device.DeviceClass,
-                device.Icon,
-                device.RoomId,
-                device.Availability.ToString(),
-                device.IsOrphaned,
-                device.LastSeenAtUtc,
-                Endpoints(device, values)))
+        var live = statuses.Get([.. list.Select(d => d.Id)]);
+        return list.Select(device =>
+            {
+                var (availability, lastSeen) = StatusOf(device, live);
+                return new DeviceSummaryDto(
+                    device.Id,
+                    device.IntegrationId,
+                    device.ParentDeviceId,
+                    device.Name,
+                    device.DeviceClass,
+                    device.Icon,
+                    device.RoomId,
+                    availability,
+                    device.IsOrphaned,
+                    lastSeen,
+                    Endpoints(device, values));
+            })
             .ToList();
     }
 
@@ -84,6 +91,7 @@ public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader 
             .Select(d => new DeviceChildDto(d.Id, d.Name))
             .ToListAsync(cancellationToken);
         var values = await ValuesAsync([device], cancellationToken);
+        var (availability, lastSeen) = StatusOf(device, statuses.Get([device.Id]));
 
         return new DeviceDetailDto(
             device.Id,
@@ -98,8 +106,8 @@ public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader 
             device.Model,
             device.Firmware,
             ParseConnections(device.ConnectionsJson),
-            device.Availability.ToString(),
-            device.LastSeenAtUtc,
+            availability,
+            lastSeen,
             device.IsOrphaned,
             device.RoomId,
             device.Icon,
@@ -132,6 +140,14 @@ public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader 
                 r.Integration.UpdatedAtUtc))
             .ToList();
     }
+
+    /// <summary>The live availability and last-seen when the runtime has them, else the database's.</summary>
+    private static (string Availability, DateTimeOffset? LastSeenAtUtc) StatusOf(Device device, IReadOnlyDictionary<Guid, DeviceLiveStatus> live) =>
+        live.TryGetValue(device.Id, out var status)
+            ? (status.Availability.ToString(), Later(status.LastSeenAtUtc, device.LastSeenAtUtc))
+            : (device.Availability.ToString(), device.LastSeenAtUtc);
+
+    private static DateTimeOffset? Later(DateTimeOffset? a, DateTimeOffset? b) => a is null ? b : b is null || a > b ? a : b;
 
     private static IQueryable<Device> WithInventory(IQueryable<Device> devices) =>
         devices

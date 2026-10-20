@@ -3,6 +3,7 @@ using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Common;
 using ControlHome.Application.Identity;
+using ControlHome.Application.Security;
 using Microsoft.AspNetCore.Identity;
 
 namespace ControlHome.Application.Auth;
@@ -20,6 +21,8 @@ public sealed class AuthService(
     IAuditLog auditLog,
     ICurrentActor actor,
     UnknownUserLockouts unknownUsers,
+    SafetyGrantStore grants,
+    IUserSessionRevoker sessions,
     TimeProvider timeProvider)
 {
     public const string UserTarget = "user";
@@ -136,12 +139,44 @@ public sealed class AuthService(
         }
 
         await session.RefreshAsync(attempt.Value.User!);
+
+        // The new security stamp ends the other sessions at their next request; live hub connections are closed now (this
+        // tab's reconnects with the refreshed cookie).
+        await sessions.RevokeAsync(userId, CancellationToken.None);
         return Result.Success();
     }
 
     /// <summary>
+    /// Re-authenticates the signed-in user with their account password before a sensitive change (setting or replacing the
+    /// safety PIN). Checked like a sign-in: under the user's sign-in lock, 423 <c>auth.locked_out</c> while locked out, and a
+    /// wrong password counts towards the same lockout (audited <c>auth.password.verify_failed</c> with
+    /// <paramref name="purpose"/>), so a session alone cannot be used to guess it. Errors: 401 <c>auth.required</c>, 400
+    /// <c>auth.password_incorrect</c>, 423 <c>auth.locked_out</c>.
+    /// </summary>
+    /// <remarks>As for <see cref="LoginAsync"/>, a client disconnect does not stop an attempt from being counted.</remarks>
+    public async Task<Result> VerifyPasswordAsync(string password, string purpose, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(password);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (actor.UserId is not { } userId)
+        {
+            return NotSignedIn();
+        }
+
+        var attempt = await RunUnderSignInLockAsync(userId, token => VerifyPasswordLockedAsync(userId, password, purpose, token));
+        if (attempt.IsFailure)
+        {
+            return attempt.Error;
+        }
+
+        return attempt.Value.Error is { } error ? error : Result.Success();
+    }
+
+    /// <summary>
     /// Consumes a one-time token printed by <c>reset-admin</c>: in one write, sets the new password (which changes the
-    /// security stamp, so the token cannot be used twice) and clears any lockout. Runs under the user's sign-in lock.
+    /// security stamp, so the token cannot be used twice), clears any lockout and the safety PIN (whoever recovers the
+    /// account sets a new one). Runs under the user's sign-in lock; the user's live hub connections are closed.
     /// </summary>
     public async Task<Result> ResetPasswordWithTokenAsync(ResetPasswordWithTokenRequest request, CancellationToken cancellationToken)
     {
@@ -165,8 +200,9 @@ public sealed class AuthService(
                     return ResetInvalid();
                 }
 
-                // Cleared first, so ResetPasswordAsync saves the counters together with the new password.
+                // Cleared first, so ResetPasswordAsync saves the counters (and the cleared PIN) together with the new password.
                 ClearLockout(reset);
+                reset.SafetyPinHash = null;
                 var changed = await userManager.ResetPasswordAsync(reset, request.Token, request.NewPassword);
                 if (!changed.Succeeded)
                 {
@@ -181,7 +217,14 @@ public sealed class AuthService(
             token => userManager.IsStoredAsync(reset, token),
             cancellationToken);
 
-        return result.IsSuccess ? Result.Success() : result.Error;
+        if (result.IsFailure)
+        {
+            return result.Error;
+        }
+
+        grants.Forget(userId);
+        await sessions.RevokeAsync(userId, CancellationToken.None);
+        return Result.Success();
     }
 
     internal static void ClearLockout(AppUser user)
@@ -290,6 +333,52 @@ public sealed class AuthService(
         if (!updated.Succeeded)
         {
             return updated.ToAppError("userName");
+        }
+
+        return new CredentialCheck(user, null);
+    }
+
+    /// <summary>Runs inside the per-user lock and transaction, like <see cref="CheckCredentialsAsync"/>.</summary>
+    private async Task<Result<CredentialCheck>> VerifyPasswordLockedAsync(
+        Guid userId,
+        string password,
+        string purpose,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByIdAsync(Id(userId));
+        if (user is null || user.IsDisabled)
+        {
+            return NotSignedIn();
+        }
+
+        var now = timeProvider.GetUtcNow();
+        if (IsLockedOut(user, now, out var remaining))
+        {
+            await AuditPasswordVerifyFailureAsync(user, purpose, "locked_out", cancellationToken);
+            return new CredentialCheck(user, LockedOut(remaining));
+        }
+
+        if (!await userManager.CheckPasswordAsync(user, password))
+        {
+            var counted = await CountFailedPasswordAsync(user, now);
+            if (counted.IsFailure)
+            {
+                return counted.Error;
+            }
+
+            await AuditPasswordVerifyFailureAsync(user, purpose, "invalid_password", cancellationToken);
+            return await FailedPasswordOutcomeAsync(user, counted.Value, PasswordIncorrect(), cancellationToken);
+        }
+
+        if (user.AccessFailedCount != 0 || user.ConsecutiveLockouts != 0)
+        {
+            // A correct password resets the counters, as a sign-in does.
+            ClearLockout(user);
+            var updated = await userManager.UpdateAsync(user);
+            if (!updated.Succeeded)
+            {
+                return updated.ToAppError("currentPassword");
+            }
         }
 
         return new CredentialCheck(user, null);
@@ -421,6 +510,11 @@ public sealed class AuthService(
                 user is null ? null : UserTarget,
                 user is null ? null : IdOf(user),
                 new { UserName = Truncate(attemptedUserName), Reason = reason }),
+            cancellationToken);
+
+    private Task AuditPasswordVerifyFailureAsync(AppUser user, string purpose, string reason, CancellationToken cancellationToken) =>
+        auditLog.WriteAsync(
+            new AuditEvent(AuditActions.PasswordVerifyFailed, UserTarget, IdOf(user), new { user.UserName, Purpose = purpose, Reason = reason }),
             cancellationToken);
 
     private Task AuditPasswordChangeFailureAsync(AppUser user, string reason, CancellationToken cancellationToken) =>

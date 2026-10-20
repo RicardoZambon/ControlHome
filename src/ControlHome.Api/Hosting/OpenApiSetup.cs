@@ -2,6 +2,7 @@ using System.Text.Json;
 using ControlHome.Api.Http;
 using ControlHome.Application.Realtime;
 using ControlHome.Application.Runtime;
+using ControlHome.Domain.Capabilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
@@ -76,6 +77,20 @@ public static class OpenApiSetup
 
             options.AddSchemaTransformer((schema, context, _) =>
             {
+                if (context.JsonTypeInfo.Type == typeof(StateValue))
+                {
+                    // On the wire only the member named by `kind` is present (the others are left out, never null):
+                    // `{ kind, b?, n?, s?, j? }`.
+                    schema.Required = new HashSet<string>(StringComparer.Ordinal) { "kind" };
+                    foreach (var member in schema.Properties?.Values.OfType<OpenApiSchema>() ?? [])
+                    {
+                        if (member.Type is { } type)
+                        {
+                            member.Type = type & ~JsonSchemaType.Null;
+                        }
+                    }
+                }
+
                 if (typeof(ProblemDetails).IsAssignableFrom(context.JsonTypeInfo.Type))
                 {
                     schema.Properties ??= new Dictionary<string, IOpenApiSchema>(StringComparer.Ordinal);

@@ -7,6 +7,7 @@ using ControlHome.Application.Capabilities;
 using ControlHome.Application.Common;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Realtime;
+using ControlHome.Application.Runtime;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Devices;
 using FluentValidation;
@@ -34,13 +35,16 @@ public sealed class CreateIntegrationRequestValidator : AbstractValidator<Create
 /// <summary>
 /// Integrations without a setup flow (milestone 1.2): created from a connector key and its config fields, removed with
 /// their devices. Secret config fields are split off and stored encrypted (<see cref="IIntegrationSecretProtector"/>);
-/// the runtime starts right away (when this process is the active runtime).
+/// the runtime starts right away (when this process is the active runtime). A read-only standby (another instance on the
+/// same database runs the devices) refuses both with 409 <c>runtime.standby</c>: the active instance would never apply them;
+/// so does a process still deciding whether it is active (503 <c>runtime.starting</c>).
 /// </summary>
 public sealed class IntegrationService(
     IControlHomeDb db,
     ConnectorCatalog connectors,
     IIntegrationSecretProtector secretProtector,
     IIntegrationRuntimeControl runtime,
+    IRuntimeStatus runtimeStatus,
     DeviceQueryService queries,
     IRealtimePublisher publisher,
     IAuditLog auditLog,
@@ -54,11 +58,17 @@ public sealed class IntegrationService(
 
     /// <summary>
     /// Errors: 400 <c>validation.failed</c> with <c>errors.connectorKey = [connectors.not_found]</c>; 400
-    /// <c>integrations.invalid_config</c> with <c>errors["config.&lt;key&gt;"]</c> (<c>commands.argument_*</c> codes).
+    /// <c>integrations.invalid_config</c> with <c>errors["config.&lt;key&gt;"]</c> (<c>commands.argument_*</c> codes); 409
+    /// <c>runtime.standby</c>; 503 <c>runtime.starting</c>.
     /// </summary>
     public async Task<Result<IntegrationDto>> CreateAsync(CreateIntegrationRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (NotActiveError() is { } notActive)
+        {
+            return notActive;
+        }
 
         if (connectors.Find(request.ConnectorKey) is not { } factory)
         {
@@ -127,13 +137,21 @@ public sealed class IntegrationService(
             integration.UpdatedAtUtc);
     }
 
-    /// <summary>Stops the runtime and deletes the integration with all its devices (and their state); 404 <c>integrations.not_found</c>.</summary>
+    /// <summary>
+    /// Stops the runtime and deletes the integration with all its devices (and their state); 404 <c>integrations.not_found</c>,
+    /// 409 <c>runtime.standby</c>, 503 <c>runtime.starting</c>.
+    /// </summary>
     public async Task<Result> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var integration = await db.Integrations.SingleOrDefaultAsync(i => i.Id == id, cancellationToken);
         if (integration is null)
         {
             return AppError.NotFound(ErrorCodes.IntegrationsNotFound, "No such integration.");
+        }
+
+        if (NotActiveError() is { } notActive)
+        {
+            return notActive;
         }
 
         await runtime.StopAsync(id, cancellationToken);
@@ -152,6 +170,24 @@ public sealed class IntegrationService(
         await publisher.DevicesChangedAsync(cancellationToken);
         return Result.Success();
     }
+
+    /// <summary>
+    /// Integration changes are made only where they are applied. The active instance reads integrations only when it becomes
+    /// active, so a change made on a standby would never reach it (a deleted integration would keep running with its
+    /// credentials): 409 <c>runtime.standby</c>. While this process is still deciding (Starting, with a device runtime) it
+    /// may yet become a standby: 503 <c>runtime.starting</c>. Without a device runtime nothing runs anywhere from here, so
+    /// nothing is refused.
+    /// </summary>
+    private AppError? NotActiveError() => runtimeStatus.Mode switch
+    {
+        RuntimeMode.Standby => AppError.Conflict(
+            ErrorCodes.RuntimeStandby,
+            "This instance is a read-only standby; make the change on the instance that runs the devices."),
+        RuntimeMode.Starting when runtimeStatus.Enabled => AppError.Unavailable(
+            ErrorCodes.RuntimeStarting,
+            "The device runtime is starting; try again in a moment."),
+        _ => null,
+    };
 
     private static AppError InvalidConfig(Domain.Capabilities.ArgumentValidationResult validation)
     {

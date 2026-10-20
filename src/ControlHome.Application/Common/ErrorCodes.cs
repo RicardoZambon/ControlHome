@@ -92,14 +92,23 @@ public static class ErrorCodes
     public const string CommandsTimedOut = "commands.timed_out";
     public const string CommandsFailed = "commands.failed";
 
+    /// <summary>Hub CommandStatus: the device reported a state that means the command did not happen (e.g. a jammed lock).</summary>
+    public const string CommandsNotConfirmed = "commands.not_confirmed";
+
     // Safety-critical commands (step-up PIN)
     public const string SafetyStepUpRequired = "safety.step_up_required";
     public const string SafetyLocked = "safety.locked";
     public const string SafetyNotAllowed = "safety.not_allowed";
     public const string SafetyPinNotSet = "safety.pin_not_set";
     public const string SafetyPinIncorrect = "safety.pin_incorrect";
+    public const string SafetyPasswordRequired = "safety.password_required";
 
     // Connectors and integrations
     public const string ConnectorsNotFound = "connectors.not_found";
     public const string IntegrationsInvalidConfig = "integrations.invalid_config";
+
+    // Device runtime: this process is a read-only standby (another instance on the same database runs the devices), or is
+    // still deciding whether it runs them
+    public const string RuntimeStandby = "runtime.standby";
+    public const string RuntimeStarting = "runtime.starting";
 }

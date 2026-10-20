@@ -1,11 +1,16 @@
+using ControlHome.Application.Common;
 using FluentValidation;
 
 namespace ControlHome.Application.Security;
 
 /// <summary>Sets or changes the signed-in user's safety PIN (<c>PUT /api/auth/me/pin</c>).</summary>
-/// <param name="CurrentPin">The PIN in use; required when one is set.</param>
+/// <param name="CurrentPin">The PIN in use, to change it (wrong ones count towards the safety lockout).</param>
+/// <param name="CurrentPassword">
+/// The account password: required to set the first PIN, and to replace a PIN without <paramref name="CurrentPin"/> (a
+/// forgotten one). Checked like a sign-in (wrong ones count towards the account lockout).
+/// </param>
 /// <param name="NewPin">4–8 digits.</param>
-public sealed record SetPinRequest(string? CurrentPin, string NewPin);
+public sealed record SetPinRequest(string? CurrentPin, string NewPin, string? CurrentPassword = null);
 
 /// <summary>Proves the PIN before a safety-critical command (<c>POST /api/auth/step-up</c>).</summary>
 public sealed record StepUpRequest(string Pin);
@@ -28,6 +33,7 @@ public sealed class SetPinRequestValidator : AbstractValidator<SetPinRequest>
     {
         RuleFor(x => x.NewPin).NotEmpty().Matches(SafetyPinRules.Pattern).WithMessage("'{PropertyName}' must be 4 to 8 digits.");
         RuleFor(x => x.CurrentPin).MaximumLength(SafetyPinRules.MaxLength).When(x => x.CurrentPin is not null);
+        RuleFor(x => x.CurrentPassword).NotEmpty().MaximumLength(ValidationRules.PasswordMaxLength).When(x => x.CurrentPassword is not null);
     }
 }
 

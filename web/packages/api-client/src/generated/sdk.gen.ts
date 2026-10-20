@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CompleteSetupData, CompleteSetupErrors, CompleteSetupResponses, ConfigureDatabaseData, ConfigureDatabaseErrors, ConfigureDatabaseResponses, CreateFloorData, CreateFloorErrors, CreateFloorResponses, CreateIntegrationData, CreateIntegrationErrors, CreateIntegrationResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteFloorData, DeleteFloorErrors, DeleteFloorResponses, DeleteIntegrationData, DeleteIntegrationErrors, DeleteIntegrationResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GetDeviceData, GetDeviceErrors, GetDeviceResponses, GetFileData, GetFileErrors, GetFileResponses, GetFloorData, GetFloorErrors, GetFloorResponses, GetHomeData, GetHomeErrors, GetHomeResponses, GetMeData, GetMeErrors, GetMeResponses, GetSafetyPinData, GetSafetyPinErrors, GetSafetyPinResponses, GetSetupStatusData, GetSetupStatusResponses, GetStateData, GetStateErrors, GetStateResponses, GetSystemStatusData, GetSystemStatusErrors, GetSystemStatusResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCapabilitiesData, ListCapabilitiesErrors, ListCapabilitiesResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListDevicesData, ListDevicesErrors, ListDevicesResponses, ListFloorsData, ListFloorsErrors, ListFloorsResponses, ListIntegrationsData, ListIntegrationsErrors, ListIntegrationsResponses, ListRoomsData, ListRoomsErrors, ListRoomsResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, ResetPasswordWithTokenData, ResetPasswordWithTokenErrors, ResetPasswordWithTokenResponses, ResetUserPasswordData, ResetUserPasswordErrors, ResetUserPasswordResponses, SaveFloorLayoutData, SaveFloorLayoutErrors, SaveFloorLayoutResponses, SendCommandData, SendCommandErrors, SendCommandResponses, SetEndpointFavoriteData, SetEndpointFavoriteErrors, SetEndpointFavoriteResponses, SetSafetyPinData, SetSafetyPinErrors, SetSafetyPinResponses, StepUpData, StepUpErrors, StepUpResponses, UpdateDeviceData, UpdateDeviceErrors, UpdateDeviceResponses, UpdateEndpointData, UpdateEndpointErrors, UpdateEndpointResponses, UpdateFloorData, UpdateFloorErrors, UpdateFloorResponses, UpdateHomeData, UpdateHomeErrors, UpdateHomeResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, UploadFileData, UploadFileErrors, UploadFileResponses } from './types.gen';
+import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CompleteSetupData, CompleteSetupErrors, CompleteSetupResponses, ConfigureDatabaseData, ConfigureDatabaseErrors, ConfigureDatabaseResponses, CreateFloorData, CreateFloorErrors, CreateFloorResponses, CreateIntegrationData, CreateIntegrationErrors, CreateIntegrationResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteFloorData, DeleteFloorErrors, DeleteFloorResponses, DeleteIntegrationData, DeleteIntegrationErrors, DeleteIntegrationResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GetDeviceData, GetDeviceErrors, GetDeviceResponses, GetFileData, GetFileErrors, GetFileResponses, GetFloorData, GetFloorErrors, GetFloorResponses, GetHomeData, GetHomeErrors, GetHomeResponses, GetMeData, GetMeErrors, GetMeResponses, GetSafetyPinData, GetSafetyPinErrors, GetSafetyPinResponses, GetSetupStatusData, GetSetupStatusResponses, GetStateData, GetStateErrors, GetStateResponses, GetSystemStatusData, GetSystemStatusErrors, GetSystemStatusResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCapabilitiesData, ListCapabilitiesErrors, ListCapabilitiesResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListDevicesData, ListDevicesErrors, ListDevicesResponses, ListFloorsData, ListFloorsErrors, ListFloorsResponses, ListIntegrationsData, ListIntegrationsErrors, ListIntegrationsResponses, ListRoomsData, ListRoomsErrors, ListRoomsResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, ResetPasswordWithTokenData, ResetPasswordWithTokenErrors, ResetPasswordWithTokenResponses, ResetUserPasswordData, ResetUserPasswordErrors, ResetUserPasswordResponses, ResetUserSafetyPinData, ResetUserSafetyPinErrors, ResetUserSafetyPinResponses, SaveFloorLayoutData, SaveFloorLayoutErrors, SaveFloorLayoutResponses, SendCommandData, SendCommandErrors, SendCommandResponses, SetEndpointFavoriteData, SetEndpointFavoriteErrors, SetEndpointFavoriteResponses, SetSafetyPinData, SetSafetyPinErrors, SetSafetyPinResponses, StepUpData, StepUpErrors, StepUpResponses, UpdateDeviceData, UpdateDeviceErrors, UpdateDeviceResponses, UpdateEndpointData, UpdateEndpointErrors, UpdateEndpointResponses, UpdateFloorData, UpdateFloorErrors, UpdateFloorResponses, UpdateHomeData, UpdateHomeErrors, UpdateHomeResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, UploadFileData, UploadFileErrors, UploadFileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -127,9 +127,9 @@ export const changePassword = <ThrowOnError extends boolean = false>(options: Op
 export const getSafetyPin = <ThrowOnError extends boolean = false>(options?: Options<GetSafetyPinData, ThrowOnError>): RequestResult<GetSafetyPinResponses, GetSafetyPinErrors, ThrowOnError> => (options?.client ?? client).get<GetSafetyPinResponses, GetSafetyPinErrors, ThrowOnError>({ url: '/api/auth/me/pin', ...options });
 
 /**
- * Sets the safety PIN (4–8 digits) for safety-critical commands, or changes it (currentPin required).
+ * Sets the safety PIN (4–8 digits) for safety-critical commands: the first one with the account password (currentPassword), a change with the current PIN (currentPin) or, if forgotten, the account password.
  *
- * 400 validation.failed or safety.pin_incorrect (wrong currentPin; counts as a failed attempt); 423 safety.locked (retryAfterSeconds) after 5 wrong PINs within 15 minutes.
+ * 400 validation.failed; safety.password_required (no PIN set yet, or neither currentPin nor currentPassword); safety.pin_incorrect (wrong currentPin; counts as a failed attempt); auth.password_incorrect (wrong currentPassword; counts towards the account lockout); 423 safety.locked (retryAfterSeconds) after 5 wrong PINs within 15 minutes, or auth.locked_out.
  */
 export const setSafetyPin = <ThrowOnError extends boolean = false>(options: Options<SetSafetyPinData, ThrowOnError>): RequestResult<SetSafetyPinResponses, SetSafetyPinErrors, ThrowOnError> => (options.client ?? client).put<SetSafetyPinResponses, SetSafetyPinErrors, ThrowOnError>({
     url: '/api/auth/me/pin',
@@ -185,6 +185,11 @@ export const resetUserPassword = <ThrowOnError extends boolean = false>(options:
         ...options.headers
     }
 });
+
+/**
+ * Clears the account's safety PIN and any safety lockout; the user sets a new PIN with their password.
+ */
+export const resetUserSafetyPin = <ThrowOnError extends boolean = false>(options: Options<ResetUserSafetyPinData, ThrowOnError>): RequestResult<ResetUserSafetyPinResponses, ResetUserSafetyPinErrors, ThrowOnError> => (options.client ?? client).delete<ResetUserSafetyPinResponses, ResetUserSafetyPinErrors, ThrowOnError>({ url: '/api/users/{id}/safety-pin', ...options });
 
 /**
  * The home's settings.
@@ -377,7 +382,7 @@ export const listIntegrations = <ThrowOnError extends boolean = false>(options?:
 /**
  * Creates an integration from a connector key and its config; its runtime starts right away.
  *
- * 400 validation.failed (errors.connectorKey = connectors.not_found for an unknown connector) or integrations.invalid_config (errors['config.<key>'] = commands.argument_* codes). Secret config fields are stored encrypted and never returned.
+ * 400 validation.failed (errors.connectorKey = connectors.not_found for an unknown connector) or integrations.invalid_config (errors['config.<key>'] = commands.argument_* codes); 409 runtime.standby (this instance is a read-only standby: make the change on the active one); 503 runtime.starting (this instance is still deciding whether it runs the devices: try again in a moment). Secret config fields are stored encrypted and never returned.
  */
 export const createIntegration = <ThrowOnError extends boolean = false>(options: Options<CreateIntegrationData, ThrowOnError>): RequestResult<CreateIntegrationResponses, CreateIntegrationErrors, ThrowOnError> => (options.client ?? client).post<CreateIntegrationResponses, CreateIntegrationErrors, ThrowOnError>({
     url: '/api/integrations',
@@ -390,6 +395,8 @@ export const createIntegration = <ThrowOnError extends boolean = false>(options:
 
 /**
  * Stops the integration and deletes it with all its devices and their state.
+ *
+ * 404 integrations.not_found; 409 runtime.standby (this instance is a read-only standby); 503 runtime.starting (still deciding whether it runs the devices).
  */
 export const deleteIntegration = <ThrowOnError extends boolean = false>(options: Options<DeleteIntegrationData, ThrowOnError>): RequestResult<DeleteIntegrationResponses, DeleteIntegrationErrors, ThrowOnError> => (options.client ?? client).delete<DeleteIntegrationResponses, DeleteIntegrationErrors, ThrowOnError>({ url: '/api/integrations/{id}', ...options });
 

@@ -122,6 +122,16 @@ public sealed partial class CapabilityCatalogTests
             {
                 capability.FindAttribute(argument.Attribute!).ShouldNotBeNull($"{id}.{command.Name}({argument.Key})");
             }
+
+            if (command.Expects is { } expected)
+            {
+                var watched = capability.FindAttribute(expected.Attribute).ShouldNotBeNull($"{id}.{command.Name} expects");
+                expected.Confirms.ShouldNotBeEmpty($"{id}.{command.Name} expects");
+                foreach (var value in expected.Confirms.Concat(expected.Fails))
+                {
+                    ValueSchemaValidator.Accepts(watched.Schema, value).ShouldBeTrue($"{id}.{command.Name} expects {value}");
+                }
+            }
         }
     }
 

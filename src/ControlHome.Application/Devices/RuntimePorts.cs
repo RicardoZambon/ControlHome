@@ -1,3 +1,4 @@
+using ControlHome.Application.Runtime;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
 
@@ -53,10 +54,16 @@ public interface IIntegrationRuntimeControl
     Task RemovedAsync(Guid integrationId, CancellationToken cancellationToken);
 }
 
-/// <summary>Dispatcher and runtime control for hosts without a device runtime: nothing runs.</summary>
-public sealed class NoDeviceRuntime : ICommandDispatcher, IIntegrationRuntimeControl
+/// <summary>Dispatcher, runtime control and status for hosts without a device runtime: nothing runs.</summary>
+public sealed class NoDeviceRuntime : ICommandDispatcher, IIntegrationRuntimeControl, IRuntimeStatus
 {
     public static NoDeviceRuntime Instance { get; } = new();
+
+    public RuntimeMode Mode => RuntimeMode.Starting;
+
+    public bool HistoryPaused => false;
+
+    public bool Enabled => false;
 
     public bool IsRunning(Guid integrationId) => false;
 

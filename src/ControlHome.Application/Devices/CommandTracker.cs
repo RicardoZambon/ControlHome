@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace ControlHome.Application.Devices;
 
 /// <summary>An accepted command on its way to the connector.</summary>
-/// <param name="AttributeIds">The endpoint capability's attributes: a report for any of them confirms an awaitState command.</param>
+/// <param name="Confirmation">Which state reports confirm (or fail) an awaitState command the connector only accepted.</param>
 /// <param name="Timeout">How long to wait for the connector (and, for awaitState commands, the confirming state report).</param>
 /// <param name="Coalescable">A setter that may be replaced by a later one for the same endpoint capability (see <see cref="CommandTracker"/>).</param>
 /// <param name="AuditArguments">Whether the arguments go into the audit entry (not for safety-critical commands).</param>
@@ -23,7 +23,7 @@ public sealed record TrackedCommand(
     Guid EndpointId,
     string CapabilityId,
     CommandDefinition Definition,
-    IReadOnlyList<int> AttributeIds,
+    CommandConfirmation Confirmation,
     DeviceCommandBatch Batch,
     TimeSpan Timeout,
     bool Coalescable,
@@ -39,9 +39,11 @@ public sealed record TrackedCommand(
 /// <item><b>Coalescing:</b> setters (<c>setLevel</c>, <c>setVolume</c>, <c>setPosition</c>, <c>setTargetTemperature</c>,
 /// <c>setColor*</c>) for the same endpoint capability are throttled to one dispatch per <see cref="CoalesceWindow"/>: the
 /// first is sent at once, later ones within the window wait, and only the last waiting one is sent when the window ends
-/// (the ones it replaced report <c>superseded</c>).</item>
+/// (the ones it replaced report <c>superseded</c>). Any other command for the same endpoint capability (e.g.
+/// <c>cover.close</c> after <c>setPosition</c>) supersedes the setter still waiting, so the latest intent always wins.</item>
 /// <item><b>Confirmation:</b> <c>Completed</c> confirms; <c>Accepted</c> confirms at once for <c>ackIsFinal</c> commands
-/// and on the next state report of the capability for <c>awaitState</c> ones; no answer within the timeout →
+/// and, for <c>awaitState</c> ones, when the device reports the target state (<see cref="CommandConfirmation"/>; a failing
+/// state such as <c>jammed</c> → <c>failed</c> with <c>commands.not_confirmed</c>); no answer within the timeout →
 /// <c>timed_out</c>; <c>Rejected</c> → <c>failed</c> with a <c>commands.*</c> code.</item>
 /// </list>
 /// </summary>
@@ -76,7 +78,7 @@ public sealed partial class CommandTracker : IStateChangeSubscriber, IDisposable
     private readonly Dictionary<(Guid EndpointId, string CapabilityId), Window> _windows = [];
 
     private readonly Lock _waitersLock = new();
-    private readonly Dictionary<int, List<TaskCompletionSource>> _waiters = [];
+    private readonly Dictionary<int, List<Waiter>> _waiters = [];
 
     private readonly Channel<CommandStatusDto> _statuses = Channel.CreateUnbounded<CommandStatusDto>(new UnboundedChannelOptions { SingleReader = true });
 
@@ -158,7 +160,24 @@ public sealed partial class CommandTracker : IStateChangeSubscriber, IDisposable
 
         if (!command.Coalescable)
         {
+            // A setter still waiting for this control would go out after this command and undo it (close, then reopen):
+            // the latest intent wins. The window stays open, so a setter sent right after this one is still throttled.
+            TrackedCommand? dropped = null;
+            lock (_windowsLock)
+            {
+                if (_windows.TryGetValue((command.EndpointId, command.CapabilityId), out var open))
+                {
+                    dropped = open.Held;
+                    open.Held = null;
+                }
+            }
+
             Start(command);
+            if (dropped is not null)
+            {
+                Finish(dropped, CommandStatuses.Superseded, null, null);
+            }
+
             return;
         }
 
@@ -195,7 +214,7 @@ public sealed partial class CommandTracker : IStateChangeSubscriber, IDisposable
     public ValueTask OnStateChangedAsync(IReadOnlyList<AttributeStateChange> changes, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(changes);
-        List<TaskCompletionSource>? confirmed = null;
+        List<(Waiter Waiter, ConfirmationState State)>? done = null;
         lock (_waitersLock)
         {
             if (_waiters.Count == 0)
@@ -205,18 +224,33 @@ public sealed partial class CommandTracker : IStateChangeSubscriber, IDisposable
 
             foreach (var change in changes)
             {
-                if (_waiters.Remove(change.AttributeId, out var waiters))
+                if (!_waiters.TryGetValue(change.AttributeId, out var waiters))
                 {
-                    (confirmed ??= []).AddRange(waiters);
+                    continue;
+                }
+
+                foreach (var waiter in waiters.ToList())
+                {
+                    if (waiter.Finished)
+                    {
+                        continue;
+                    }
+
+                    var state = waiter.Progress.Apply(change);
+                    if (state != ConfirmationState.Pending)
+                    {
+                        waiter.Finished = true;
+                        (done ??= []).Add((waiter, state));
+                    }
                 }
             }
         }
 
-        if (confirmed is not null)
+        if (done is not null)
         {
-            foreach (var waiter in confirmed)
+            foreach (var (waiter, state) in done)
             {
-                waiter.TrySetResult();
+                waiter.Done.TrySetResult(state);
             }
         }
 
@@ -338,8 +372,18 @@ public sealed partial class CommandTracker : IStateChangeSubscriber, IDisposable
                     detail = rejected.Code;
                     break;
                 case CommandOutcome.Accepted when waiter is not null:
-                    await waiter.Task.WaitAsync(linked.Token).ConfigureAwait(false);
-                    status = CommandStatuses.Confirmed;
+                    if (await waiter.Done.Task.WaitAsync(linked.Token).ConfigureAwait(false) == ConfirmationState.Failed)
+                    {
+                        // The device reported a state that means it did not happen (e.g. a jammed lock).
+                        status = CommandStatuses.Failed;
+                        code = ErrorCodes.CommandsNotConfirmed;
+                        detail = waiter.Progress.FailedWith;
+                    }
+                    else
+                    {
+                        status = CommandStatuses.Confirmed;
+                    }
+
                     break;
                 default:
                     status = CommandStatuses.Confirmed;
@@ -377,12 +421,12 @@ public sealed partial class CommandTracker : IStateChangeSubscriber, IDisposable
         Finish(command, status, code, detail);
     }
 
-    private TaskCompletionSource AddWaiter(TrackedCommand command)
+    private Waiter AddWaiter(TrackedCommand command)
     {
-        var waiter = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waiter = new Waiter(command.Confirmation.Start());
         lock (_waitersLock)
         {
-            foreach (var attributeId in command.AttributeIds)
+            foreach (var attributeId in command.Confirmation.AttributeIds)
             {
                 if (!_waiters.TryGetValue(attributeId, out var list))
                 {
@@ -397,11 +441,11 @@ public sealed partial class CommandTracker : IStateChangeSubscriber, IDisposable
         return waiter;
     }
 
-    private void RemoveWaiter(TrackedCommand command, TaskCompletionSource waiter)
+    private void RemoveWaiter(TrackedCommand command, Waiter waiter)
     {
         lock (_waitersLock)
         {
-            foreach (var attributeId in command.AttributeIds)
+            foreach (var attributeId in command.Confirmation.AttributeIds)
             {
                 if (_waiters.TryGetValue(attributeId, out var list))
                 {
@@ -488,6 +532,16 @@ public sealed partial class CommandTracker : IStateChangeSubscriber, IDisposable
         public TrackedCommand? Held { get; set; }
 
         public ITimer? Timer { get; set; }
+    }
+
+    /// <summary>An awaitState command waiting for its confirming report (<see cref="Progress"/> and <see cref="Finished"/> under the waiters lock).</summary>
+    private sealed class Waiter(CommandConfirmation.Progress progress)
+    {
+        public CommandConfirmation.Progress Progress { get; } = progress;
+
+        public TaskCompletionSource<ConfirmationState> Done { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Finished { get; set; }
     }
 
     /// <summary>The <c>commands.executed</c> audit details.</summary>

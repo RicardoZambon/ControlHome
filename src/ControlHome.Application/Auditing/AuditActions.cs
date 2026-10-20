@@ -11,6 +11,9 @@ public static class AuditActions
     public const string Logout = "auth.logout";
     public const string PasswordChanged = "auth.password.changed";
     public const string PasswordChangeFailed = "auth.password.change_failed";
+
+    /// <summary>A wrong (or locked-out) password when re-authenticating for a sensitive change, e.g. the safety PIN.</summary>
+    public const string PasswordVerifyFailed = "auth.password.verify_failed";
     public const string AdminReset = "auth.admin_reset";
 
     public const string UserCreated = "users.created";
@@ -38,6 +41,9 @@ public static class AuditActions
     public const string CommandExecuted = "commands.executed";
 
     public const string SafetyPinSet = "safety.pin.set";
+
+    /// <summary>An Admin cleared a user's safety PIN (the user sets a new one with their password).</summary>
+    public const string SafetyPinReset = "safety.pin.reset";
     public const string SafetyStepUpSucceeded = "safety.step_up.succeeded";
     public const string SafetyStepUpFailed = "safety.step_up.failed";
     public const string SafetyStepUpLocked = "safety.step_up.locked";

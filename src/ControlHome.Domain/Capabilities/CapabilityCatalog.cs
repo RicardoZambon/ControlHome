@@ -49,7 +49,11 @@ public static class CapabilityCatalog
         CapabilityIds.Switch,
         1,
         [Attribute("on", BoolSchema.Instance, recorded: true, writable: true)],
-        [Command("turnOn"), Command("turnOff"), Command("toggle")]);
+        [
+            Command("turnOn") with { Expects = Expect("on", [StateValue.True]) },
+            Command("turnOff") with { Expects = Expect("on", [StateValue.False]) },
+            Command("toggle"),
+        ]);
 
     public static CapabilityDefinition Level { get; } = new(
         CapabilityIds.Level,
@@ -139,7 +143,10 @@ public static class CapabilityCatalog
         CapabilityIds.Lock,
         1,
         [Attribute("lockState", new EnumSchema(["locked", "unlocked", "jammed", "unknown"]), recorded: true)],
-        [Command("lock") with { FailSafe = true }, Command("unlock") with { SafetyCritical = true }]);
+        [
+            Command("lock") with { FailSafe = true, Expects = Expect("lockState", ["locked"], fails: ["jammed"]) },
+            Command("unlock") with { SafetyCritical = true, Expects = Expect("lockState", ["unlocked"], fails: ["jammed"]) },
+        ]);
 
     public static CapabilityDefinition DoorOpener { get; } = new(
         CapabilityIds.DoorOpener,
@@ -155,9 +162,9 @@ public static class CapabilityCatalog
             Attribute("coverState", new EnumSchema(["open", "closed", "opening", "closing", "stopped", "unknown"]), recorded: true),
         ],
         [
-            Command("open") with { SafetyCriticalForDeviceClasses = _gateClasses },
-            Command("close") with { FailSafe = true },
-            Command("stop"),
+            Command("open") with { SafetyCriticalForDeviceClasses = _gateClasses, Expects = Expect("coverState", ["open"]) },
+            Command("close") with { FailSafe = true, Expects = Expect("coverState", ["closed"]) },
+            Command("stop") with { Expects = Expect("coverState", ["stopped", "open", "closed"]) }, // not moving any more
 
             // Opening part-way is still opening: gated like open on a gate or garage.
             Command("setPosition", Argument("position", _percent)) with { SafetyCriticalForDeviceClasses = _gateClasses },
@@ -173,8 +180,11 @@ public static class CapabilityCatalog
                 recorded: true),
         ],
         [
-            Command("arm", Argument("mode", new EnumSchema(["home", "away", "night"]))),
-            Command("disarm") with { SafetyCritical = true },
+            Command("arm", Argument("mode", new EnumSchema(["home", "away", "night"]))) with
+            {
+                Expects = Expect("armState", ["armed_home", "armed_away", "armed_night"]),
+            },
+            Command("disarm") with { SafetyCritical = true, Expects = Expect("armState", ["disarmed"]) },
         ]);
 
     public static CapabilityDefinition MediaPlayer { get; } = new(
@@ -189,17 +199,18 @@ public static class CapabilityCatalog
             Attribute("playbackState", new EnumSchema(["idle", "playing", "paused", "stopped", "buffering", "unknown"])),
         ],
         [
-            Command("powerOn") with { Timeout = TimeSpan.FromSeconds(90) }, // a TV may need Wake-on-LAN and a boot
-            Command("powerOff"),
+            // A TV may need Wake-on-LAN and a boot.
+            Command("powerOn") with { Timeout = TimeSpan.FromSeconds(90), Expects = Expect("power", [StateValue.True]) },
+            Command("powerOff") with { Expects = Expect("power", [StateValue.False]) },
             Command("setVolume", Argument("volume", _percent)),
             Momentary("volumeUp"),
             Momentary("volumeDown"),
             Command("setMuted", Argument("muted", BoolSchema.Instance)),
             Command("selectSource", Argument("source", new StringSchema(128))),
             Command("launchApp", Argument("app", new StringSchema(128))),
-            Command("play"),
-            Command("pause"),
-            Command("stop"),
+            Command("play") with { Expects = Expect("playbackState", ["playing"]) },
+            Command("pause") with { Expects = Expect("playbackState", ["paused"]) },
+            Command("stop") with { Expects = Expect("playbackState", ["stopped", "idle"]) },
             Momentary("next"),
             Momentary("previous"),
         ]);
@@ -260,9 +271,9 @@ public static class CapabilityCatalog
             Attribute("remoteControlEnabled", BoolSchema.Instance, category: AttributeCategory.Diagnostic),
         ],
         [
-            Command("start") with { GateAttribute = "remoteControlEnabled" },
-            Command("pause") with { GateAttribute = "remoteControlEnabled" },
-            Command("stop") with { GateAttribute = "remoteControlEnabled" },
+            Command("start") with { GateAttribute = "remoteControlEnabled", Expects = Expect("machineState", ["running"]) },
+            Command("pause") with { GateAttribute = "remoteControlEnabled", Expects = Expect("machineState", ["paused"]) },
+            Command("stop") with { GateAttribute = "remoteControlEnabled", Expects = Expect("machineState", ["idle", "finished"]) },
         ]);
 
     /// <summary>
@@ -312,4 +323,10 @@ public static class CapabilityCatalog
         new(name, arguments, ConfirmationMode.AwaitState, null, SafetyCritical: false, FailSafe: false);
 
     private static CommandDefinition Momentary(string name) => Command(name) with { Confirmation = ConfirmationMode.AckIsFinal };
+
+    private static ExpectedState Expect(string attribute, StateValue[] confirms, StateValue[]? fails = null) =>
+        new(attribute, confirms, fails ?? []);
+
+    private static ExpectedState Expect(string attribute, string[] confirms, string[]? fails = null) =>
+        new(attribute, [.. confirms.Select(StateValue.String)], [.. (fails ?? []).Select(StateValue.String)]);
 }

@@ -1,8 +1,10 @@
+using System.ComponentModel;
 using System.Security.Claims;
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
 using ControlHome.Application.Devices;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ControlHome.Api.Features.Devices;
 
@@ -87,11 +89,15 @@ public static class DeviceEndpoints
         return app;
     }
 
+    // Bound one by one, so the public parameter names are camelCase and do not follow DeviceListQuery's member names.
     private static async Task<Ok<IReadOnlyList<DeviceSummaryDto>>> ListAsync(
-        [AsParameters] DeviceListQuery query,
+        [FromQuery, Description("Devices with at least one endpoint in the room (an endpoint's own room, else the device's).")] int? roomId,
+        [FromQuery, Description("Devices of one integration.")] Guid? integrationId,
+        [FromQuery, Description("Devices with an endpoint that has this (non-retired) capability, e.g. `switch`.")] string? capability,
+        [FromQuery, Description("Text contained in the name, manufacturer or model.")] string? q,
         DeviceQueryService devices,
         CancellationToken cancellationToken) =>
-        TypedResults.Ok(await devices.ListAsync(query, cancellationToken));
+        TypedResults.Ok(await devices.ListAsync(new DeviceListQuery(roomId, integrationId, capability, q), cancellationToken));
 
     private static async Task<Results<Ok<DeviceDetailDto>, ProblemHttpResult>> GetAsync(
         Guid id,

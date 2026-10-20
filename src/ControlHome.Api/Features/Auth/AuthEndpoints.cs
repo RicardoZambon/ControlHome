@@ -61,14 +61,21 @@ public static class AuthEndpoints
             .WithName("getSafetyPin")
             .WithSummary("Whether the signed-in user has a safety PIN, and any lockout.");
 
+        // PIN and password checks share the sign-in budget per client, on top of the per-user lockouts.
         me.MapPut("/pin", SetPinAsync)
             .WithName("setSafetyPin")
-            .WithSummary("Sets the safety PIN (4–8 digits) for safety-critical commands, or changes it (currentPin required).")
+            .WithSummary(
+                "Sets the safety PIN (4–8 digits) for safety-critical commands: the first one with the account password " +
+                "(currentPassword), a change with the current PIN (currentPin) or, if forgotten, the account password.")
             .WithDescription(
-                "400 validation.failed or safety.pin_incorrect (wrong currentPin; counts as a failed attempt); 423 safety.locked " +
-                "(retryAfterSeconds) after 5 wrong PINs within 15 minutes.")
+                "400 validation.failed; safety.password_required (no PIN set yet, or neither currentPin nor currentPassword); " +
+                "safety.pin_incorrect (wrong currentPin; counts as a failed attempt); auth.password_incorrect (wrong " +
+                "currentPassword; counts towards the account lockout); 423 safety.locked (retryAfterSeconds) after 5 wrong " +
+                "PINs within 15 minutes, or auth.locked_out.")
+            .RequireRateLimiting(RateLimitPolicies.Login)
             .WithValidation<SetPinRequest>()
-            .ProducesProblem(StatusCodes.Status423Locked);
+            .ProducesProblem(StatusCodes.Status423Locked)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         group.MapPost("/step-up", StepUpAsync)
             .WithName("stepUp")
@@ -77,10 +84,12 @@ public static class AuthEndpoints
                 "409 safety.pin_not_set; 400 safety.pin_incorrect; 423 safety.locked (retryAfterSeconds) after 5 wrong PINs " +
                 "within 15 minutes, which also blocks safety-critical commands for 15 minutes.")
             .RequireAuthorization()
+            .RequireRateLimiting(RateLimitPolicies.Login)
             .WithValidation<StepUpRequest>()
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status409Conflict)
-            .ProducesProblem(StatusCodes.Status423Locked);
+            .ProducesProblem(StatusCodes.Status423Locked)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         return app;
     }

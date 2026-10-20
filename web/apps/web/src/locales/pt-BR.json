@@ -208,14 +208,20 @@
       "unavailable": "A integração deste dispositivo não está funcionando agora. Tente novamente em instantes.",
       "refused": "O dispositivo recusou a ação.",
       "timed_out": "O dispositivo não confirmou a tempo. Verifique o estado dele.",
-      "failed": "A ação não deu certo. Tente novamente."
+      "failed": "A ação não deu certo. Tente novamente.",
+      "not_confirmed": "O dispositivo informou que a ação não aconteceu (por exemplo, uma fechadura travada). Confira no local."
     },
     "safety": {
       "step_up_required": "Confirme com o seu PIN de segurança.",
       "locked": "Muitos PINs errados. As ações de segurança ficam bloqueadas por um tempo.",
       "not_allowed": "Você não tem permissão para esta ação de segurança.",
       "pin_not_set": "Defina primeiro um PIN de segurança no seu perfil.",
-      "pin_incorrect": "Esse PIN não está correto."
+      "pin_incorrect": "Esse PIN não está correto.",
+      "password_required": "Digite a senha da sua conta para definir um novo PIN de segurança."
+    },
+    "runtime": {
+      "standby": "Esta instância do ControlHome é uma reserva somente leitura. Faça a alteração na instância que controla seus dispositivos.",
+      "starting": "O ControlHome ainda está iniciando o controle dos dispositivos. Tente novamente em instantes."
     }
   }
 }

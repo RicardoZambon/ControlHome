@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Integrations;
+using ControlHome.Application.Users;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Security;
 using ControlHome.TestSupport;
@@ -105,15 +106,20 @@ public abstract class DevicesTestBase(DevicesApiFactory factory) : ResetAppTestB
             async () => Equals(await StateOfAsync(client, attributeId), expected),
             $"attribute {attributeId} is {JsonSerializer.Serialize(expected)}");
 
-    protected static async Task SetPinAndStepUpAsync(HttpClient client, string pin = Pin)
+    /// <summary>Sets the first PIN (with the account password) and steps up.</summary>
+    protected static async Task SetPinAndStepUpAsync(HttpClient client, string password = Password, string pin = Pin)
     {
-        using (var set = await client.PutAsJsonAsync("/api/auth/me/pin", new { newPin = pin }, Ct))
+        using (var set = await client.PutAsJsonAsync("/api/auth/me/pin", new { newPin = pin, currentPassword = password }, Ct))
         {
             await set.ShouldHaveStatusAsync(HttpStatusCode.NoContent);
         }
 
         await StepUpAsync(client, pin, HttpStatusCode.NoContent);
     }
+
+    /// <summary>A user's id from <c>GET /api/users</c>.</summary>
+    protected static async Task<Guid> UserIdAsync(HttpClient admin, string userName) =>
+        (await admin.GetFromJsonAsync<UserDto[]>("/api/users", Ct))!.Single(u => u.UserName == userName).Id;
 
     protected static async Task<HttpResponseMessage> StepUpAsync(HttpClient client, string pin, HttpStatusCode? expected = null)
     {

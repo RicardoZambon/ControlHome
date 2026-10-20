@@ -34,6 +34,7 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         { "PUT", "/api/users/{id:guid}", "updateUser", AuthorizationPolicies.Admin, null },
         { "POST", "/api/users/{id:guid}/password", "resetUserPassword", AuthorizationPolicies.Admin, null },
         { "DELETE", "/api/users/{id:guid}", "deleteUser", AuthorizationPolicies.Admin, null },
+        { "DELETE", "/api/users/{id:guid}/safety-pin", "resetUserSafetyPin", AuthorizationPolicies.Admin, null },
         { "GET", "/api/home", "getHome", AuthorizationPolicies.Viewer, null },
         { "PUT", "/api/home", "updateHome", AuthorizationPolicies.Admin, null },
         { "GET", "/api/audit", "listAudit", AuthorizationPolicies.Admin, null },
@@ -47,8 +48,8 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         { "POST", "/api/files", "uploadFile", AuthorizationPolicies.Admin, null },
         { "GET", "/api/files/{id:guid}", "getFile", AuthorizationPolicies.Viewer, null },
         { "GET", "/api/auth/me/pin", "getSafetyPin", Authenticated, null },
-        { "PUT", "/api/auth/me/pin", "setSafetyPin", Authenticated, null },
-        { "POST", "/api/auth/step-up", "stepUp", Authenticated, null },
+        { "PUT", "/api/auth/me/pin", "setSafetyPin", Authenticated, RateLimitPolicies.Login },
+        { "POST", "/api/auth/step-up", "stepUp", Authenticated, RateLimitPolicies.Login },
         { "GET", "/api/capabilities", "listCapabilities", AuthorizationPolicies.Viewer, null },
         { "GET", "/api/connectors", "listConnectors", AuthorizationPolicies.Viewer, null },
         { "GET", "/api/integrations", "listIntegrations", AuthorizationPolicies.Viewer, null },
@@ -76,6 +77,29 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         }
 
         schemas.GetProperty("StateDelta").GetProperty("properties").GetProperty("attributeId").ValueKind.ShouldBe(JsonValueKind.Object);
+    }
+
+    [Fact]
+    public async Task State_values_require_only_their_kind_as_on_the_wire()
+    {
+        using var document = await OpenApiDocument.LoadAsync(TestContext.Current.CancellationToken);
+        var stateValue = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty("StateValue");
+
+        stateValue.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ShouldBe(["kind"]);
+        foreach (var member in new[] { "b", "n", "s" })
+        {
+            stateValue.GetProperty("properties").GetProperty(member).GetProperty("type").ToString().ShouldNotContain("null");
+        }
+    }
+
+    [Fact]
+    public async Task Device_list_query_parameters_are_camel_case()
+    {
+        using var document = await OpenApiDocument.LoadAsync(TestContext.Current.CancellationToken);
+        var parameters = document.RootElement.GetProperty("paths").GetProperty("/api/devices").GetProperty("get").GetProperty("parameters");
+
+        parameters.EnumerateArray().Select(p => p.GetProperty("name").GetString()).ShouldBe(["roomId", "integrationId", "capability", "q"]);
+        parameters.EnumerateArray().ShouldAllBe(p => p.GetProperty("in").GetString() == "query");
     }
 
     [Fact]

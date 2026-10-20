@@ -853,13 +853,18 @@ export type SetFavoriteRequest = {
  */
 export type SetPinRequest = {
     /**
-     * The PIN in use; required when one is set.
+     * The PIN in use, to change it (wrong ones count towards the safety lockout).
      */
     currentPin: null | string;
     /**
      * 4–8 digits.
      */
     newPin: string;
+    /**
+     * The account password: required to set the first PIN, and to replace a PIN without CurrentPin (a
+     * forgotten one). Checked like a sign-in (wrong ones count towards the account lockout).
+     */
+    currentPassword?: null | string;
 };
 
 /**
@@ -916,19 +921,19 @@ export type StateValue = {
     /**
      * Set when StateValueKind StateValue.Kind is StateValueKind.Bool.
      */
-    b: null | boolean;
+    b?: boolean;
     /**
      * Set (finite) when StateValueKind StateValue.Kind is StateValueKind.Number.
      */
-    n: null | number;
+    n?: number;
     /**
      * Set when StateValueKind StateValue.Kind is StateValueKind.String.
      */
-    s: null | string;
+    s?: string;
     /**
      * A JSON object or array, set when StateValueKind StateValue.Kind is StateValueKind.Json.
      */
-    j: JsonElement;
+    j?: JsonElement;
 };
 
 /**
@@ -1379,6 +1384,10 @@ export type StepUpErrors = {
      * Locked
      */
     423: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
 };
 
 export type StepUpError = StepUpErrors[keyof StepUpErrors];
@@ -1528,6 +1537,10 @@ export type SetSafetyPinErrors = {
      * Locked
      */
     423: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
 };
 
 export type SetSafetyPinError = SetSafetyPinErrors[keyof SetSafetyPinErrors];
@@ -1727,6 +1740,41 @@ export type ResetUserPasswordResponses = {
 };
 
 export type ResetUserPasswordResponse = ResetUserPasswordResponses[keyof ResetUserPasswordResponses];
+
+export type ResetUserSafetyPinData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/users/{id}/safety-pin';
+};
+
+export type ResetUserSafetyPinErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type ResetUserSafetyPinError = ResetUserSafetyPinErrors[keyof ResetUserSafetyPinErrors];
+
+export type ResetUserSafetyPinResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type ResetUserSafetyPinResponse = ResetUserSafetyPinResponses[keyof ResetUserSafetyPinResponses];
 
 export type GetHomeData = {
     body?: never;
@@ -2189,19 +2237,19 @@ export type ListDevicesData = {
         /**
          * Devices with at least one endpoint in the room (an endpoint's own room, else the device's).
          */
-        RoomId?: number;
+        roomId?: number;
         /**
          * Devices of one integration.
          */
-        IntegrationId?: string;
+        integrationId?: string;
         /**
          * Devices with an endpoint that has this (non-retired) capability, e.g. `switch`.
          */
-        Capability?: string;
+        capability?: string;
         /**
          * Text contained in the name, manufacturer or model.
          */
-        Q?: string;
+        q?: string;
     };
     url: '/api/devices';
 };
@@ -2538,6 +2586,14 @@ export type CreateIntegrationErrors = {
      * Forbidden
      */
     403: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
 };
 
 export type CreateIntegrationError = CreateIntegrationErrors[keyof CreateIntegrationErrors];
@@ -2573,6 +2629,14 @@ export type DeleteIntegrationErrors = {
      * Not Found
      */
     404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
 };
 
 export type DeleteIntegrationError = DeleteIntegrationErrors[keyof DeleteIntegrationErrors];

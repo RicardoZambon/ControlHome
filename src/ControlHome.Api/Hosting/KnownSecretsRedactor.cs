@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using ControlHome.Application.Security;
@@ -10,12 +12,17 @@ namespace ControlHome.Api.Hosting;
 /// <summary>
 /// Masks every secret this process knows (<see cref="KnownSecrets"/>: integration tokens, passwords, per-device keys) in
 /// every Serilog event: as an enricher it rewrites property values (scalars, and inside sequences, structures and
-/// dictionaries) after they were captured; as a destructuring policy it renders JSON values as redacted text. Message
-/// templates are constant text and exceptions are never logged with secrets by the runtime (it logs redacted messages).
-/// Register it as the last enricher.
+/// dictionaries) after they were captured; as a destructuring policy it renders JSON values as redacted text (without the
+/// HTML-safe escaping, so a secret containing <c>+</c>, <c>'</c>, <c>&lt;</c>, <c>&gt;</c> or <c>&amp;</c> is still found).
+/// Message templates are constant text. An event's exception cannot be rewritten here: the runtime logs connector failures
+/// as redacted messages, and connectors get a logger that redacts the exceptions they log (Infrastructure's
+/// <c>RedactingLogger</c>). Register it as the last enricher.
 /// </summary>
 public sealed class KnownSecretsRedactor(KnownSecrets secrets) : ILogEventEnricher, IDestructuringPolicy
 {
+    /// <summary>Only the escaping JSON itself needs: secrets appear in the text as they were registered.</summary>
+    private static readonly JsonSerializerOptions _unescaped = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
     public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
     {
         ArgumentNullException.ThrowIfNull(logEvent);
@@ -39,15 +46,27 @@ public sealed class KnownSecretsRedactor(KnownSecrets secrets) : ILogEventEnrich
         switch (value)
         {
             case JsonElement element:
-                result = new ScalarValue(secrets.Redact(element.GetRawText()));
+                // Re-serialized, not GetRawText(): the raw text keeps whatever escapes its source used (e.g. +).
+                result = new ScalarValue(secrets.Redact(Render(element)));
                 return true;
             case JsonNode node:
-                result = new ScalarValue(secrets.Redact(node.ToJsonString()));
+                result = new ScalarValue(secrets.Redact(node.ToJsonString(_unescaped)));
                 return true;
             default:
                 result = null;
                 return false;
         }
+    }
+
+    private static string Render(JsonElement element)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Encoder = _unescaped.Encoder }))
+        {
+            element.WriteTo(writer);
+        }
+
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     /// <summary>The value with secrets masked; the same instance when it holds none.</summary>

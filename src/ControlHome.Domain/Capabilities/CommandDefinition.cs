@@ -24,6 +24,25 @@ public enum ConfirmationMode
 /// </param>
 public sealed record ArgumentDefinition(string Key, ValueSchema Schema, bool Required, string? Attribute = null);
 
+/// <summary>
+/// The state that confirms an argument-less <see cref="ConfirmationMode.AwaitState"/> command the connector only accepted
+/// (e.g. <c>lock.lock</c> → <c>lockState</c> = <c>locked</c>). Other values keep the command waiting (an unchanged old
+/// value, <c>opening</c> while it moves) until its timeout.
+/// </summary>
+/// <param name="Attribute">The attribute of the same capability to watch.</param>
+/// <param name="Confirms">Values that confirm the command.</param>
+/// <param name="Fails">Values that fail it at once (e.g. <c>jammed</c>).</param>
+public sealed record ExpectedState(string Attribute, IReadOnlyList<StateValue> Confirms, IReadOnlyList<StateValue> Fails)
+{
+    public bool Equals(ExpectedState? other) =>
+        other is not null
+        && string.Equals(Attribute, other.Attribute, StringComparison.Ordinal)
+        && Confirms.SequenceEqual(other.Confirms)
+        && Fails.SequenceEqual(other.Fails);
+
+    public override int GetHashCode() => HashCode.Combine(StringComparer.Ordinal.GetHashCode(Attribute), Confirms.Count, Fails.Count);
+}
+
 /// <summary>An action a capability accepts.</summary>
 /// <param name="Name">camelCase, unique within the capability (e.g. <c>turnOn</c>, <c>setLevel</c>).</param>
 /// <param name="Arguments">In display order; empty for argument-less commands.</param>
@@ -58,6 +77,13 @@ public sealed record CommandDefinition(
     /// </summary>
     public string? GateAttribute { get; init; }
 
+    /// <summary>
+    /// For an argument-less <see cref="ConfirmationMode.AwaitState"/> command: the reported state that confirms it. Setters
+    /// need none (the value of each argument bound to an attribute is the target); without either, the first report that
+    /// changes a value of the capability confirms it.
+    /// </summary>
+    public ExpectedState? Expects { get; init; }
+
     /// <summary>Whether the command is safety-critical on a device of class <paramref name="deviceClass"/>.</summary>
     public bool IsSafetyCriticalFor(string? deviceClass) =>
         SafetyCritical
@@ -75,7 +101,8 @@ public sealed record CommandDefinition(
         && SafetyCritical == other.SafetyCritical
         && FailSafe == other.FailSafe
         && SafetyCriticalForDeviceClasses.SequenceEqual(other.SafetyCriticalForDeviceClasses, StringComparer.Ordinal)
-        && string.Equals(GateAttribute, other.GateAttribute, StringComparison.Ordinal);
+        && string.Equals(GateAttribute, other.GateAttribute, StringComparison.Ordinal)
+        && Equals(Expects, other.Expects);
 
     public override int GetHashCode() => HashCode.Combine(Name, Arguments.Count, Confirmation, Timeout, SafetyCritical, FailSafe, GateAttribute);
 }

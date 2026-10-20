@@ -3,6 +3,7 @@ using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Devices;
 using ControlHome.Infrastructure.Devices;
+using Microsoft.Extensions.Logging.Abstractions;
 using static ControlHome.Infrastructure.Tests.Devices.Runtime.PipelineHarness;
 
 namespace ControlHome.Infrastructure.Tests.Devices.Runtime;
@@ -54,6 +55,109 @@ public sealed class StateProcessorTests
         pipeline.Cache.TryGet(LevelAttribute, out var cached).ShouldBeTrue();
         cached.Value.ShouldBe(StateValue.Number(80));
         pipeline.Publisher.Deltas.ShouldHaveSingleItem().Value.ShouldBe(StateValue.Number(80));
+    }
+
+    [Fact]
+    public async Task An_older_report_never_replaces_a_newer_one_waiting_for_the_same_attribute()
+    {
+        await using var pipeline = new PipelineHarness();
+
+        // The loop is not running yet (SettleAsync starts it): both wait together.
+        pipeline.Processor.ReportState(pipeline.IntegrationId, pipeline.Report(CapabilityIds.Level, "level", StateValue.Number(80), T0.AddSeconds(10)));
+        pipeline.Processor.ReportState(pipeline.IntegrationId, pipeline.Report(CapabilityIds.Level, "level", StateValue.Number(20), T0));
+        await pipeline.SettleAsync();
+
+        pipeline.Cache.TryGet(LevelAttribute, out var cached).ShouldBeTrue();
+        cached.Value.ShouldBe(StateValue.Number(80));
+        pipeline.Publisher.Deltas.ShouldHaveSingleItem().Value.ShouldBe(StateValue.Number(80));
+        pipeline.Processor.OutOfOrder.ShouldBe(1);
+        pipeline.Processor.Coalesced.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_failing_lookup_does_not_stall_other_reports_and_is_retried_only_after_a_back_off()
+    {
+        await using var pipeline = new PipelineHarness();
+        pipeline.Inventory.ResolveAsync = (_, _) => Task.FromException<AttributeInfo?>(new TimeoutException("The database is down."));
+        var unknown = new StateReport(DeviceExternalId, Endpoint.MainKey, CapabilityIds.Level, "vendorKey", StateValue.Number(1), T0);
+
+        pipeline.Processor.ReportState(pipeline.IntegrationId, unknown);
+        pipeline.Processor.ReportState(pipeline.IntegrationId, pipeline.Report(CapabilityIds.Switch, "on", StateValue.True));
+        await pipeline.SettleAsync();
+
+        pipeline.Subscriber.Changes.ShouldHaveSingleItem().AttributeId.ShouldBe(OnAttribute);
+        pipeline.Inventory.Lookups.Count.ShouldBe(1);
+
+        // Within the back-off: dropped without asking again.
+        pipeline.Time.Advance(StateProcessor.ResolveFailureBackoff - TimeSpan.FromSeconds(1));
+        pipeline.Processor.ReportState(pipeline.IntegrationId, unknown with { ObservedAtUtc = T0.AddSeconds(1) });
+        await pipeline.SettleAsync();
+        pipeline.Inventory.Lookups.Count.ShouldBe(1);
+
+        // After it: asked again; a second failure doubles the back-off.
+        pipeline.Time.Advance(TimeSpan.FromSeconds(1));
+        pipeline.Processor.ReportState(pipeline.IntegrationId, unknown with { ObservedAtUtc = T0.AddSeconds(2) });
+        await pipeline.SettleAsync();
+        pipeline.Inventory.Lookups.Count.ShouldBe(2);
+
+        pipeline.Time.Advance(StateProcessor.ResolveFailureBackoff);
+        pipeline.Processor.ReportState(pipeline.IntegrationId, unknown with { ObservedAtUtc = T0.AddSeconds(3) });
+        await pipeline.SettleAsync();
+        pipeline.Inventory.Lookups.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_hanging_lookup_is_abandoned_after_the_resolve_timeout()
+    {
+        await using var pipeline = new PipelineHarness();
+        pipeline.Inventory.ResolveAsync = async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return null;
+        };
+
+        pipeline.Processor.ReportState(
+            pipeline.IntegrationId,
+            new StateReport(DeviceExternalId, Endpoint.MainKey, CapabilityIds.Level, "vendorKey", StateValue.Number(1), T0));
+        pipeline.Processor.ReportState(pipeline.IntegrationId, pipeline.Report(CapabilityIds.Switch, "on", StateValue.True));
+        pipeline.Processor.Start();
+        await RecordingPublisher.WaitUntilAsync(() => pipeline.Inventory.Lookups.Count == 1, "the lookup started");
+        pipeline.Subscriber.Changes.ShouldBeEmpty();
+
+        pipeline.Time.Advance(StateProcessor.ResolveTimeout);
+        await pipeline.SettleAsync();
+
+        pipeline.Subscriber.Changes.ShouldHaveSingleItem().AttributeId.ShouldBe(OnAttribute);
+    }
+
+    [Fact]
+    public async Task Clearing_while_reports_arrive_never_strands_an_attribute()
+    {
+        await using var pipeline = new PipelineHarness();
+        pipeline.Processor.Start();
+        using var stop = new CancellationTokenSource();
+        var producer = Task.Run(
+            () =>
+            {
+                for (var i = 0; !stop.IsCancellationRequested; i++)
+                {
+                    pipeline.Processor.ReportState(pipeline.IntegrationId, pipeline.Report(CapabilityIds.Level, "level", StateValue.Number(i % 100), T0.AddMilliseconds(i)));
+                }
+            },
+            TestContext.Current.CancellationToken);
+        for (var i = 0; i < 200; i++)
+        {
+            pipeline.Processor.Clear();
+        }
+
+        await stop.CancelAsync();
+        await producer;
+
+        // Whatever the interleaving, the attribute is still read: a later report reaches the cache.
+        pipeline.Processor.ReportState(pipeline.IntegrationId, pipeline.Report(CapabilityIds.Level, "level", StateValue.Number(42), T0.AddDays(1)));
+        await pipeline.SettleAsync();
+        pipeline.Cache.TryGet(LevelAttribute, out var cached).ShouldBeTrue();
+        cached.Value.ShouldBe(StateValue.Number(42));
     }
 
     [Fact]
@@ -178,6 +282,32 @@ public sealed class StateProcessorTests
         pipeline.Publisher.Availability.ShouldBe([new AvailabilityChangedDto(pipeline.DeviceId, "Online")]);
         pipeline.WriteBehind.PendingDevices.ShouldBe(1);
         pipeline.Registry.FindDevice(pipeline.DeviceId)!.Availability.ShouldBe(Availability.Online);
+    }
+
+    [Fact]
+    public async Task Removing_a_device_makes_it_unknown_after_any_availability_reported_before()
+    {
+        await using var pipeline = new PipelineHarness();
+        var context = new ConnectorContext(
+            pipeline.IntegrationId,
+            pipeline.Time,
+            NullLogger.Instance,
+            pipeline.Processor,
+            pipeline.Inventory,
+            (_, _) => { });
+        context.ReportAvailability(DeviceExternalId, Availability.Online, null);
+        await pipeline.SettleAsync();
+
+        // Offline still waiting in the queue, then the connector drops the device.
+        context.ReportAvailability(DeviceExternalId, Availability.Offline, null);
+        await context.RemoveDeviceAsync(DeviceExternalId, TestContext.Current.CancellationToken);
+        await pipeline.SettleAsync();
+
+        pipeline.Inventory.Removed.ShouldBe([DeviceExternalId]);
+        pipeline.Registry.FindDevice(pipeline.DeviceId)!.Availability.ShouldBe(Availability.Unknown);
+        pipeline.Publisher.Availability[^1].Availability.ShouldBe(nameof(Availability.Unknown));
+        (await pipeline.WriteBehind.FlushAsync(TestContext.Current.CancellationToken)).ShouldBeTrue();
+        pipeline.Store.Batches[^1].Devices.Single(d => d.DeviceId == pipeline.DeviceId).Availability.ShouldBe(Availability.Unknown);
     }
 
     [Fact]

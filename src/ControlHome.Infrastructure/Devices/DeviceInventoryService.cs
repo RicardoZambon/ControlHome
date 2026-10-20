@@ -16,12 +16,16 @@ public interface IDeviceInventory
     /// <exception cref="ArgumentException">The discovered device is malformed (a connector bug).</exception>
     Task UpsertAsync(Guid integrationId, DiscoveredDevice device, CancellationToken cancellationToken);
 
-    /// <summary>The connector no longer has the device: it becomes orphaned (never deleted).</summary>
+    /// <summary>
+    /// The connector no longer has the device: it becomes orphaned (never deleted) and Unknown in the database. The caller
+    /// reports the Unknown availability through the state pipeline, so it is ordered with the device's other reports.
+    /// </summary>
     Task RemoveAsync(Guid integrationId, string externalDeviceId, CancellationToken cancellationToken);
 
     /// <summary>
     /// The attribute at <paramref name="address"/>, created when its device, endpoint and capability exist and the
-    /// capability's definition has the key; <c>null</c> otherwise.
+    /// capability's definition has the key; <c>null</c> otherwise. Called on the state pipeline's loop: answers from memory
+    /// whenever it can and throws (<see cref="TimeoutException"/>, database errors) rather than wait long.
     /// </summary>
     Task<AttributeInfo?> EnsureAttributeAsync(AttributeAddress address, CancellationToken cancellationToken);
 }
@@ -41,6 +45,9 @@ public sealed partial class DeviceInventoryService(
     RuntimeClock clock,
     ILogger<DeviceInventoryService> logger) : IDeviceInventory
 {
+    /// <summary>How long <see cref="EnsureAttributeAsync"/> waits for an upsert or removal in progress before giving up.</summary>
+    internal static readonly TimeSpan GateWait = TimeSpan.FromMilliseconds(50);
+
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public async Task UpsertAsync(Guid integrationId, DiscoveredDevice device, CancellationToken cancellationToken)
@@ -122,12 +129,7 @@ public sealed partial class DeviceInventoryService(
 
         if (changed > 0)
         {
-            if (registry.FindDevice(integrationId, externalDeviceId) is { } entry)
-            {
-                entry.Availability = Availability.Unknown;
-                realtime.AvailabilityChanged(entry.DeviceId, Availability.Unknown);
-            }
-
+            // The registry's availability (and the hub push) follow through the state pipeline (see the interface).
             LogOrphaned(integrationId, externalDeviceId);
             realtime.DevicesChanged();
         }
@@ -135,12 +137,22 @@ public sealed partial class DeviceInventoryService(
 
     public async Task<AttributeInfo?> EnsureAttributeAsync(AttributeAddress address, CancellationToken cancellationToken)
     {
-        if (registry.FindDevice(address.IntegrationId, address.Device) is not { } device)
+        // From memory first: an upsert creates a row for every attribute of each capability it binds and registers them
+        // all, so an unbound endpoint/capability or a key its definition lacks is unknown without asking the database.
+        if (registry.FindDevice(address.IntegrationId, address.Device) is not { } device
+            || registry.FindCapability(address) is not { } bound
+            || bound.Definition?.FindAttribute(address.Attribute) is null)
         {
             return null;
         }
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Only a key the definition has but the database lacks (the catalogue gained it since the last upsert) gets here.
+        // Never queue behind an upsert or removal holding the gate across its own database work.
+        if (!await _gate.WaitAsync(GateWait, cancellationToken).ConfigureAwait(false))
+        {
+            throw new TimeoutException("The device inventory is busy.");
+        }
+
         try
         {
             if (registry.TryResolve(address, out var known))
@@ -152,8 +164,7 @@ public sealed partial class DeviceInventoryService(
             var db = scope.ServiceProvider.GetRequiredService<IControlHomeDb>();
             var capability = await db.EndpointCapabilities
                 .Include(c => c.Attributes)
-                .Where(c => c.CapabilityId == address.Capability
-                    && db.Endpoints.Any(e => e.Id == c.EndpointId && e.DeviceId == device.DeviceId && e.Key == address.Endpoint))
+                .Where(c => c.Id == bound.EndpointCapabilityId)
                 .SingleOrDefaultAsync(cancellationToken)
                 .ConfigureAwait(false);
             if (capability is null || DeviceRegistry.DefinitionOf(capability)?.FindAttribute(address.Attribute) is not { } definition)

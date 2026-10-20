@@ -102,6 +102,9 @@ public sealed class CanaryConnectorFactory : IConnectorFactory
             // Logs the secret on purpose, as a careless connector would.
             context.Logger.LogInformation("Canary connecting with token {Token}", _token);
             context.Logger.LogWarning("Canary settings {@Settings}", new { Token = _token, Url = $"https://vendor.example/api?access_token={_token}" });
+            context.Logger.LogError(
+                new InvalidOperationException($"Vendor rejected token {_token}", new HttpRequestException($"401 for {_token}")),
+                "Canary login rejected");
             if (run == 1)
             {
                 throw new InvalidOperationException($"Login failed for token {_token}");
@@ -256,6 +259,94 @@ public sealed class BurstConnectorFactory(ConnectorSpy spy) : IConnectorFactory
         public Task RefreshAsync(string externalDeviceId, CancellationToken cancellationToken) => Task.CompletedTask;
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Connector <c>gadgets</c>: a washer (<c>applianceCycle</c>, remote control off), a gate and a blind (both <c>cover</c>,
+/// closed). Commands complete at once, report the new state and are recorded by the <see cref="ConnectorSpy"/>.
+/// </summary>
+public sealed class GadgetsConnectorFactory(ConnectorSpy spy) : IConnectorFactory
+{
+    public const string Key = "gadgets";
+    public const string Washer = "washer-1";
+    public const string Gate = "gate-1";
+    public const string Blind = "blind-1";
+
+    public IConnectorDescriptor Descriptor { get; } = new TestDescriptor(Key, []);
+
+    public IConnectorFlow? CreateSetupFlow() => null;
+
+    public IConnectorRuntime CreateRuntime(IntegrationInstance instance) => new GadgetsRuntime(spy);
+
+    private sealed class GadgetsRuntime(ConnectorSpy spy) : IConnectorRuntime
+    {
+        private IConnectorContext? _context;
+
+        public async Task RunAsync(IConnectorContext context, CancellationToken cancellationToken)
+        {
+            await context.UpsertDeviceAsync(Device(Washer, DeviceClasses.Washer, CapabilityIds.ApplianceCycle), cancellationToken);
+            await context.UpsertDeviceAsync(Device(Gate, DeviceClasses.Gate, CapabilityIds.Cover), cancellationToken);
+            await context.UpsertDeviceAsync(Device(Blind, DeviceClasses.Blind, CapabilityIds.Cover), cancellationToken);
+            _context = context;
+            foreach (var device in new[] { Washer, Gate, Blind })
+            {
+                context.ReportAvailability(device, Availability.Online, null);
+            }
+
+            Report(Washer, CapabilityIds.ApplianceCycle, "machineState", StateValue.String("idle"));
+            Report(Washer, CapabilityIds.ApplianceCycle, "remoteControlEnabled", StateValue.False);
+            foreach (var cover in new[] { Gate, Blind })
+            {
+                Report(cover, CapabilityIds.Cover, "position", StateValue.Number(0));
+                Report(cover, CapabilityIds.Cover, "coverState", StateValue.String("closed"));
+            }
+
+            context.SetStatus(IntegrationStatus.Ok, null);
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.Time, cancellationToken);
+        }
+
+        public Task<CommandOutcome> ExecuteAsync(DeviceCommandBatch batch, CancellationToken cancellationToken)
+        {
+            spy.Record(batch);
+            foreach (var command in batch.Commands)
+            {
+                switch (command.Command)
+                {
+                    case "start":
+                        Report(batch.ExternalDeviceId, CapabilityIds.ApplianceCycle, "machineState", StateValue.String("running"));
+                        break;
+                    case "open":
+                        Report(batch.ExternalDeviceId, CapabilityIds.Cover, "position", StateValue.Number(100));
+                        Report(batch.ExternalDeviceId, CapabilityIds.Cover, "coverState", StateValue.String("open"));
+                        break;
+                    case "setPosition":
+                        Report(batch.ExternalDeviceId, CapabilityIds.Cover, "position", StateValue.Number(command.Arguments.GetProperty("position").GetDouble()));
+                        break;
+                }
+            }
+
+            return Task.FromResult(CommandOutcome.CompletedOutcome);
+        }
+
+        public Task RefreshAsync(string externalDeviceId, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        private static DiscoveredDevice Device(string id, string deviceClass, string capability) => new(
+            id,
+            id,
+            deviceClass,
+            "Test",
+            "Gadget",
+            "1.0",
+            null,
+            new Dictionary<string, string>(),
+            null,
+            [new DiscoveredEndpoint(Endpoint.MainKey, null, [CapabilityBinding.Of(capability)])]);
+
+        private void Report(string device, string capability, string attribute, StateValue value) =>
+            _context?.ReportState(new StateReport(device, Endpoint.MainKey, capability, attribute, value, null));
     }
 }
 

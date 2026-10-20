@@ -9,7 +9,8 @@ namespace ControlHome.Infrastructure.Devices;
 /// <summary>
 /// Writes write-behind batches to SQL Server in one transaction: current values with one <c>MERGE</c> into
 /// <c>ch.AttributeState</c> (rows for attributes deleted meanwhile are skipped; an older observation never overwrites a newer
-/// one) and device availability / last-seen with one <c>UPDATE</c>. History rows are accepted and discarded until the
+/// one) and device availability / last-seen with one <c>UPDATE</c> (an orphaned device keeps the Unknown it was given when it
+/// was orphaned: a buffered or late availability never overwrites it). History rows are accepted and discarded until the
 /// <c>StateLog</c> table exists (milestone 1.4-A appends them there).
 /// </summary>
 public sealed class SqlStateStore(IDatabaseConnectionProvider connections, TimeProvider timeProvider) : IStateStore
@@ -39,7 +40,7 @@ public sealed class SqlStateStore(IDatabaseConnectionProvider connections, TimeP
 
     private const string UpdateDevices = """
         UPDATE d
-        SET Availability = COALESCE(s.Availability, d.Availability),
+        SET Availability = CASE WHEN d.IsOrphaned = 1 THEN d.Availability ELSE COALESCE(s.Availability, d.Availability) END,
             LastSeenAtUtc = CASE WHEN s.LastSeenAtUtc IS NOT NULL AND (d.LastSeenAtUtc IS NULL OR s.LastSeenAtUtc > d.LastSeenAtUtc)
                                  THEN s.LastSeenAtUtc ELSE d.LastSeenAtUtc END
         FROM [ch].[Devices] AS d

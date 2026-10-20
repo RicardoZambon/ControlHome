@@ -208,14 +208,20 @@
       "unavailable": "This device's integration isn't running right now. Try again in a moment.",
       "refused": "The device refused the action.",
       "timed_out": "The device didn't confirm in time. Check its state.",
-      "failed": "The action didn't work. Try again."
+      "failed": "The action didn't work. Try again.",
+      "not_confirmed": "The device reported that the action didn't happen (for example, a jammed lock). Check it on site."
     },
     "safety": {
       "step_up_required": "Confirm with your safety PIN.",
       "locked": "Too many wrong PINs. Safety actions are locked for a while.",
       "not_allowed": "You aren't allowed to do this safety action.",
       "pin_not_set": "Set a safety PIN in your profile first.",
-      "pin_incorrect": "That PIN isn't right."
+      "pin_incorrect": "That PIN isn't right.",
+      "password_required": "Enter your account password to set a new safety PIN."
+    },
+    "runtime": {
+      "standby": "This ControlHome instance is a read-only standby. Make the change on the instance that runs your devices.",
+      "starting": "ControlHome is still starting its device runtime. Try again in a moment."
     }
   }
 }

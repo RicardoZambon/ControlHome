@@ -19,7 +19,7 @@ namespace ControlHome.Api.IntegrationTests.Devices;
 
 /// <summary>
 /// The API with the device runtime tuned for tests (write-behind every 250 ms, fast restarts), the test connectors
-/// (<c>spy</c>, <c>canary</c>, <c>burst</c>), a recording decorator around the hub publisher and a log capture. Shared by the
+/// (<c>spy</c>, <c>canary</c>, <c>burst</c>, <c>gadgets</c>), a recording decorator around the hub publisher and a log capture. Shared by the
 /// <see cref="DevicesCollection"/> (tests run one after the other and reset the app first).
 /// </summary>
 public class DevicesApiFactory(SqlServerFixture sql) : ControlHomeApiFactory(sql)
@@ -72,6 +72,7 @@ public class DevicesApiFactory(SqlServerFixture sql) : ControlHomeApiFactory(sql
             services.AddConnector<SpyConnectorFactory>();
             services.AddConnector<CanaryConnectorFactory>();
             services.AddConnector<BurstConnectorFactory>();
+            services.AddConnector<GadgetsConnectorFactory>();
             services.AddSingleton<RecordingRealtimePublisher>();
             services.Replace(ServiceDescriptor.Singleton<IRealtimePublisher>(sp => sp.GetRequiredService<RecordingRealtimePublisher>()));
             services.AddSingleton<LogCapture>();
