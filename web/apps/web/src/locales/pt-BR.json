@@ -105,6 +105,379 @@
     "currency": "Escolha uma moeda.",
     "timeZone": "Escolha um fuso horário."
   },
+  "live": {
+    "reconnecting": "Reconectando…",
+    "stale": "Os estados dos dispositivos podem estar desatualizados até lá.",
+    "back": "As atualizações ao vivo voltaram."
+  },
+  "commands": {
+    "superseded": "Outra pessoa acabou de alterar este dispositivo."
+  },
+  "safety": {
+    "dialog": {
+      "title": "PIN de segurança",
+      "description": "Digite seu PIN de segurança para continuar.",
+      "for": "Digite seu PIN de segurança para confirmar: {action}.",
+      "entered": "{count} de até {max} dígitos digitados",
+      "keypad": "Teclado do PIN",
+      "erase": "Apagar o último dígito",
+      "confirm": "Confirmar",
+      "setPin": "Defina seu PIN no perfil"
+    }
+  },
+  "schema": {
+    "true": "Sim",
+    "false": "Não",
+    "noValue": "—",
+    "noFlags": "Nenhum",
+    "choose": "Escolha…",
+    "errors": {
+      "between": "Use um valor de {min} a {max}.",
+      "atLeast": "Use {min} ou mais.",
+      "atMost": "Use {max} ou menos.",
+      "step": "Use passos de {step}.",
+      "notAllowed": "Escolha uma das opções."
+    }
+  },
+  "device": {
+    "noValue": "—",
+    "noRoom": "Sem cômodo",
+    "orphaned": "Não informado mais",
+    "hidden": "Oculto",
+    "favorite": "Favorito",
+    "availability": {
+      "Online": "On-line",
+      "Offline": "Off-line",
+      "Unknown": "Status desconhecido"
+    },
+    "state": {
+      "on": "Ligado",
+      "off": "Desligado",
+      "unknown": "Desconhecido",
+      "pending": "Atualizando…"
+    },
+    "capabilities": {
+      "switch": "Liga/desliga",
+      "level": "Brilho",
+      "color": "Cor",
+      "thermostat": "Clima",
+      "power": "Consumo",
+      "energy": "Energia",
+      "temperature": "Temperatura",
+      "humidity": "Umidade",
+      "contact": "Porta ou janela",
+      "motion": "Movimento",
+      "occupancy": "Ocupação",
+      "lock": "Fechadura",
+      "doorOpener": "Abridor de porta",
+      "cover": "Cortina ou portão",
+      "alarmPanel": "Alarme",
+      "mediaPlayer": "Mídia",
+      "button": "Botão",
+      "battery": "Bateria",
+      "presence": "Presença",
+      "smoke": "Fumaça",
+      "waterLeak": "Vazamento de água",
+      "airQuality": "Qualidade do ar",
+      "camera": "Câmera",
+      "applianceCycle": "Eletrodoméstico",
+      "generic": "Outros ajustes"
+    },
+    "attributes": {
+      "on": "Liga/desliga",
+      "level": "Brilho",
+      "transitionMs": "Transição",
+      "hue": "Matiz",
+      "saturation": "Saturação",
+      "colorTemperature": "Tom de branco",
+      "mode": "Modo",
+      "targetTemperature": "Temperatura desejada",
+      "currentTemperature": "Temperatura do ambiente",
+      "fanMode": "Ventilação",
+      "power": "Potência",
+      "energy": "Energia",
+      "temperature": "Temperatura",
+      "humidity": "Umidade",
+      "open": "Aberto",
+      "motion": "Movimento",
+      "occupied": "Ocupado",
+      "lockState": "Estado da fechadura",
+      "position": "Posição",
+      "coverState": "Estado",
+      "armState": "Estado do alarme",
+      "volume": "Volume",
+      "muted": "Sem som",
+      "source": "Fonte",
+      "app": "App",
+      "playbackState": "Reprodução",
+      "press": "Último toque",
+      "battery": "Bateria",
+      "present": "Presente",
+      "smoke": "Fumaça",
+      "leak": "Vazamento",
+      "pm25": "PM2,5",
+      "co2": "CO₂",
+      "voc": "COV",
+      "streamAvailable": "Transmissão disponível",
+      "machineState": "Estado",
+      "phase": "Etapa",
+      "remainingMinutes": "Tempo restante",
+      "remoteControlEnabled": "Controle remoto"
+    },
+    "attributesIn": {
+      "power": {
+        "power": "Consumo"
+      }
+    },
+    "commands": {
+      "turnOn": "Ligar",
+      "turnOff": "Desligar",
+      "toggle": "Alternar",
+      "setLevel": "Ajustar brilho",
+      "setColor": "Ajustar cor",
+      "setColorTemperature": "Ajustar tom de branco",
+      "setMode": "Mudar modo",
+      "setTargetTemperature": "Ajustar temperatura",
+      "setFanMode": "Ajustar ventilação",
+      "lock": "Trancar",
+      "unlock": "Destrancar",
+      "open": "Abrir",
+      "close": "Fechar",
+      "stop": "Parar",
+      "setPosition": "Ajustar posição",
+      "arm": "Armar",
+      "disarm": "Desarmar",
+      "powerOn": "Ligar",
+      "powerOff": "Desligar",
+      "setVolume": "Ajustar volume",
+      "volumeUp": "Aumentar volume",
+      "volumeDown": "Diminuir volume",
+      "setMuted": "Tirar o som",
+      "selectSource": "Trocar fonte",
+      "launchApp": "Abrir app",
+      "play": "Reproduzir",
+      "pause": "Pausar",
+      "next": "Próximo",
+      "previous": "Anterior",
+      "snapshot": "Capturar imagem",
+      "start": "Iniciar"
+    },
+    "values": {
+      "mode": {
+        "off": "Desligado",
+        "cool": "Resfriar",
+        "heat": "Aquecer",
+        "auto": "Automático",
+        "dry": "Desumidificar",
+        "fan": "Ventilar",
+        "home": "Em casa",
+        "away": "Fora",
+        "night": "Noite"
+      },
+      "fanMode": {
+        "auto": "Automática",
+        "quiet": "Silenciosa",
+        "low": "Baixa",
+        "medium": "Média",
+        "high": "Alta",
+        "turbo": "Turbo"
+      },
+      "lockState": {
+        "locked": "Trancada",
+        "unlocked": "Destrancada",
+        "jammed": "Travada",
+        "unknown": "Desconhecido"
+      },
+      "coverState": {
+        "open": "Aberto",
+        "closed": "Fechado",
+        "opening": "Abrindo…",
+        "closing": "Fechando…",
+        "stopped": "Parado",
+        "unknown": "Desconhecido"
+      },
+      "armState": {
+        "disarmed": "Desarmado",
+        "armed_home": "Armado (em casa)",
+        "armed_away": "Armado (fora)",
+        "armed_night": "Armado (noite)",
+        "triggered": "Alarme disparado",
+        "arming": "Armando…",
+        "unknown": "Desconhecido"
+      },
+      "playbackState": {
+        "idle": "Parado",
+        "playing": "Reproduzindo",
+        "paused": "Pausado",
+        "stopped": "Interrompido",
+        "buffering": "Carregando…",
+        "unknown": "Desconhecido"
+      },
+      "machineState": {
+        "idle": "Parada",
+        "running": "Em funcionamento",
+        "paused": "Pausada",
+        "finished": "Concluída",
+        "error": "Erro"
+      },
+      "press": {
+        "single": "Toque simples",
+        "double": "Toque duplo",
+        "long": "Toque longo"
+      },
+      "on": {
+        "true": "Ligado",
+        "false": "Desligado"
+      },
+      "power": {
+        "true": "Ligado",
+        "false": "Desligado"
+      },
+      "open": {
+        "true": "Aberto",
+        "false": "Fechado"
+      },
+      "motion": {
+        "true": "Detectado",
+        "false": "Nenhum"
+      },
+      "occupied": {
+        "true": "Ocupado",
+        "false": "Livre"
+      },
+      "present": {
+        "true": "Em casa",
+        "false": "Fora"
+      },
+      "smoke": {
+        "true": "Detectada",
+        "false": "Nenhuma"
+      },
+      "leak": {
+        "true": "Detectado",
+        "false": "Seco"
+      },
+      "muted": {
+        "true": "Sem som",
+        "false": "Com som"
+      },
+      "remoteControlEnabled": {
+        "true": "Ativado",
+        "false": "Desativado"
+      }
+    },
+    "reading": {
+      "batteryLow": "Bateria {value}",
+      "replaceBattery": "Baixa: troque a bateria em breve",
+      "smoke": "Fumaça detectada",
+      "noSmoke": "Sem fumaça",
+      "leak": "Vazamento detectado",
+      "dry": "Seco",
+      "open": "Aberta",
+      "closed": "Fechada",
+      "motion": "Movimento",
+      "noMotion": "Sem movimento",
+      "occupied": "Ocupado",
+      "clear": "Livre",
+      "home": "Em casa",
+      "away": "Fora"
+    },
+    "switch": {
+      "label": "Liga/desliga, {name}"
+    },
+    "level": {
+      "label": "Brilho, {name}"
+    },
+    "color": {
+      "current": "Cor atual",
+      "hueValue": "Matiz {hue}°, saturação {saturation} %",
+      "mode": "Modo da luz",
+      "color": "Cor",
+      "white": "Branco",
+      "presets": "Atalhos",
+      "warm": "Quente",
+      "cool": "Frio",
+      "preset": {
+        "red": "Vermelho",
+        "orange": "Laranja",
+        "yellow": "Amarelo",
+        "green": "Verde",
+        "cyan": "Ciano",
+        "blue": "Azul",
+        "purple": "Roxo",
+        "pink": "Rosa",
+        "warm": "Branco quente",
+        "neutral": "Branco neutro",
+        "daylight": "Luz do dia"
+      }
+    },
+    "thermostat": {
+      "summary": {
+        "heat": "Aquecendo até {temperature}",
+        "cool": "Resfriando até {temperature}",
+        "auto": "Mantendo {temperature}"
+      },
+      "action": {
+        "off": "Desligado",
+        "cool": "Resfriando",
+        "heat": "Aquecendo",
+        "auto": "Automático",
+        "dry": "Desumidificando",
+        "fan": "Só ventilação"
+      },
+      "target": "Temperatura desejada, {name}",
+      "now": "Agora {temperature}",
+      "lower": "Diminuir a temperatura",
+      "raise": "Aumentar a temperatura"
+    },
+    "cover": {
+      "percentOpen": "{value} aberto",
+      "position": "Posição, {name}",
+      "pinHint": "Abrir pede seu PIN de segurança."
+    },
+    "lock": {
+      "locking": "Trancando…",
+      "unlocking": "Destrancando…",
+      "jammed": "A fechadura travou. Verifique-a no local.",
+      "pinHint": "Destrancar pede seu PIN de segurança."
+    },
+    "doorOpener": {
+      "ready": "Pronto",
+      "opening": "Abrindo…",
+      "opened": "Aberto",
+      "pinHint": "Abrir pede seu PIN de segurança."
+    },
+    "media": {
+      "nowPlaying": "Tocando agora",
+      "transport": "Reprodução",
+      "muted": "Sem som",
+      "mute": "Tirar o som",
+      "unmute": "Ativar o som",
+      "volume": "Volume, {name}"
+    },
+    "appliance": {
+      "remaining": "Faltam {minutes} min",
+      "minutesLeft": "min restantes",
+      "remoteOff": "O controle remoto está desligado no aparelho. Ligue-o lá para iniciar ou parar daqui."
+    },
+    "airQuality": {
+      "good": "Ar bom",
+      "moderate": "Ar moderado",
+      "poor": "Ar ruim"
+    },
+    "button": {
+      "never": "Ainda não foi tocado"
+    },
+    "camera": {
+      "streamAvailable": "Transmissão disponível",
+      "noStream": "Sem transmissão",
+      "placeholder": "Imagens e vídeo ao vivo chegam em uma versão futura.",
+      "snapshotTaken": "Captura solicitada."
+    },
+    "generic": {
+      "empty": "Nada para mostrar aqui ainda."
+    }
+  },
   "errors": {
     "unknown": "Algo deu errado. Tente novamente.",
     "network": "Não foi possível acessar o ControlHome. Verifique se o servidor está rodando e se você está na rede de casa.",

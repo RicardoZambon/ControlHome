@@ -16,7 +16,9 @@ const router = useRouter()
 const session = useSessionStore()
 
 const items = computed(() =>
-  visibleNavGroups(navItems, session.me?.roles ?? []).flatMap((group) => group.items),
+  visibleNavGroups(navItems, session.me?.roles ?? [])
+    .flatMap((group) => group.items)
+    .filter((item) => item.tabBar !== false),
 )
 </script>
 

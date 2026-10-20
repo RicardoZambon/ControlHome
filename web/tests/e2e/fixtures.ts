@@ -100,6 +100,104 @@ export async function savePreferences(
   expect(response.status(), `PUT /api/auth/me/profile: ${await response.text()}`).toBe(200)
 }
 
+// --- Devices ---------------------------------------------------------------------------------------------------------
+
+/** The parts of `GET /api/devices` the specs use. */
+export interface SimulatedDevice {
+  id: string
+  name: string
+  deviceClass: string | null
+  endpoints: {
+    id: string
+    capabilities: {
+      capabilityId: string
+      attributes: {
+        attributeId: number
+        key: string
+        value: { kind: string; b?: boolean; n?: number; s?: string }
+      }[]
+    }[]
+  }[]
+}
+
+/** The Simulated connector's basic home (Task 1.2-B), by its device names. */
+export const SIMULATED = {
+  light: 'Living room light',
+  plug: 'Coffee maker plug',
+  ac: 'Bedroom air conditioner',
+  contact: 'Front door sensor',
+  lock: 'Front door lock',
+} as const
+
+export async function listDevices(request: APIRequestContext): Promise<SimulatedDevice[]> {
+  const response = await request.get('/api/devices')
+  expect(response.status(), `GET /api/devices: ${await response.text()}`).toBe(200)
+  return (await response.json()) as SimulatedDevice[]
+}
+
+/**
+ * Adds the Simulated connector's basic home (`POST /api/integrations`, the request context must be an Admin's) and waits
+ * until its five devices are in. Returns them by name.
+ */
+export async function createSimulatedHome(
+  request: APIRequestContext,
+): Promise<Record<keyof typeof SIMULATED, SimulatedDevice>> {
+  const response = await request.post('/api/integrations', {
+    headers: mutationHeaders(),
+    data: { connectorKey: 'simulated', name: 'Simulated home', config: { preset: 'basic' } },
+  })
+  expect(response.status(), `POST /api/integrations: ${await response.text()}`).toBe(201)
+  let devices: SimulatedDevice[] = []
+  await expect
+    .poll(
+      async () => {
+        devices = await listDevices(request)
+        return devices.length
+      },
+      { message: 'the simulated devices to appear', timeout: 30_000 },
+    )
+    .toBe(5)
+  const byName = (name: string) => devices.find((device) => device.name === name)!
+  return {
+    light: byName(SIMULATED.light),
+    plug: byName(SIMULATED.plug),
+    ac: byName(SIMULATED.ac),
+    contact: byName(SIMULATED.contact),
+    lock: byName(SIMULATED.lock),
+  }
+}
+
+/** The current value of `capability.attribute` of a device (`GET /api/devices`). */
+export async function attributeValue(
+  request: APIRequestContext,
+  deviceName: string,
+  capabilityId: string,
+  key: string,
+): Promise<boolean | number | string | undefined> {
+  const device = (await listDevices(request)).find((entry) => entry.name === deviceName)
+  const attribute = device?.endpoints
+    .flatMap((endpoint) => endpoint.capabilities)
+    .find((capability) => capability.capabilityId === capabilityId)
+    ?.attributes.find((entry) => entry.key === key)
+  const value = attribute?.value
+  return value?.b ?? value?.n ?? value?.s
+}
+
+/** The AttributeId of `capability.attribute` of a device. */
+export function attributeIdOf(device: SimulatedDevice, capabilityId: string, key: string): number {
+  const attribute = device.endpoints
+    .flatMap((endpoint) => endpoint.capabilities)
+    .find((capability) => capability.capabilityId === capabilityId)
+    ?.attributes.find((entry) => entry.key === key)
+  expect(attribute, `${device.name} has ${capabilityId}.${key}`).toBeDefined()
+  return attribute!.attributeId
+}
+
+/** Waits until the page's live connection to the hub is up (devices update without a reload from then on). */
+export async function waitForLive(page: Page): Promise<void> {
+  await expect(page.locator('[data-realtime-status="connected"]')).toBeAttached({ timeout: 15_000 })
+}
+
 // --- UI helpers ------------------------------------------------------------------------------------------------------
 
 /** Phones get the sidebar as a sheet (below Tailwind's md breakpoint). */

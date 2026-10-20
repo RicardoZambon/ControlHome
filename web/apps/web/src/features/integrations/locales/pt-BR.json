@@ -1,0 +1,37 @@
+{
+  "title": "Integrações",
+  "nav": "Integrações",
+  "eyebrow": "Configurações",
+  "description": "As integrações trazem seus dispositivos para o ControlHome: a nuvem de um fabricante, um hub ou um protocolo da sua rede.",
+  "loadFailed": "Não foi possível carregar as integrações.",
+  "listLabel": "Integrações",
+  "added": "Adicionada em {date}",
+  "deviceCount": "Nenhum dispositivo | 1 dispositivo | {count} dispositivos",
+  "actions": "Ações de {name}",
+  "comingSoon": "A configuração guiada de integrações reais chega na próxima atualização.",
+  "status": {
+    "Ok": "Conectada",
+    "Connecting": "Conectando",
+    "Degraded": "Funcionando em parte",
+    "NeedsReauth": "Precisa entrar de novo",
+    "PlanRequired": "Plano necessário",
+    "QuotaExceeded": "Cota atingida",
+    "Error": "Erro",
+    "Stopped": "Parada"
+  },
+  "demo": {
+    "add": "Adicionar demonstração simulada",
+    "name": "Casa simulada",
+    "added": "Casa simulada adicionada. Os dispositivos aparecem em instantes."
+  },
+  "empty": {
+    "title": "Conecte seus primeiros dispositivos",
+    "description": "A configuração guiada de integrações reais chega na próxima atualização. Enquanto isso, a casa simulada traz uma luz com dimmer, uma tomada, um ar-condicionado, um sensor de porta e uma fechadura inteligente para experimentar todos os controles."
+  },
+  "delete": {
+    "title": "Remover {name}?",
+    "description": "Ela não tem dispositivos. | O dispositivo dela sai junto, com o histórico. | Os {count} dispositivos dela saem junto, com o histórico.",
+    "confirm": "Remover integração",
+    "done": "{name} removida."
+  }
+}
