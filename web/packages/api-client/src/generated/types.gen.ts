@@ -132,6 +132,27 @@ export type AvailabilityChangedDto = {
 };
 
 /**
+ * What `POST /api/backup/import` restored.
+ */
+export type BackupImportResultDto = {
+    floors: number;
+    rooms: number;
+    files: number;
+    integrations: number;
+    devices: number;
+    placements: number;
+    /**
+     * Accounts created from the backup (it holds no passwords: an admin sets one for each with a password reset); accounts
+     * whose user name already exists are left as they are.
+     */
+    usersCreated: number;
+    /**
+     * The integrations' secrets were in the backup and the passphrase opened them.
+     */
+    secretsRestored: boolean;
+};
+
+/**
  * A capability definition as served by `GET /api/capabilities` (and inside generic endpoint capabilities).
  */
 export type CapabilityDto = {
@@ -241,6 +262,11 @@ export type CompleteSetupRequest = {
     setupCode: string;
     admin: AdminAccountInput;
     home: HomeInput;
+    /**
+     * Also load the demo home (two floors, eight rooms, a Simulated integration with about 20 devices placed on the plans),
+     * named in the home's language. Skipped when the home already has floors, integrations or devices.
+     */
+    loadDemoHome?: null | boolean;
 };
 
 /**
@@ -276,14 +302,25 @@ export type ConnectorDto = {
  */
 export type ConnectorFeaturesDto = {
     /**
-     * Setup runs through a flow (milestone 1.3); otherwise integrations are created from the config fields.
+     * The connector has a setup flow of its own (several steps); others get a single config form. Either way, set up through
+     * `POST /api/integrations/flows`.
      */
     setupFlow: boolean;
+    /**
+     * The flow can re-authorize an existing integration (`POST /api/integrations/{id}/flows/reauth`), keeping its devices.
+     */
     reauth: boolean;
     pushInventory: boolean;
     permitJoin: boolean;
     cloud: boolean;
     polling: boolean;
+};
+
+/**
+ * Answers the flow's current step (`POST /api/integrations/flows/{flowId}`, Admin).
+ */
+export type ContinueFlowRequest = {
+    input: null | JsonElement;
 };
 
 /**
@@ -319,6 +356,112 @@ export type CreateUserRequest = {
      * `Admin`, `Member` or `Viewer`.
      */
     role: string;
+};
+
+/**
+ * A device counts as active while this attribute has one of ActiveValues.
+ */
+export type DashboardActivityDto = {
+    deviceId: string;
+    attributeId: number;
+    activeValues: Array<StateValue>;
+};
+
+/**
+ * A device in a dashboard list.
+ */
+export type DashboardDeviceDto = {
+    id: string;
+    name: string;
+    deviceClass: null | string;
+    roomId: null | number;
+    /**
+     * `Unknown`, `Online` or `Offline`.
+     */
+    availability: string;
+    lastSeenAtUtc: null | string;
+};
+
+/**
+ * The home at a glance (`GET /api/dashboard`): favorites, rooms with what is on / the temperature / the power drawn,
+ * the power drawn now, offline devices and integration health. Values are current when served; to keep them live, apply
+ * hub `StateChanged` deltas to the listed attribute ids, and refetch on `DevicesChanged`.
+ */
+export type DashboardDto = {
+    /**
+     * Favorite endpoints (not hidden) in display order: render them with the device tiles.
+     */
+    favoriteEndpointIds: Array<string>;
+    /**
+     * Every room of every floor, by floor level and room order (empty: point to the floor editor).
+     */
+    rooms: Array<DashboardRoomDto>;
+    /**
+     * What the home draws now.
+     */
+    power: DashboardPowerDto;
+    /**
+     * Devices their connector reports as unreachable (orphaned devices are left out).
+     */
+    offlineDevices: Array<DashboardDeviceDto>;
+    /**
+     * Every integration with its status (empty: point to the integrations page).
+     */
+    integrations: Array<IntegrationDto>;
+    floorCount: number;
+    /**
+     * Devices that are not orphaned.
+     */
+    deviceCount: number;
+};
+
+/**
+ * The power drawn now: the sum of every `power.power` reading (W, one decimal; `null` without readings).
+ */
+export type DashboardPowerDto = {
+    watts: null | number;
+    attributeIds: Array<number>;
+};
+
+/**
+ * One room's summary. Endpoints count in their own room, else their device's; hidden endpoints are left out.
+ */
+export type DashboardRoomDto = {
+    id: number;
+    name: string;
+    icon: string;
+    colorToken: string;
+    floorId: number;
+    floorName: string;
+    /**
+     * Devices with at least one endpoint in the room.
+     */
+    deviceCount: number;
+    /**
+     * Devices with something on in the room: a switch on, a media player powered, an appliance running (see
+     * ActivityAttributes).
+     */
+    activeDeviceCount: number;
+    /**
+     * The mean of the room's temperature readings (°C, one decimal), or `null` when it has none.
+     */
+    temperatureC: null | number;
+    /**
+     * The sum of the room's power readings (W, one decimal), or `null` when it has none.
+     */
+    powerW: null | number;
+    /**
+     * The temperature readings averaged into TemperatureC.
+     */
+    temperatureAttributeIds: Array<number>;
+    /**
+     * The power readings summed into PowerW.
+     */
+    powerAttributeIds: Array<number>;
+    /**
+     * What makes a device count as active, to recount from live values.
+     */
+    activityAttributes: Array<DashboardActivityDto>;
 };
 
 /**
@@ -391,6 +534,10 @@ export type DeviceDetailDto = {
      * Devices reached through this one (e.g. an NVR's cameras), by name.
      */
     children: Array<DeviceChildDto>;
+    /**
+     * Devices of other integrations with the same MAC address or serial number.
+     */
+    possibleDuplicateIds: Array<string>;
 };
 
 /**
@@ -420,6 +567,11 @@ export type DeviceSummaryDto = {
      * In display order.
      */
     endpoints: Array<EndpointDto>;
+    /**
+     * Devices of other integrations with the same MAC address or serial number: most likely the same hardware reached twice
+     * (remove one, or move this one's settings and history with `POST /api/devices/{id}/replace`). Empty when none.
+     */
+    possibleDuplicateIds: Array<string>;
 };
 
 /**
@@ -499,6 +651,18 @@ export type EnergyHourlyDto = {
 };
 
 /**
+ * Exports the home with its integrations' secrets (`POST /api/backup/export`, Admin).
+ */
+export type ExportBackupRequest = {
+    /**
+     * 12–256 characters: the integrations' secrets are included, encrypted with it (AES-256-GCM, key from PBKDF2-SHA256 with
+     * 600 000 iterations). Without one the backup has no secrets (integrations need their credentials again after import).
+     * Kept out of URLs on purpose.
+     */
+    passphrase: null | string;
+};
+
+/**
  * A form field.
  */
 export type FieldSchemaDto = {
@@ -538,7 +702,7 @@ export type FloorBackgroundDto = {
 };
 
 /**
- * A floor with its rooms. Send RowVersion back with every change to it.
+ * A floor with its rooms and the devices placed on it. Send RowVersion back with every change to it.
  */
 export type FloorDto = {
     id: number;
@@ -565,6 +729,10 @@ export type FloorDto = {
      * Opaque concurrency token; a change sent with an older one gets 409 `floors.concurrency`.
      */
     rowVersion: string;
+    /**
+     * The endpoints and devices on this floor (`PUT /api/placements`; not part of the layout's concurrency token).
+     */
+    placements: Array<PlacementDto>;
 };
 
 /**
@@ -575,6 +743,58 @@ export type FloorSummaryDto = {
     name: string;
     level: number;
     roomCount: number;
+};
+
+/**
+ * One option of a `choose` step.
+ */
+export type FlowChoiceDto = {
+    key: string;
+    label: LocalizedTextDto;
+    description: null | LocalizedTextDto;
+};
+
+/**
+ *             One step of a setup or reauth flow. Type says which members apply:
+ * * form:  (render with the schema form),  (initial values,
+ * never secrets),  (messages by field key after a rejected submission). Send the values.
+ * * externalUrl: open  (https);  is the field to paste the
+ * result into, if any. Send { "&lt;pasteBack.key&gt;": "…" } or {}.
+ * * progress: waiting for something on the device for at most ; poll with
+ * {} (about every second) until the step changes.
+ * * choose: pick one of ; send { "choice": "&lt;key&gt;" }.
+ * * done: finished;  is the integration created or updated. The flow is gone.
+ * * abort: the flow cannot continue:  (stable snake_case) and
+ * . The flow is gone.
+ * Texts come from the connector in both UI languages.
+ */
+export type FlowStepDto = {
+    /**
+     * Send the answer to `POST /api/integrations/flows/{flowId}`; flows expire 15 minutes after their last step.
+     */
+    flowId: string;
+    /**
+     * `form`, `externalUrl`, `progress`, `choose`, `done` or `abort`.
+     */
+    type: string;
+    /**
+     * The connector's id of the step (for its form, progress, choose and external page steps).
+     */
+    stepId: null | string;
+    title: null | LocalizedTextDto;
+    description: null | LocalizedTextDto;
+    fields: Array<FieldSchemaDto>;
+    values: null | JsonElement;
+    errors: {
+        [key: string]: LocalizedTextDto;
+    };
+    url: null | string;
+    pasteBack: null | FieldSchemaDto;
+    timeoutSeconds: null | number;
+    choices: Array<FlowChoiceDto>;
+    integrationId: null | string;
+    reason: null | string;
+    message: null | LocalizedTextDto;
 };
 
 /**
@@ -784,6 +1004,53 @@ export type PagedResultOfAuditEntryDto = {
 };
 
 /**
+ * An endpoint or device on a floor plan.
+ */
+export type PlacementDto = {
+    id: number;
+    floorId: number;
+    /**
+     * Set when an endpoint is placed (then DeviceId is `null`).
+     */
+    endpointId: null | string;
+    /**
+     * Set when a whole device is placed (then EndpointId is `null`).
+     */
+    deviceId: null | string;
+    xCm: number;
+    yCm: number;
+    /**
+     * The room that contains the point (first in the floor's room order), or `null`.
+     */
+    roomId: null | number;
+};
+
+/**
+ * Places an endpoint or a whole device on a floor, or moves it there (`PUT /api/placements`, Admin). Exactly one of
+ * EndpointId and DeviceId. The target's room becomes the room containing the point
+ * (none when it is outside every room).
+ */
+export type PlaceRequest = {
+    /**
+     * The endpoint to place (one control of a multi-channel device, or any single-endpoint device).
+     */
+    endpointId: null | string;
+    /**
+     * The device to place as a whole.
+     */
+    deviceId: null | string;
+    floorId: number;
+    /**
+     * 0 … the floor's width.
+     */
+    xCm: number;
+    /**
+     * 0 … the floor's height.
+     */
+    yCm: number;
+};
+
+/**
  * A point on a floor plan in centimetres (origin: the floor's top-left corner; y grows downwards).
  */
 export type PointCmDto = {
@@ -805,6 +1072,17 @@ export type ProblemDetails = {
      * Correlates the response with the server log.
      */
     traceId?: string;
+};
+
+/**
+ * Replaces a device by another one (`POST /api/devices/{id}/replace`, Admin): the new device takes over the old one's
+ * name, room, icon, endpoint settings, favorites, placements and history; the old device is deleted.
+ */
+export type ReplaceDeviceRequest = {
+    /**
+     * The device taking over (typically the same hardware re-paired, or its successor).
+     */
+    newDeviceId: string;
 };
 
 /**
@@ -979,6 +1257,16 @@ export type SetupStatusDto = {
 };
 
 /**
+ * Starts a connector's setup flow (`POST /api/integrations/flows`, Admin).
+ */
+export type StartFlowRequest = {
+    /**
+     * A key from `GET /api/connectors`. Connectors without a flow of their own get a single form with their config fields.
+     */
+    connectorKey: string;
+};
+
+/**
  * A new current value of one attribute (hub `StateChanged`).
  */
 export type StateDelta = {
@@ -1134,6 +1422,20 @@ export type UpdateHomeRequest = {
     locale: string;
     currency: string;
     pricePerKwh: null | number;
+};
+
+/**
+ * Renames an integration and enables or disables it (`PUT /api/integrations/{id}`, Admin).
+ */
+export type UpdateIntegrationRequest = {
+    /**
+     * 1–128 characters.
+     */
+    name: string;
+    /**
+     * A disabled integration's runtime does not run; its devices stay (availability Unknown).
+     */
+    enabled: boolean;
 };
 
 export type UpdateProfileRequest = {
@@ -2055,6 +2357,10 @@ export type DeleteFloorErrors = {
      * Not Found
      */
     404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
 };
 
 export type DeleteFloorError = DeleteFloorErrors[keyof DeleteFloorErrors];
@@ -2217,6 +2523,108 @@ export type ListRoomsResponses = {
 };
 
 export type ListRoomsResponse = ListRoomsResponses[keyof ListRoomsResponses];
+
+export type ListPlacementsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only the placements of this floor.
+         */
+        floorId?: number;
+    };
+    url: '/api/placements';
+};
+
+export type ListPlacementsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type ListPlacementsError = ListPlacementsErrors[keyof ListPlacementsErrors];
+
+export type ListPlacementsResponses = {
+    /**
+     * OK
+     */
+    200: Array<PlacementDto>;
+};
+
+export type ListPlacementsResponse = ListPlacementsResponses[keyof ListPlacementsResponses];
+
+export type PlaceOnFloorData = {
+    body: PlaceRequest;
+    path?: never;
+    query?: never;
+    url: '/api/placements';
+};
+
+export type PlaceOnFloorErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type PlaceOnFloorError = PlaceOnFloorErrors[keyof PlaceOnFloorErrors];
+
+export type PlaceOnFloorResponses = {
+    /**
+     * OK
+     */
+    200: PlacementDto;
+};
+
+export type PlaceOnFloorResponse = PlaceOnFloorResponses[keyof PlaceOnFloorResponses];
+
+export type DeletePlacementData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/api/placements/{id}';
+};
+
+export type DeletePlacementErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type DeletePlacementError = DeletePlacementErrors[keyof DeletePlacementErrors];
+
+export type DeletePlacementResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type DeletePlacementResponse = DeletePlacementResponses[keyof DeletePlacementResponses];
 
 export type UploadFileData = {
     body: {
@@ -2443,6 +2851,45 @@ export type UpdateDeviceResponses = {
 
 export type UpdateDeviceResponse = UpdateDeviceResponses[keyof UpdateDeviceResponses];
 
+export type ReplaceDeviceData = {
+    body: ReplaceDeviceRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/devices/{id}/replace';
+};
+
+export type ReplaceDeviceErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type ReplaceDeviceError = ReplaceDeviceErrors[keyof ReplaceDeviceErrors];
+
+export type ReplaceDeviceResponses = {
+    /**
+     * OK
+     */
+    200: DeviceDetailDto;
+};
+
+export type ReplaceDeviceResponse = ReplaceDeviceResponses[keyof ReplaceDeviceResponses];
+
 export type UpdateEndpointData = {
     body: UpdateEndpointRequest;
     path: {
@@ -2520,6 +2967,45 @@ export type SetEndpointFavoriteResponses = {
 };
 
 export type SetEndpointFavoriteResponse = SetEndpointFavoriteResponses[keyof SetEndpointFavoriteResponses];
+
+export type GetCameraSnapshotData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/endpoints/{id}/camera/snapshot';
+};
+
+export type GetCameraSnapshotErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetCameraSnapshotError = GetCameraSnapshotErrors[keyof GetCameraSnapshotErrors];
+
+export type GetCameraSnapshotResponses = {
+    /**
+     * OK
+     */
+    200: Stream;
+};
+
+export type GetCameraSnapshotResponse = GetCameraSnapshotResponses[keyof GetCameraSnapshotResponses];
 
 export type SendCommandData = {
     body: CommandRequest;
@@ -2743,6 +3229,219 @@ export type DeleteIntegrationResponses = {
 
 export type DeleteIntegrationResponse = DeleteIntegrationResponses[keyof DeleteIntegrationResponses];
 
+export type UpdateIntegrationData = {
+    body: UpdateIntegrationRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/integrations/{id}';
+};
+
+export type UpdateIntegrationErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateIntegrationError = UpdateIntegrationErrors[keyof UpdateIntegrationErrors];
+
+export type UpdateIntegrationResponses = {
+    /**
+     * OK
+     */
+    200: IntegrationDto;
+};
+
+export type UpdateIntegrationResponse = UpdateIntegrationResponses[keyof UpdateIntegrationResponses];
+
+export type StartIntegrationFlowData = {
+    body: StartFlowRequest;
+    path?: never;
+    query?: never;
+    url: '/api/integrations/flows';
+};
+
+export type StartIntegrationFlowErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartIntegrationFlowError = StartIntegrationFlowErrors[keyof StartIntegrationFlowErrors];
+
+export type StartIntegrationFlowResponses = {
+    /**
+     * OK
+     */
+    200: FlowStepDto;
+};
+
+export type StartIntegrationFlowResponse = StartIntegrationFlowResponses[keyof StartIntegrationFlowResponses];
+
+export type CancelIntegrationFlowData = {
+    body?: never;
+    path: {
+        flowId: string;
+    };
+    query?: never;
+    url: '/api/integrations/flows/{flowId}';
+};
+
+export type CancelIntegrationFlowErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type CancelIntegrationFlowError = CancelIntegrationFlowErrors[keyof CancelIntegrationFlowErrors];
+
+export type CancelIntegrationFlowResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type CancelIntegrationFlowResponse = CancelIntegrationFlowResponses[keyof CancelIntegrationFlowResponses];
+
+export type ContinueIntegrationFlowData = {
+    body: ContinueFlowRequest;
+    path: {
+        flowId: string;
+    };
+    query?: never;
+    url: '/api/integrations/flows/{flowId}';
+};
+
+export type ContinueIntegrationFlowErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ContinueIntegrationFlowError = ContinueIntegrationFlowErrors[keyof ContinueIntegrationFlowErrors];
+
+export type ContinueIntegrationFlowResponses = {
+    /**
+     * OK
+     */
+    200: FlowStepDto;
+};
+
+export type ContinueIntegrationFlowResponse = ContinueIntegrationFlowResponses[keyof ContinueIntegrationFlowResponses];
+
+export type StartIntegrationReauthFlowData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/integrations/{id}/flows/reauth';
+};
+
+export type StartIntegrationReauthFlowErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartIntegrationReauthFlowError = StartIntegrationReauthFlowErrors[keyof StartIntegrationReauthFlowErrors];
+
+export type StartIntegrationReauthFlowResponses = {
+    /**
+     * OK
+     */
+    200: FlowStepDto;
+};
+
+export type StartIntegrationReauthFlowResponse = StartIntegrationReauthFlowResponses[keyof StartIntegrationReauthFlowResponses];
+
 export type GetSystemStatusData = {
     body?: never;
     path?: never;
@@ -2935,3 +3634,143 @@ export type UpdateRetentionSettingsResponses = {
 };
 
 export type UpdateRetentionSettingsResponse = UpdateRetentionSettingsResponses[keyof UpdateRetentionSettingsResponses];
+
+export type GetDashboardData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/dashboard';
+};
+
+export type GetDashboardErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type GetDashboardError = GetDashboardErrors[keyof GetDashboardErrors];
+
+export type GetDashboardResponses = {
+    /**
+     * OK
+     */
+    200: DashboardDto;
+};
+
+export type GetDashboardResponse = GetDashboardResponses[keyof GetDashboardResponses];
+
+export type ExportBackupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/backup/export';
+};
+
+export type ExportBackupErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type ExportBackupError = ExportBackupErrors[keyof ExportBackupErrors];
+
+export type ExportBackupResponses = {
+    /**
+     * OK
+     */
+    200: Stream;
+};
+
+export type ExportBackupResponse = ExportBackupResponses[keyof ExportBackupResponses];
+
+export type ExportBackupWithSecretsData = {
+    body: ExportBackupRequest;
+    path?: never;
+    query?: never;
+    url: '/api/backup/export';
+};
+
+export type ExportBackupWithSecretsErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type ExportBackupWithSecretsError = ExportBackupWithSecretsErrors[keyof ExportBackupWithSecretsErrors];
+
+export type ExportBackupWithSecretsResponses = {
+    /**
+     * OK
+     */
+    200: Stream;
+};
+
+export type ExportBackupWithSecretsResponse = ExportBackupWithSecretsResponses[keyof ExportBackupWithSecretsResponses];
+
+export type ImportBackupData = {
+    body: {
+        file: IFormFile;
+    } & {
+        passphrase?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/backup/import';
+};
+
+export type ImportBackupErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Payload Too Large
+     */
+    413: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ImportBackupError = ImportBackupErrors[keyof ImportBackupErrors];
+
+export type ImportBackupResponses = {
+    /**
+     * OK
+     */
+    200: BackupImportResultDto;
+};
+
+export type ImportBackupResponse = ImportBackupResponses[keyof ImportBackupResponses];

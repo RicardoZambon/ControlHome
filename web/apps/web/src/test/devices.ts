@@ -213,6 +213,7 @@ function device(
     isOrphaned: false,
     lastSeenAtUtc: OBSERVED,
     endpoints,
+    possibleDuplicateIds: [],
     ...extra,
   }
 }

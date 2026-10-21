@@ -50,6 +50,7 @@ export function toSummary(detail: DeviceDetailDto): DeviceSummaryDto {
     isOrphaned: detail.isOrphaned,
     lastSeenAtUtc: detail.lastSeenAtUtc,
     endpoints: detail.endpoints,
+    possibleDuplicateIds: detail.possibleDuplicateIds,
   }
 }
 
