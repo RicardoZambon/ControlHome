@@ -16,11 +16,15 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-21 — Milestone 1.4-A merged (PR #15): StateLog, 5-minute/hourly stats, EnergyHourly, rollups, retention purge, history API.
 - 2026-10-21 — Milestone 1.3 + 1.4-B merged (PR #17): device placement + room auto-assign, integration flows + merge rules (orphaned, replace device), more Simulated types, demo home, backup export/import (passphrase), dashboard v1, history charts, settings pages (home, data retention, backup). 1558 .NET tests, 898 web tests, 83 E2E + 548 screenshots.
 - 2026-10-21 — Tagged **v0.1.0** (Phase 1 complete).
+- 2026-10-21 — Milestone 1.5 merged (PR #19): Umbrel community store template (`deploy/umbrel/`), Dockerfile NuGet layer fix, VersionPrefix 0.2.0.
 
 ## In progress (2026-10-21)
-- Branch `milestone/1.5-umbrel`: Umbrel community store template (`deploy/umbrel/`), Dockerfile NuGet layer fix (the main release after #15 failed with NETSDK1064), VersionPrefix 0.2.0.
-- Running `wayv3mbur` = Phase 2 wave A (run wf_ea0b675b-d0e, base c4a0238): LG ThinQ, DahuaHttp + go2rtc backend, SmartThings connectors, each implemented then adversarially reviewed in its own worktree. When done: merge the three review branches into a Phase 2 branch, add the catalogue Experimental flag, then a second workflow for UI (CameraPlayer, tiles, door open, flows), E2E, screenshots, visual review; HTTPS listener (2.1 optional) still to do.
-- 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans; footer shows v1.0.0 when the image is built without a version.
+- **PAUSED 2026-10-21 ~14:58 UTC for the 5-hour usage limit (88%; resets 17:50 UTC).** Phase 2 wave A workflow `wayv3mbur` (run wf_ea0b675b-d0e, script workflows/scripts/p2a-vendor-connectors-wf_ea0b675b-d0e.js, base c4a0238) was stopped while all three implementers were in final verification; each had committed its work (worktrees clean):
+  - LG ThinQ: worktree wf_ea0b675b-d0e-1, branch worktree-wf_ea0b675b-d0e-1, ef14c87 (+ d803678 energy windows into EnergyHourly).
+  - DahuaHttp + go2rtc backend: worktree wf_ea0b675b-d0e-2, branch worktree-wf_ea0b675b-d0e-2, 9c8ed59 (+ c45129d).
+  - SmartThings: worktree wf_ea0b675b-d0e-3, branch worktree-wf_ea0b675b-d0e-3, d4bcbbb.
+  Resume plan (no implement step completed, so resumeFromRunId has nothing cached): edit the script so stage 1 is a short "finish" agent per track (reset to the commit above, check the task scope is complete, run the full suite, report), then the adversarial review stage as written.
+- 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans.
 - Next phases: Phase 2 (docs/plans/phase-2-vendor-connectors.md: LG ThinQ, DahuaHttp + go2rtc, SmartThings), Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
 - Usage guard: session cron every 10 min, pause at ≥ 90% of the 5-hour limit (TaskStop running tasks, one-shot resume after reset); no new workflows at ≥ 92% weekly.
 - Host notes: default node is now v22 — prepend C:/Users/samur/AppData/Local/nvm/v24.21.0 to PATH for web commands.
