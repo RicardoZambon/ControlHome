@@ -23,8 +23,20 @@ services:
       ASPNETCORE_HTTP_PORTS: "8711"
       # From .env, e.g. Server=mssql,1433;Database=ControlHome_Compose;User Id=sa;Password=<MSSQL_SA_PASSWORD>;TrustServerCertificate=True
       ConnectionStrings__ControlHome: ${CONTROLHOME_DB_CONNECTION:-}
+      # go2rtc (profile cameras) by service name on the project network.
+      Cameras__Go2Rtc__Url: http://go2rtc:1984
     volumes: !override
       - controlhome-data:/data
+
+  go2rtc:
+    # Bridge network: the API listens inside the project network only (no published port, credentials required);
+    # WebRTC is published for browsers on the LAN, which reach it through CONTROLHOME_LAN_IP (the Docker host's address).
+    network_mode: !reset null
+    environment:
+      GO2RTC_API_LISTEN: ":1984"
+    ports:
+      - "8555:8555/tcp"
+      - "8555:8555/udp"
 
 volumes:
   controlhome-data:

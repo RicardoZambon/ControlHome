@@ -31,6 +31,7 @@
     <!-- Connectors are registered statically (AddConnector<T>()), never loaded as plugins. -->
     <ProjectReference Include="..\ControlHome.Connectors.Simulated\ControlHome.Connectors.Simulated.csproj" />
     <ProjectReference Include="..\ControlHome.Connectors.Mqtt\ControlHome.Connectors.Mqtt.csproj" />
+    <ProjectReference Include="..\ControlHome.Connectors.DahuaHttp\ControlHome.Connectors.DahuaHttp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

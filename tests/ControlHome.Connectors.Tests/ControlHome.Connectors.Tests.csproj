@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Testcontainers" />
+    <PackageReference Include="WireMock.Net" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
@@ -23,6 +24,7 @@
     <ProjectReference Include="..\..\src\ControlHome.Connectors.Abstractions\ControlHome.Connectors.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\ControlHome.Connectors.Simulated\ControlHome.Connectors.Simulated.csproj" />
     <ProjectReference Include="..\..\src\ControlHome.Connectors.Mqtt\ControlHome.Connectors.Mqtt.csproj" />
+    <ProjectReference Include="..\..\src\ControlHome.Connectors.DahuaHttp\ControlHome.Connectors.DahuaHttp.csproj" />
   </ItemGroup>
 
   <ItemGroup>

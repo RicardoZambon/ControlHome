@@ -1,0 +1,40 @@
+--myboundary
+Content-Type: text/plain
+
+Heartbeat
+--myboundary
+Content-Type: text/plain
+
+Code=VideoMotion;action=Start;index=0
+--myboundary
+Content-Type: text/plain
+
+Code=VideoMotion;action=Stop;index=0
+--myboundary
+Content-Type: text/plain
+
+Code=CrossLineDetection;action=Start;index=0;data={
+   "Class" : "Normal",
+   "Direction" : "LeftToRight",
+   "Name" : "Linha1",
+   "ObjectType" : "Human"
+}
+--myboundary
+Content-Type: text/plain
+
+Code=AlarmLocal;action=Start;index=0
+--myboundary
+Content-Type: text/plain
+
+Code=NewFile;action=Pulse;index=0;data={
+   "File" : "/mnt/sd/2026-10-21/001/dav/10/10.30.00-10.30.05[M][0@0][0].dav",
+   "Size" : 1024
+}
+--myboundary
+Content-Type: text/plain
+
+Heartbeat
+--myboundary
+Content-Type: text/plain
+
+Code=AlarmLocal;action=Stop;index=0

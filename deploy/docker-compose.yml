@@ -8,6 +8,9 @@
 # Optional bundled SQL Server 2025 Express (x64 hosts only; listens on 127.0.0.1:1433):
 #   docker compose --profile bundled-db up -d
 #
+# Optional camera live view (go2rtc sidecar; set GO2RTC_API_USERNAME / GO2RTC_API_PASSWORD / CONTROLHOME_LAN_IP in .env):
+#   docker compose --profile cameras up -d
+#
 # Without a connection string the app starts in pre-DB setup mode and asks for the database in the setup wizard.
 # Development: docker-compose.dev.yml (local build, bridge network, published port 8080).
 
@@ -25,6 +28,10 @@ services:
       ConnectionStrings__ControlHome: ${CONTROLHOME_DB_CONNECTION:-}
       Setup__Code: ${CONTROLHOME_SETUP_CODE:-}
       TZ: ${TZ:-Etc/UTC}
+      # Camera live view through the go2rtc sidecar (profile cameras): off while the credentials are empty.
+      Cameras__Go2Rtc__Url: http://127.0.0.1:${GO2RTC_API_PORT:-1984}
+      Cameras__Go2Rtc__Username: ${GO2RTC_API_USERNAME:-}
+      Cameras__Go2Rtc__Password: ${GO2RTC_API_PASSWORD:-}
     volumes:
       - ./data:/data
     read_only: true
@@ -42,6 +49,40 @@ services:
       start_period: 60s
       start_interval: 5s
       retries: 3
+
+  go2rtc:
+    profiles: [cameras]
+    # alexxit/go2rtc 1.9.14 (multi-arch index digest).
+    image: alexxit/go2rtc:1.9.14@sha256:675c318b23c06fd862a61d262240c9a63436b4050d177ffc68a32710d9e05bae
+    # Host networking like the app: WebRTC media goes straight to browsers on the LAN (TCP/UDP 8555). The API listens on
+    # 127.0.0.1 only, with random credentials and local_auth (go2rtc.yaml), so only ControlHome can use it.
+    network_mode: host
+    user: "${CONTROLHOME_UID:-1000}:${CONTROLHOME_GID:-1000}"
+    environment:
+      GO2RTC_API_LISTEN: 127.0.0.1:${GO2RTC_API_PORT:-1984}
+      GO2RTC_API_USERNAME: ${GO2RTC_API_USERNAME:-}
+      GO2RTC_API_PASSWORD: ${GO2RTC_API_PASSWORD:-}
+      CONTROLHOME_LAN_IP: ${CONTROLHOME_LAN_IP:-}
+    # Refuses to start without real credentials (go2rtc would otherwise accept the literal "${...}" placeholders).
+    entrypoint: ["/sbin/tini", "--", "/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$GO2RTC_API_USERNAME" ] || [ "$${#GO2RTC_API_PASSWORD}" -lt 16 ]; then
+          echo "go2rtc: set GO2RTC_API_USERNAME and a random GO2RTC_API_PASSWORD (16+ characters) in deploy/.env" >&2
+          exit 1
+        fi
+        [ -n "$$CONTROLHOME_LAN_IP" ] || echo "go2rtc: CONTROLHOME_LAN_IP is not set; WebRTC may not reach browsers (MSE still works)" >&2
+        exec go2rtc -config /config/go2rtc.yaml
+    volumes:
+      - ./go2rtc.yaml:/config/go2rtc.yaml:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
 
   mssql:
     profiles: [bundled-db]

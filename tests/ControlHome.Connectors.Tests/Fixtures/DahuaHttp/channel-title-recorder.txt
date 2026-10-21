@@ -1,0 +1,4 @@
+table.ChannelTitle[0].Name=Garagem
+table.ChannelTitle[1].Name=Portao
+table.ChannelTitle[2].Name=Quintal
+table.ChannelTitle[3].Name=

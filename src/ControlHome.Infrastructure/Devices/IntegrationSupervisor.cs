@@ -43,7 +43,7 @@ public sealed partial class IntegrationSupervisor(
     TimeProvider timeProvider,
     KnownSecrets knownSecrets,
     IOptions<DeviceRuntimeOptions> options,
-    ILoggerFactory loggerFactory) : ICommandDispatcher, IIntegrationRuntimeControl, ICameraSnapshotProvider, IAsyncDisposable
+    ILoggerFactory loggerFactory) : ICommandDispatcher, IIntegrationRuntimeControl, ICameraSnapshotProvider, ICameraStreamProvider, IAsyncDisposable
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger<IntegrationSupervisor>();
     private readonly ConcurrentDictionary<Guid, RunningIntegration> _running = new();
@@ -97,6 +97,30 @@ public sealed partial class IntegrationSupervisor(
         {
             // Never the exception object: a connector's message may quote a secret (e.g. a camera URL with credentials).
             LogSnapshotFailed(integrationId, ex.GetType().Name, knownSecrets.Redact(ex.Message));
+            return null;
+        }
+    }
+
+    public async Task<CameraStreamSource?> GetStreamSourceAsync(
+        Guid integrationId,
+        string externalDeviceId,
+        string endpointKey,
+        CameraStreamQuality quality,
+        CancellationToken cancellationToken)
+    {
+        if (!_running.TryGetValue(integrationId, out var running) || running.Runtime is not ICameraStreamSource source)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await source.GetStreamSourceAsync(externalDeviceId, endpointKey, quality, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Never the exception object: a connector's message may quote a secret (the stream URL carries credentials).
+            LogStreamSourceFailed(integrationId, ex.GetType().Name, knownSecrets.Redact(ex.Message));
             return null;
         }
     }
@@ -511,6 +535,9 @@ public sealed partial class IntegrationSupervisor(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: getting a camera snapshot failed ({ExceptionType}): {Reason}")]
     private partial void LogSnapshotFailed(Guid integrationId, string exceptionType, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: getting a camera stream source failed ({ExceptionType}): {Reason}")]
+    private partial void LogStreamSourceFailed(Guid integrationId, string exceptionType, string reason);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Integration {IntegrationId} status: {Status}")]
     private partial void LogStatus(Guid integrationId, IntegrationStatus status);

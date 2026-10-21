@@ -11,6 +11,13 @@ public sealed class SimulatedConnectorOptions
 
     /// <summary>The seed used when an integration's config has none.</summary>
     public int Seed { get; set; } = SimulatedSettings.DefaultSeed;
+
+    /// <summary>
+    /// The live stream of the demo cameras, for trying the camera player end to end against a test RTSP server (e.g.
+    /// <c>rtsp://127.0.0.1:8554/demo{n}</c>; <c>{n}</c> is the camera number 1–4, <c>{quality}</c> <c>main</c> or
+    /// <c>sub</c>). Unset (default): the simulated cameras have stills but no live stream.
+    /// </summary>
+    public string? CameraStreamSource { get; set; }
 }
 
 /// <summary>
@@ -35,7 +42,7 @@ public sealed class SimulatedConnectorFactory(SimulatedConnectorOptions? options
     public IConnectorRuntime CreateRuntime(IntegrationInstance instance)
     {
         ArgumentNullException.ThrowIfNull(instance);
-        return new SimulatedRuntime(SimulatedSettings.Parse(instance.Config, _defaultSeed));
+        return new SimulatedRuntime(SimulatedSettings.Parse(instance.Config, _defaultSeed), options?.CameraStreamSource);
     }
 
     /// <exception cref="ArgumentException">The config does not match <see cref="IConnectorDescriptor.ConfigFields"/>.</exception>

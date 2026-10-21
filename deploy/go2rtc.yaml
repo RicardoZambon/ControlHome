@@ -1,0 +1,47 @@
+# go2rtc for ControlHome's camera live view (compose profile "cameras"; see docs/connectors/dahuahttp.md).
+#
+# This file holds no secret: go2rtc replaces each ${VAR} (or ${VAR:default}) with the container's environment when it
+# reads the file, and compose fills that environment from deploy/.env. It is mounted read-only. Streams are registered
+# at runtime by ControlHome through the API (PATCH /api/streams, in memory only) and are never written here, so camera
+# URLs and passwords never land on disk.
+
+app:
+  # Only what live view needs: the API and its WebSocket, the RTSP *client* (rtsp.listen is empty: no RTSP server),
+  # WebRTC, and fMP4/MSE (module mp4). Not loaded: exec, ffmpeg, echo and expr sources (they run programs), HLS,
+  # MJPEG, HomeKit, ONVIF, RTMP, WebTorrent, ngrok and every other source or server.
+  modules: [api, ws, rtsp, webrtc, mp4]
+
+api:
+  # Loopback only (with host networking every local process could reach it, hence the credentials below). The dev
+  # compose sets ":1984" inside the project network, never published to the host.
+  listen: "${GO2RTC_API_LISTEN:127.0.0.1:1984}"
+  username: "${GO2RTC_API_USERNAME}"
+  password: "${GO2RTC_API_PASSWORD}"
+  # Ask for the credentials on loopback too (go2rtc skips them for 127.0.0.1 otherwise).
+  local_auth: true
+  # WebSocket upgrades only from the same origin (ControlHome's own client sends none).
+  origin: ""
+  # The only API paths go2rtc registers at all: no web UI, no /api/config, /api/exit, /api/restart, /api/log, ...
+  allow_paths: [/api/streams, /api/ws, /api/webrtc]
+
+rtsp:
+  # No RTSP server: cameras are only read, never re-published on the network.
+  listen: ""
+
+webrtc:
+  # Media goes straight between go2rtc and the browser on the LAN (TCP and UDP 8555).
+  listen: "${GO2RTC_WEBRTC_LISTEN::8555}"
+  candidates:
+    # The host's LAN address (CONTROLHOME_LAN_IP in .env): what browsers connect to. With host networking go2rtc also
+    # offers its own interface addresses.
+    - "${CONTROLHOME_LAN_IP:127.0.0.1}:8555"
+  # LAN only: no public STUN servers.
+  ice_servers: []
+
+exec:
+  # The exec module is not loaded (app.modules); if it ever were, it could run nothing.
+  allow_paths: []
+
+log:
+  # Keep it at info: trace levels print request URLs, and stream sources carry camera credentials.
+  level: info

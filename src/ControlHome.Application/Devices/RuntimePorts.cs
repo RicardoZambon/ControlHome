@@ -100,13 +100,37 @@ public interface ICameraSnapshotProvider
     Task<CameraSnapshot?> GetSnapshotAsync(Guid integrationId, string externalDeviceId, string endpointKey, CancellationToken cancellationToken);
 }
 
+/// <summary>Asks running connector runtimes where their cameras stream (implemented by the integration supervisor).</summary>
+public interface ICameraStreamProvider
+{
+    /// <summary>
+    /// The camera's stream source from the integration's runtime (when it implements <see cref="ICameraStreamSource"/>),
+    /// or <c>null</c> when it is not running, has no such camera, or no stream of that quality. The source carries the
+    /// camera's credentials: it goes only to the restreamer, never to a client or a log.
+    /// </summary>
+    Task<CameraStreamSource?> GetStreamSourceAsync(
+        Guid integrationId,
+        string externalDeviceId,
+        string endpointKey,
+        CameraStreamQuality quality,
+        CancellationToken cancellationToken);
+}
+
 /// <summary>Dispatcher, runtime control and status for hosts without a device runtime: nothing runs.</summary>
-public sealed class NoDeviceRuntime : ICommandDispatcher, IIntegrationRuntimeControl, IRuntimeStatus, ICameraSnapshotProvider
+public sealed class NoDeviceRuntime : ICommandDispatcher, IIntegrationRuntimeControl, IRuntimeStatus, ICameraSnapshotProvider, ICameraStreamProvider
 {
     public static NoDeviceRuntime Instance { get; } = new();
 
     public Task<CameraSnapshot?> GetSnapshotAsync(Guid integrationId, string externalDeviceId, string endpointKey, CancellationToken cancellationToken) =>
         Task.FromResult<CameraSnapshot?>(null);
+
+    public Task<CameraStreamSource?> GetStreamSourceAsync(
+        Guid integrationId,
+        string externalDeviceId,
+        string endpointKey,
+        CameraStreamQuality quality,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<CameraStreamSource?>(null);
 
     public RuntimeMode Mode => RuntimeMode.Starting;
 

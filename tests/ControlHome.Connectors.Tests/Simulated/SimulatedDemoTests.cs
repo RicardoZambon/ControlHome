@@ -247,6 +247,25 @@ public sealed class SimulatedDemoTests
     }
 
     [Fact]
+    public async Task Cameras_stream_the_configured_test_source_only()
+    {
+        await using (var none = await SimulatedHarness.StartAsync(Demo))
+        {
+            (await ((ICameraStreamSource)none.Runtime).GetStreamSourceAsync("cam-1", "main", CameraStreamQuality.Main, Ct)).ShouldBeNull("no test stream configured");
+        }
+
+        await using var sim = await SimulatedHarness.StartAsync(Demo, new SimulatedConnectorOptions { CameraStreamSource = "rtsp://192.0.2.50:8554/demo{n}_{quality}" });
+        var source = (ICameraStreamSource)sim.Runtime;
+
+        (await source.GetStreamSourceAsync("cam-3", "main", CameraStreamQuality.Sub, Ct)).ShouldNotBeNull().Url.ShouldBe("rtsp://192.0.2.50:8554/demo3_sub");
+        (await source.GetStreamSourceAsync("cam-1", "main", CameraStreamQuality.Main, Ct)).ShouldNotBeNull().Url.ShouldBe("rtsp://192.0.2.50:8554/demo1_main");
+        (await source.GetStreamSourceAsync("light-1", "main", CameraStreamQuality.Main, Ct)).ShouldBeNull();
+        (await source.GetStreamSourceAsync("cam-1", "other", CameraStreamQuality.Main, Ct)).ShouldBeNull();
+        await using var bad = await SimulatedHarness.StartAsync(Demo, new SimulatedConnectorOptions { CameraStreamSource = "exec:ffmpeg -i x" });
+        (await ((ICameraStreamSource)bad.Runtime).GetStreamSourceAsync("cam-1", "main", CameraStreamQuality.Main, Ct)).ShouldBeNull("only rtsp sources");
+    }
+
+    [Fact]
     public async Task The_same_seed_gives_the_same_demo_reports()
     {
         var first = await ReportsAfterAsync("""{"preset":"demo","seed":11}""", ticks: 20);

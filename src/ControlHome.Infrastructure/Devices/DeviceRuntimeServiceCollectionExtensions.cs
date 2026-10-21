@@ -60,6 +60,7 @@ public static class DeviceRuntimeServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<ICommandDispatcher>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
         services.Replace(ServiceDescriptor.Singleton<IIntegrationRuntimeControl>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
         services.Replace(ServiceDescriptor.Singleton<ICameraSnapshotProvider>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
+        services.Replace(ServiceDescriptor.Singleton<ICameraStreamProvider>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
         services.Replace(ServiceDescriptor.Scoped<IAttributeStateReader, RuntimeAttributeStateReader>());
         services.Replace(ServiceDescriptor.Singleton<IDeviceStatusReader, RuntimeDeviceStatusReader>());
         services.TryAddSingleton<RuntimeLease>();

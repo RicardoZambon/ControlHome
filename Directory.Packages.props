@@ -50,6 +50,8 @@
     <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
     <!-- Generic containers (MQTT connector tests run eclipse-mosquitto). -->
     <PackageVersion Include="Testcontainers" Version="4.16.0" />
+    <!-- HTTP fakes of vendor APIs (the Dahua CGI API with Digest auth, the go2rtc API). -->
+    <PackageVersion Include="WireMock.Net" Version="2.19.0" />
   </ItemGroup>
 
   <ItemGroup Label="Transitive security pins">

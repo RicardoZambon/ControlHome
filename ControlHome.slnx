@@ -4,6 +4,7 @@
     <Project Path="src/ControlHome.Connectors.Abstractions/ControlHome.Connectors.Abstractions.csproj" />
     <Project Path="src/ControlHome.Connectors.Simulated/ControlHome.Connectors.Simulated.csproj" />
     <Project Path="src/ControlHome.Connectors.Mqtt/ControlHome.Connectors.Mqtt.csproj" />
+    <Project Path="src/ControlHome.Connectors.DahuaHttp/ControlHome.Connectors.DahuaHttp.csproj" />
     <Project Path="src/ControlHome.Application/ControlHome.Application.csproj" />
     <Project Path="src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj" />
     <Project Path="src/ControlHome.Api/ControlHome.Api.csproj" />
