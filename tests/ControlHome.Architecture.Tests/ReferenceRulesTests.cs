@@ -22,6 +22,7 @@ public sealed class ReferenceRulesTests
     private const string ConnectorsAbstractions = "ControlHome.Connectors.Abstractions";
     private const string SimulatedConnector = "ControlHome.Connectors.Simulated";
     private const string MqttConnector = "ControlHome.Connectors.Mqtt";
+    private const string SmartThingsConnector = "ControlHome.Connectors.SmartThings";
     private const string FixturesNamespace = "ControlHome.Architecture.Tests.Fixtures";
 
     /// <summary>What no connector assembly (the SDK included) may depend on: the application layers, EF Core, the web stack.</summary>
@@ -62,12 +63,13 @@ public sealed class ReferenceRulesTests
     [Fact]
     public void Connectors_Abstractions_depends_on_Domain_only()
     {
-        AssertNoTypeDependencies(ConnectorsAbstractions, [.. _connectorForbidden, SimulatedConnector, MqttConnector]);
+        AssertNoTypeDependencies(ConnectorsAbstractions, [.. _connectorForbidden, SimulatedConnector, MqttConnector, SmartThingsConnector]);
     }
 
     [Theory]
     [InlineData(SimulatedConnector)]
     [InlineData(MqttConnector)]
+    [InlineData(SmartThingsConnector)]
     public void Connector_assemblies_never_depend_on_Application_Infrastructure_or_Api(string connector)
     {
         AssertNoTypeDependencies(connector, _connectorForbidden);
@@ -104,6 +106,7 @@ public sealed class ReferenceRulesTests
 
         connectors.ShouldContain(SimulatedConnector);
         connectors.ShouldContain(MqttConnector);
+        connectors.ShouldContain(SmartThingsConnector);
         foreach (var connector in connectors)
         {
             var project = LoadProject(connector);
@@ -192,8 +195,8 @@ public sealed class ReferenceRulesTests
     }
 
     [Theory]
-    [InlineData(Application, new[] { Infrastructure, Api, SimulatedConnector, MqttConnector })]
-    [InlineData(Infrastructure, new[] { Api, SimulatedConnector, MqttConnector })]
+    [InlineData(Application, new[] { Infrastructure, Api, SimulatedConnector, MqttConnector, SmartThingsConnector })]
+    [InlineData(Infrastructure, new[] { Api, SimulatedConnector, MqttConnector, SmartThingsConnector })]
     public void Project_does_not_reference_outer_layers(string projectName, string[] forbidden)
     {
         var referenced = ProjectReferenceNames(LoadProject(projectName));

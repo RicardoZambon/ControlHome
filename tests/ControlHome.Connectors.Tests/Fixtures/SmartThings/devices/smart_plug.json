@@ -1,0 +1,58 @@
+{
+  "items": [
+    {
+      "deviceId": "00000000-0000-4000-8000-00000000002c",
+      "name": "SYLVANIA SMART+ Smart Plug",
+      "label": "Plug",
+      "manufacturerName": "SmartThingsCommunity",
+      "presentationId": "00000000-0000-4000-8000-00000000002d",
+      "deviceManufacturerCode": "LEDVANCE",
+      "locationId": "00000000-0000-4000-8000-000000000014 ",
+      "ownerId": "00000000-0000-4000-8000-000000000015",
+      "roomId": "00000000-0000-4000-8000-000000000011",
+      "components": [
+        {
+          "id": "main",
+          "label": "Plug",
+          "capabilities": [
+            {
+              "id": "switch",
+              "version": 1
+            },
+            {
+              "id": "firmwareUpdate",
+              "version": 1
+            },
+            {
+              "id": "refresh",
+              "version": 1
+            }
+          ],
+          "categories": [
+            {
+              "name": "Switch",
+              "categoryType": "manufacturer"
+            }
+          ]
+        }
+      ],
+      "createTime": "2018-10-05T12:23:14Z",
+      "profile": {
+        "id": "00000000-0000-4000-8000-00000000002e"
+      },
+      "zigbee": {
+        "eui": "0200000000000004",
+        "networkId": "A005",
+        "driverId": "00000000-0000-4000-8000-00000000002f",
+        "executingLocally": true,
+        "hubId": "00000000-0000-4000-8000-00000000002b",
+        "provisioningState": "PROVISIONED"
+      },
+      "type": "ZIGBEE",
+      "restrictionTier": 0,
+      "allowed": [],
+      "executionContext": "LOCAL"
+    }
+  ],
+  "_links": {}
+}

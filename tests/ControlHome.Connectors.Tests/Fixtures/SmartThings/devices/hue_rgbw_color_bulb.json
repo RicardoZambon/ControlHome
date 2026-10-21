@@ -1,0 +1,81 @@
+{
+  "items": [
+    {
+      "deviceId": "00000000-0000-4000-8000-000000000021",
+      "name": "hue-rgbw-color-bulb",
+      "label": "Standing light",
+      "manufacturerName": "0A2r",
+      "presentationId": "ST_00000000-0000-4000-8000-000000000022",
+      "deviceManufacturerCode": "Signify Netherlands B.V.",
+      "locationId": "00000000-0000-4000-8000-000000000023",
+      "ownerId": "00000000-0000-4000-8000-000000000024",
+      "components": [
+        {
+          "id": "main",
+          "label": "main",
+          "capabilities": [
+            {
+              "id": "switch",
+              "version": 1
+            },
+            {
+              "id": "colorControl",
+              "version": 1
+            },
+            {
+              "id": "colorTemperature",
+              "version": 1
+            },
+            {
+              "id": "switchLevel",
+              "version": 1
+            },
+            {
+              "id": "healthCheck",
+              "version": 1
+            },
+            {
+              "id": "refresh",
+              "version": 1
+            },
+            {
+              "id": "samsungim.hueSyncMode",
+              "version": 1
+            },
+            {
+              "id": "synthetic.lightingEffectCircadian",
+              "version": 1
+            },
+            {
+              "id": "synthetic.lightingEffectFade",
+              "version": 1
+            }
+          ],
+          "categories": [
+            {
+              "name": "Light",
+              "categoryType": "manufacturer"
+            }
+          ]
+        }
+      ],
+      "createTime": "2023-12-17T18:11:41.454Z",
+      "profile": {
+        "id": "00000000-0000-4000-8000-000000000025"
+      },
+      "viper": {
+        "uniqueIdentifier": "00000000000000000000000000000003",
+        "manufacturerName": "Signify Netherlands B.V.",
+        "modelName": "Hue color lamp",
+        "swVersion": "1.122.2",
+        "hwVersion": "LCA001",
+        "endpointAppId": "viper_00000000-0000-4000-8000-000000000026"
+      },
+      "type": "VIPER",
+      "restrictionTier": 0,
+      "allowed": [],
+      "executionContext": "CLOUD"
+    }
+  ],
+  "_links": {}
+}

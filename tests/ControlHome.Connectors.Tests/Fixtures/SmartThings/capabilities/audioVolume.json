@@ -1,0 +1,29 @@
+{
+  "id": "audioVolume",
+  "version": 1,
+  "status": "live",
+  "name": "Audio Volume",
+  "ephemeral": false,
+  "attributes": {
+    "volume": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "unit": { "type": "string", "enum": ["%"], "default": "%" }
+        },
+        "additionalProperties": false,
+        "required": ["value"]
+      },
+      "setter": "setVolume"
+    }
+  },
+  "commands": {
+    "setVolume": {
+      "name": "setVolume",
+      "arguments": [{ "name": "volume", "optional": false, "schema": { "type": "integer", "minimum": 0, "maximum": 100 } }]
+    },
+    "volumeUp": { "name": "volumeUp", "arguments": [] },
+    "volumeDown": { "name": "volumeDown", "arguments": [] }
+  }
+}

@@ -27,6 +27,9 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
     <!-- MQTT connector client (v5: no ManagedClient; the connector owns its reconnect/resubscribe loop). -->
     <PackageVersion Include="MQTTnet" Version="5.2.0.1603" />
+    <!-- Cloud connectors (SmartThings): IHttpClientFactory, and retries for idempotent GETs only. -->
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
   </ItemGroup>
 
   <ItemGroup Label="Imaging">
@@ -50,6 +53,8 @@
     <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
     <!-- Generic containers (MQTT connector tests run eclipse-mosquitto). -->
     <PackageVersion Include="Testcontainers" Version="4.16.0" />
+    <!-- HTTP fakes for cloud connector tests (SmartThings). -->
+    <PackageVersion Include="WireMock.Net" Version="2.19.0" />
   </ItemGroup>
 
   <ItemGroup Label="Transitive security pins">

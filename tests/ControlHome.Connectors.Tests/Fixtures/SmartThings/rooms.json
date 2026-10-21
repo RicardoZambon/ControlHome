@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "roomId": "00000000-0000-4000-8000-000000000011",
+      "locationId": "00000000-0000-4000-8000-000000000036",
+      "name": "Theater",
+      "backgroundImage": null
+    },
+    {
+      "roomId": "00000000-0000-4000-8000-000000000037",
+      "locationId": "00000000-0000-4000-8000-000000000036",
+      "name": "Toilet",
+      "backgroundImage": null
+    }
+  ],
+  "_links": null
+}

@@ -1,0 +1,82 @@
+{
+  "items": [
+    {
+      "deviceId": "00000000-0000-4000-8000-00000000001a",
+      "name": "v4 - ecobee Thermostat - Heat and Cool (F)",
+      "label": "Downstairs",
+      "manufacturerName": "0A0b",
+      "presentationId": "ST_00000000-0000-4000-8000-00000000001b",
+      "deviceManufacturerCode": "ecobee",
+      "locationId": "00000000-0000-4000-8000-00000000001c",
+      "ownerId": "00000000-0000-4000-8000-00000000001d",
+      "roomId": "00000000-0000-4000-8000-00000000001e",
+      "components": [
+        {
+          "id": "main",
+          "label": "main",
+          "capabilities": [
+            {
+              "id": "temperatureMeasurement",
+              "version": 1
+            },
+            {
+              "id": "relativeHumidityMeasurement",
+              "version": 1
+            },
+            {
+              "id": "thermostatHeatingSetpoint",
+              "version": 1
+            },
+            {
+              "id": "thermostatCoolingSetpoint",
+              "version": 1
+            },
+            {
+              "id": "thermostatOperatingState",
+              "version": 1
+            },
+            {
+              "id": "thermostatMode",
+              "version": 1
+            },
+            {
+              "id": "thermostatFanMode",
+              "version": 1
+            },
+            {
+              "id": "refresh",
+              "version": 1
+            },
+            {
+              "id": "healthCheck",
+              "version": 1
+            }
+          ],
+          "categories": [
+            {
+              "name": "Thermostat",
+              "categoryType": "manufacturer"
+            }
+          ]
+        }
+      ],
+      "createTime": "2025-03-10T00:57:26.760Z",
+      "profile": {
+        "id": "00000000-0000-4000-8000-00000000001f"
+      },
+      "viper": {
+        "manufacturerName": "ecobee",
+        "modelName": "nikeSmart-thermostat",
+        "swVersion": "250308073247",
+        "hwVersion": "250308073247",
+        "endpointAppId": "viper_00000000-0000-4000-8000-000000000020"
+      },
+      "type": "VIPER",
+      "restrictionTier": 0,
+      "allowed": null,
+      "executionContext": "CLOUD",
+      "relationships": []
+    }
+  ],
+  "_links": {}
+}

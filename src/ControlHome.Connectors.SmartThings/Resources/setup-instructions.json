@@ -1,0 +1,30 @@
+{
+  "$comment": "Setup wizard data for creating the household's own SmartThings OAuth-In app. Samsung changes this path (CLI today, Developer Workspace 'coming soon', possibly paid): update this file and docs/connectors/smartthings.md together (a test checks they agree). {cli}, {appType}, {scopes} and {redirect} are filled in.",
+  "docsUrl": "https://github.com/RicardoZambon/ControlHome/blob/main/docs/connectors/smartthings.md#create-your-own-smartthings-app",
+  "cliCommand": "npx @smartthings/cli apps:create",
+  "appType": "OAuth-In App",
+  "scopes": ["r:locations:*", "r:devices:*", "x:devices:*"],
+  "defaultRedirectUri": "https://httpbin.org/get",
+  "title": {
+    "en": "Create your own SmartThings app",
+    "ptBr": "Crie o seu próprio app SmartThings"
+  },
+  "steps": {
+    "en": [
+      "On a computer with Node.js, run {cli} and sign in with your Samsung account.",
+      "Choose \"{appType}\" and give it a name (for example ControlHome) and a short description.",
+      "Select the scopes {scopes}.",
+      "Add the redirect URI {redirect} (or an HTTPS page you control: see the guide).",
+      "The CLI shows the OAuth client id and client secret only once: keep them for the next step.",
+      "Every household uses its own app; ControlHome never ships a shared one. SmartThings may require its paid Personal Plan for API apps."
+    ],
+    "ptBr": [
+      "Em um computador com Node.js, execute {cli} e entre com a sua conta Samsung.",
+      "Escolha \"{appType}\" e dê um nome (por exemplo ControlHome) e uma descrição curta.",
+      "Marque os escopos {scopes}.",
+      "Adicione a redirect URI {redirect} (ou uma página HTTPS sua: veja o guia).",
+      "A CLI mostra o client id e o client secret do OAuth uma única vez: guarde-os para a próxima etapa.",
+      "Cada casa usa o seu próprio app; o ControlHome nunca distribui um app compartilhado. A SmartThings pode exigir o Personal Plan pago para apps de API."
+    ]
+  }
+}

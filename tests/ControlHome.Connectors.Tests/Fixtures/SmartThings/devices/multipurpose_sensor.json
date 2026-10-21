@@ -1,0 +1,77 @@
+{
+  "items": [
+    {
+      "deviceId": "00000000-0000-4000-8000-000000000027",
+      "name": "Multipurpose Sensor",
+      "label": "Deck door",
+      "manufacturerName": "SmartThingsCommunity",
+      "presentationId": "00000000-0000-4000-8000-000000000028",
+      "deviceManufacturerCode": "SmartThings",
+      "locationId": "00000000-0000-4000-8000-000000000014 ",
+      "roomId": "00000000-0000-4000-8000-000000000011",
+      "components": [
+        {
+          "id": "main",
+          "label": "Deck door",
+          "capabilities": [
+            {
+              "id": "contactSensor",
+              "version": 1
+            },
+            {
+              "id": "temperatureMeasurement",
+              "version": 1
+            },
+            {
+              "id": "threeAxis",
+              "version": 1
+            },
+            {
+              "id": "accelerationSensor",
+              "version": 1
+            },
+            {
+              "id": "battery",
+              "version": 1
+            },
+            {
+              "id": "firmwareUpdate",
+              "version": 1
+            },
+            {
+              "id": "refresh",
+              "version": 1
+            }
+          ],
+          "categories": [
+            {
+              "name": "MultiFunctionalSensor",
+              "categoryType": "manufacturer"
+            },
+            {
+              "name": "Door",
+              "categoryType": "user"
+            }
+          ]
+        }
+      ],
+      "createTime": "2019-02-23T16:53:57Z",
+      "profile": {
+        "id": "00000000-0000-4000-8000-000000000029"
+      },
+      "zigbee": {
+        "eui": "0200000000000002",
+        "networkId": "A003",
+        "driverId": "00000000-0000-4000-8000-00000000002a",
+        "executingLocally": true,
+        "hubId": "00000000-0000-4000-8000-00000000002b",
+        "provisioningState": "PROVISIONED"
+      },
+      "type": "ZIGBEE",
+      "restrictionTier": 0,
+      "allowed": [],
+      "executionContext": "LOCAL"
+    }
+  ],
+  "_links": {}
+}

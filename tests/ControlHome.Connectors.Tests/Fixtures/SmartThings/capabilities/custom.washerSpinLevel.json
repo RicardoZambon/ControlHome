@@ -1,0 +1,45 @@
+{
+  "id": "custom.washerSpinLevel",
+  "version": 1,
+  "status": "proposed",
+  "name": "Washer Spin Level",
+  "ephemeral": false,
+  "attributes": {
+    "washerSpinLevel": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": ["rinseHold", "noSpin", "low", "medium", "high", "extraHigh"]
+          }
+        },
+        "additionalProperties": false,
+        "required": ["value"]
+      },
+      "setter": "setWasherSpinLevel"
+    },
+    "supportedWasherSpinLevel": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false,
+        "required": ["value"]
+      }
+    }
+  },
+  "commands": {
+    "setWasherSpinLevel": {
+      "name": "setWasherSpinLevel",
+      "arguments": [
+        {
+          "name": "spinLevel",
+          "optional": false,
+          "schema": { "type": "string", "enum": ["rinseHold", "noSpin", "low", "medium", "high", "extraHigh"] }
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,6 @@
 using ControlHome.Connectors.Mqtt;
 using ControlHome.Connectors.Simulated;
+using ControlHome.Connectors.SmartThings;
 using ControlHome.Infrastructure.Devices;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -18,6 +19,10 @@ public static class ConnectorSetup
 
         // MQTT: Zigbee2MQTT, Home Assistant MQTT discovery and Tasmota over one broker connection per integration.
         services.AddConnector<MqttConnectorFactory>();
+
+        // SmartThings: the household's own OAuth-In app (or a dev token), adaptive polling of the cloud API per location.
+        services.AddSmartThingsHttpClient();
+        services.AddConnector<SmartThingsConnectorFactory>();
 
         return services;
     }
