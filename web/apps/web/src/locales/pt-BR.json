@@ -523,7 +523,8 @@
       "network_denied": "O ControlHome só aceita conexões da sua rede doméstica.",
       "host_denied": "Este endereço não é permitido. Abra o ControlHome pelo IP ou pelo nome local, ou adicione este nome à lista de permitidos.",
       "conflict": "Outra pessoa alterou isto ao mesmo tempo. Recarregue e tente novamente.",
-      "too_large": "São dados demais para o ControlHome receber de uma só vez."
+      "too_large": "São dados demais para o ControlHome receber de uma só vez.",
+      "websocket_required": "Esta conexão precisa de um WebSocket. Recarregue a página."
     },
     "validation": {
       "failed": "Alguns campos precisam de atenção."
@@ -646,7 +647,11 @@
       "not_found": "Esta etapa de configuração expirou ou já foi concluída. Comece de novo."
     },
     "cameras": {
-      "no_snapshot": "Esta câmera não tem imagem no momento. Tente de novo em instantes."
+      "no_snapshot": "Esta câmera não tem imagem no momento. Tente de novo em instantes.",
+      "no_stream": "Esta câmera não tem vídeo ao vivo.",
+      "live_disabled": "O vídeo ao vivo não está configurado neste servidor. Um administrador pode ativá-lo (go2rtc).",
+      "live_unavailable": "O vídeo ao vivo não está disponível agora. Tente de novo em instantes.",
+      "live_busy": "Há vídeos ao vivo demais abertos agora. Feche um e tente de novo."
     },
     "backup": {
       "not_empty": "Um backup só pode ser importado numa casa vazia. Remova os andares e as integrações primeiro.",

@@ -4154,6 +4154,203 @@
           }
         }
       }
+    },
+    "/api/endpoints/{id}/camera/stream": {
+      "get": {
+        "tags": [
+          "Cameras"
+        ],
+        "summary": "Live view over a WebSocket (go2rtc's MSE / WebRTC-signalling protocol), relayed by the app.",
+        "description": "Open as a WebSocket from the app's own origin (the session cookie authenticates it). Messages are those of go2rtc's video-rtc.js: send {\"type\":\"mse\",\"value\":\"<codecs>\"} (or mp4, webrtc/offer with a receive-only SDP, webrtc/candidate) and receive binary fMP4 segments and JSON messages. Anything else sent is dropped; binary or larger than 64 KB closes it. quality: main (default) or sub. Errors before the upgrade: 400 validation.failed (quality); 404 endpoints.not_found or cameras.no_stream; 400 request.websocket_required (not a WebSocket request); 503 cameras.live_disabled, commands.unavailable, cameras.live_unavailable or cameras.live_busy; 429 request.rate_limited (more than 30 views started a minute).",
+        "operationId": "openCameraStream",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "quality",
+            "in": "query",
+            "description": "main (default) or sub (the lighter extra stream).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "101": {
+            "description": "Switching Protocols"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/endpoints/{id}/camera/webrtc": {
+      "post": {
+        "tags": [
+          "Cameras"
+        ],
+        "summary": "WebRTC live view: exchanges the browser's receive-only SDP offer for the restreamer's answer.",
+        "description": "The answer carries the restreamer's ICE candidates (its LAN address, WebRTC port 8555); media then flows directly between the browser and go2rtc. 400 validation.failed (errors.sdp: not an offer, or it would send media; errors.quality); 404 endpoints.not_found or cameras.no_stream; 503 cameras.live_disabled, commands.unavailable or cameras.live_unavailable; 429 request.rate_limited (more than 30 views started a minute).",
+        "operationId": "exchangeCameraWebRtc",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraWebRtcOfferRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraWebRtcAnswerDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4465,6 +4662,39 @@
           }
         },
         "description": "What `POST /api/backup/import` restored."
+      },
+      "CameraWebRtcAnswerDto": {
+        "required": [
+          "sdp"
+        ],
+        "type": "object",
+        "properties": {
+          "sdp": {
+            "type": "string"
+          }
+        },
+        "description": "The restreamer's SDP answer (with its ICE candidates)."
+      },
+      "CameraWebRtcOfferRequest": {
+        "required": [
+          "sdp",
+          "quality"
+        ],
+        "type": "object",
+        "properties": {
+          "sdp": {
+            "type": "string",
+            "description": "The browser's SDP offer; every media section must be receive-only (`a=recvonly`)."
+          },
+          "quality": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "`main` (default) or `sub` (the lighter extra stream, for tiles and phones)."
+          }
+        },
+        "description": "A WebRTC offer for a camera's live view (`POST /api/endpoints/{id}/camera/webrtc`)."
       },
       "CapabilityDto": {
         "required": [
@@ -7577,6 +7807,9 @@
     },
     {
       "name": "Backup"
+    },
+    {
+      "name": "Cameras"
     }
   ]
 }

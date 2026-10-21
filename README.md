@@ -69,6 +69,7 @@ The image and compose files land with milestone 0.4. Then:
 cp deploy/.env.example deploy/.env       # fill in the values; .env is gitignored
 docker compose -f deploy/docker-compose.yml up -d                          # bring your own SQL Server 2025
 docker compose -f deploy/docker-compose.yml --profile bundled-db up -d     # or add SQL Server 2025 Express (x64 hosts)
+docker compose -f deploy/docker-compose.yml --profile cameras up -d        # camera live view (go2rtc; docs/connectors/dahuahttp.md)
 docker compose -f deploy/docker-compose.yml logs controlhome | grep -i "setup code"
 ```
 

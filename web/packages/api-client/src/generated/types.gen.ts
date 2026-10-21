@@ -153,6 +153,27 @@ export type BackupImportResultDto = {
 };
 
 /**
+ * The restreamer's SDP answer (with its ICE candidates).
+ */
+export type CameraWebRtcAnswerDto = {
+    sdp: string;
+};
+
+/**
+ * A WebRTC offer for a camera's live view (`POST /api/endpoints/{id}/camera/webrtc`).
+ */
+export type CameraWebRtcOfferRequest = {
+    /**
+     * The browser's SDP offer; every media section must be receive-only (`a=recvonly`).
+     */
+    sdp: string;
+    /**
+     * `main` (default) or `sub` (the lighter extra stream, for tiles and phones).
+     */
+    quality: null | string;
+};
+
+/**
  * A capability definition as served by `GET /api/capabilities` (and inside generic endpoint capabilities).
  */
 export type CapabilityDto = {
@@ -3918,3 +3939,93 @@ export type GetScheduledBackupResponses = {
 };
 
 export type GetScheduledBackupResponse = GetScheduledBackupResponses[keyof GetScheduledBackupResponses];
+
+export type OpenCameraStreamData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * main (default) or sub (the lighter extra stream).
+         */
+        quality?: string;
+    };
+    url: '/api/endpoints/{id}/camera/stream';
+};
+
+export type OpenCameraStreamErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type OpenCameraStreamError = OpenCameraStreamErrors[keyof OpenCameraStreamErrors];
+
+export type ExchangeCameraWebRtcData = {
+    body: CameraWebRtcOfferRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/endpoints/{id}/camera/webrtc';
+};
+
+export type ExchangeCameraWebRtcErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ExchangeCameraWebRtcError = ExchangeCameraWebRtcErrors[keyof ExchangeCameraWebRtcErrors];
+
+export type ExchangeCameraWebRtcResponses = {
+    /**
+     * OK
+     */
+    200: CameraWebRtcAnswerDto;
+};
+
+export type ExchangeCameraWebRtcResponse = ExchangeCameraWebRtcResponses[keyof ExchangeCameraWebRtcResponses];

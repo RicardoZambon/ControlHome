@@ -77,7 +77,6 @@ public sealed partial class Go2RtcRestreamer : ICameraRestreamer
         _logger = logger;
         var settings = options.Value;
         _timeout = settings.RequestTimeout > TimeSpan.Zero ? settings.RequestTimeout : TimeSpan.FromSeconds(10);
-        MaxLiveSessions = Math.Max(1, settings.MaxLiveSessions);
         secrets.Register(settings.Password);
 
         if (string.IsNullOrWhiteSpace(settings.Url))
@@ -108,9 +107,6 @@ public sealed partial class Go2RtcRestreamer : ICameraRestreamer
     }
 
     public bool Enabled => _base is not null;
-
-    /// <summary>The most live views relayed at once (<see cref="Go2RtcOptions.MaxLiveSessions"/>).</summary>
-    public int MaxLiveSessions { get; }
 
     public async Task RegisterAsync(string streamName, CameraStreamSource source, CancellationToken cancellationToken)
     {

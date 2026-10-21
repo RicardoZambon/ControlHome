@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
 using ControlHome.Application.Common;
@@ -47,12 +48,13 @@ public static class CameraEndpoints
                 "binary or larger than 64 KB closes it. quality: main (default) or sub. Errors before the upgrade: 400 " +
                 "validation.failed (quality); 404 endpoints.not_found or cameras.no_stream; 400 request.websocket_required " +
                 "(not a WebSocket request); 503 cameras.live_disabled, commands.unavailable, cameras.live_unavailable or " +
-                "cameras.live_busy.")
+                "cameras.live_busy; 429 request.rate_limited (more than 30 views started a minute).")
             .RequireAuthorization(AuthorizationPolicies.Viewer)
             .Produces(StatusCodes.Status101SwitchingProtocols)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         cameras.MapPost("/{id:guid}/camera/webrtc", WebRtcAsync)
@@ -62,10 +64,11 @@ public static class CameraEndpoints
                 "The answer carries the restreamer's ICE candidates (its LAN address, WebRTC port 8555); media then flows " +
                 "directly between the browser and go2rtc. 400 validation.failed (errors.sdp: not an offer, or it would send " +
                 "media; errors.quality); 404 endpoints.not_found or cameras.no_stream; 503 cameras.live_disabled, " +
-                "commands.unavailable or cameras.live_unavailable.")
+                "commands.unavailable or cameras.live_unavailable; 429 request.rate_limited (more than 30 views started a minute).")
             .RequireAuthorization(AuthorizationPolicies.Viewer)
             .WithValidation<CameraWebRtcOfferRequest>()
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         return app;
@@ -98,6 +101,11 @@ public static class CameraEndpoints
         if (!context.WebSockets.IsWebSocketRequest)
         {
             return Problems.From(AppError.Validation(ErrorCodes.RequestWebSocketRequired, "Open this endpoint as a WebSocket."));
+        }
+
+        if (!sessions.TryStart(user))
+        {
+            return RateLimited();
         }
 
         var opened = await cameras.OpenAsync(id, parsed, cancellationToken);
@@ -141,9 +149,26 @@ public static class CameraEndpoints
     private static async Task<Results<Ok<CameraWebRtcAnswerDto>, ProblemHttpResult>> WebRtcAsync(
         Guid id,
         CameraWebRtcOfferRequest request,
+        ClaimsPrincipal user,
         CameraStreamService cameras,
-        CancellationToken cancellationToken) =>
-        (await cameras.ExchangeWebRtcAsync(id, request, cancellationToken)).ToHttpResult();
+        CameraLiveSessions sessions,
+        CancellationToken cancellationToken)
+    {
+        var camera = await cameras.CheckCameraAsync(id, cancellationToken);
+        if (camera.IsFailure)
+        {
+            return Problems.From(camera.Error);
+        }
+
+        return sessions.TryStart(user)
+            ? (await cameras.ExchangeWebRtcAsync(id, request, cancellationToken)).ToHttpResult()
+            : RateLimited();
+    }
+
+    private static ProblemHttpResult RateLimited() => TypedResults.Problem(
+        detail: "Too many live views were started; try again in a minute.",
+        statusCode: StatusCodes.Status429TooManyRequests,
+        extensions: new Dictionary<string, object?>(StringComparer.Ordinal) { [Problems.CodeExtension] = ErrorCodes.RequestRateLimited });
 
     /// <summary>A signed-in user's session as it was when the live view opened (user id and security stamp).</summary>
     private sealed class UserSession(Guid userId, string? stamp, IServiceScopeFactory scopes)
@@ -171,13 +196,37 @@ public static class CameraEndpoints
     }
 }
 
-/// <summary>Counts open live views against <see cref="Go2RtcOptions.MaxLiveSessions"/> (each holds a go2rtc consumer).</summary>
-public sealed class CameraLiveSessions(IOptions<Go2RtcOptions> options)
+/// <summary>
+/// Counts open live views against <see cref="Go2RtcOptions.MaxLiveSessions"/> (each holds a go2rtc consumer), and limits
+/// how often one user may start a view (<see cref="StartsPerMinute"/> WebSocket opens and WebRTC exchanges a minute), so
+/// no signed-in client can pile up go2rtc consumers or camera connections.
+/// </summary>
+public sealed class CameraLiveSessions(IOptions<Go2RtcOptions> options) : IDisposable
 {
+    public const int StartsPerMinute = 30;
+
     private readonly int _max = Math.Max(1, options.Value.MaxLiveSessions);
+    private readonly PartitionedRateLimiter<string> _starts = PartitionedRateLimiter.Create<string, string>(user =>
+        RateLimitPartition.GetFixedWindowLimiter(user, static _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = StartsPerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+        }));
+
     private int _open;
 
     public int Open => Volatile.Read(ref _open);
+
+    /// <summary>Whether <paramref name="user"/> may start another view now.</summary>
+    public bool TryStart(ClaimsPrincipal user)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        using var lease = _starts.AttemptAcquire(user.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty);
+        return lease.IsAcquired;
+    }
+
+    public void Dispose() => _starts.Dispose();
 
     /// <summary>A lease to dispose when the view closes, or <c>null</c> when the limit is reached.</summary>
     public IDisposable? TryEnter()

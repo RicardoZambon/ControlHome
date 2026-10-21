@@ -307,7 +307,7 @@ internal sealed partial class DahuaRuntime : IConnectorRuntime, ICameraSnapshotS
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            TimeSpan delay;
+            DateTimeOffset? streamOpenedAt = null;
             try
             {
                 var inventory = Inventory ?? await DiscoverAsync(context, client, cancellationToken).ConfigureAwait(false);
@@ -320,15 +320,17 @@ internal sealed partial class DahuaRuntime : IConnectorRuntime, ICameraSnapshotS
                     return;
                 }
 
-                var opened = context.Time.GetUtcNow();
-                await StreamAsync(context, client, inventory, cancellationToken).ConfigureAwait(false);
+                await StreamAsync(context, client, inventory, at => streamOpenedAt = at, cancellationToken).ConfigureAwait(false);
 
                 // The device closed the stream (a reboot, a firmware limit): reconnect.
-                failures = context.Time.GetUtcNow() - opened >= _options.StableConnection ? 0 : failures;
+                failures = Stable(context, streamOpenedAt) ? 0 : failures;
                 LogStreamEnded(context.Logger, client.Endpoint);
                 ReportAvailability(context, inventory, Availability.Unknown, "The event stream ended; reconnecting.");
+
+                // The timer starts before the status is published, so whoever reacts to the status (a test clock) finds it armed.
+                var next = Task.Delay(_backoff.Next(failures++), context.Time, cancellationToken);
                 context.SetStatus(IntegrationStatus.Degraded, $"The event stream of the device at {client.Endpoint} ended; reconnecting.");
-                delay = _backoff.Next(failures++);
+                await next.ConfigureAwait(false);
             }
             catch (DahuaHttpException exception) when (exception.Failure == DahuaFailure.Unauthorized)
             {
@@ -341,27 +343,27 @@ internal sealed partial class DahuaRuntime : IConnectorRuntime, ICameraSnapshotS
                     IntegrationStatus.NeedsReauth,
                     $"The device at {client.Endpoint} refused the user name or password. Update them (reauthorize); ControlHome tries again only every {_options.AuthRetryDelay.TotalMinutes:0} minutes to avoid locking the device.");
                 await retry.ConfigureAwait(false);
-                continue;
             }
             catch (DahuaHttpException exception)
             {
                 LogConnectionFailed(context.Logger, client.Endpoint, exception.Failure, exception.Message);
                 var unreachable = exception.Failure is DahuaFailure.Unreachable or DahuaFailure.Timeout;
                 MarkAll(context, unreachable ? Availability.Offline : Availability.Unknown, unreachable ? "The device cannot be reached." : null);
-                delay = _backoff.Next(failures++);
+
+                // A stream that had been up for a while broke: start the back-off over.
+                failures = Stable(context, streamOpenedAt) ? 0 : failures;
                 var status = exception.Failure is DahuaFailure.NotFound or DahuaFailure.Forbidden or DahuaFailure.InvalidResponse
                     ? IntegrationStatus.Error
                     : IntegrationStatus.Degraded;
-                var wait = Task.Delay(delay, context.Time, cancellationToken);
+                var wait = Task.Delay(_backoff.Next(failures++), context.Time, cancellationToken);
                 context.SetStatus(status, $"{exception.Message} Retrying.");
                 await wait.ConfigureAwait(false);
-                continue;
             }
-
-            // The timer starts before the status is published, so whoever reacts to the status (a test clock) finds it armed.
-            await Task.Delay(delay, context.Time, cancellationToken).ConfigureAwait(false);
         }
     }
+
+    private bool Stable(IConnectorContext context, DateTimeOffset? openedAt) =>
+        openedAt is { } at && context.Time.GetUtcNow() - at >= _options.StableConnection;
 
     private async Task<DahuaInventory> DiscoverAsync(IConnectorContext context, DahuaHttpClient client, CancellationToken cancellationToken)
     {
@@ -434,11 +436,17 @@ internal sealed partial class DahuaRuntime : IConnectorRuntime, ICameraSnapshotS
     }
 
     /// <summary>One event-stream connection: opens it, reads the current state back, then handles events until it ends.</summary>
-    private async Task StreamAsync(IConnectorContext context, DahuaHttpClient client, DahuaInventory inventory, CancellationToken cancellationToken)
+    private async Task StreamAsync(
+        IConnectorContext context,
+        DahuaHttpClient client,
+        DahuaInventory inventory,
+        Action<DateTimeOffset> opened,
+        CancellationToken cancellationToken)
     {
         var stream = await client.OpenEventStreamAsync(cancellationToken).ConfigureAwait(false);
         await using (stream.ConfigureAwait(false))
         {
+            opened(context.Time.GetUtcNow());
             Interlocked.Increment(ref _streamsOpened);
             LogStreamOpened(context.Logger, client.Endpoint);
             ReportAvailability(context, inventory, Availability.Online, null);
