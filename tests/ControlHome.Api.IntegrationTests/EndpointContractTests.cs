@@ -67,6 +67,20 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         { "GET", "/api/energy/hourly", "listEnergyHourly", AuthorizationPolicies.Viewer, null },
         { "GET", "/api/settings/retention", "getRetentionSettings", AuthorizationPolicies.Admin, null },
         { "PUT", "/api/settings/retention", "updateRetentionSettings", AuthorizationPolicies.Admin, null },
+        { "GET", "/api/placements", "listPlacements", AuthorizationPolicies.Viewer, null },
+        { "PUT", "/api/placements", "placeOnFloor", AuthorizationPolicies.Admin, null },
+        { "DELETE", "/api/placements/{id:int}", "deletePlacement", AuthorizationPolicies.Admin, null },
+        { "PUT", "/api/integrations/{id:guid}", "updateIntegration", AuthorizationPolicies.Admin, null },
+        { "POST", "/api/integrations/flows", "startIntegrationFlow", AuthorizationPolicies.Admin, null },
+        { "POST", "/api/integrations/flows/{flowId:guid}", "continueIntegrationFlow", AuthorizationPolicies.Admin, null },
+        { "DELETE", "/api/integrations/flows/{flowId:guid}", "cancelIntegrationFlow", AuthorizationPolicies.Admin, null },
+        { "POST", "/api/integrations/{id:guid}/flows/reauth", "startIntegrationReauthFlow", AuthorizationPolicies.Admin, null },
+        { "POST", "/api/devices/{id:guid}/replace", "replaceDevice", AuthorizationPolicies.Admin, null },
+        { "GET", "/api/endpoints/{id:guid}/camera/snapshot", "getCameraSnapshot", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/dashboard", "getDashboard", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/backup/export", "exportBackup", AuthorizationPolicies.Admin, null },
+        { "POST", "/api/backup/export", "exportBackupWithSecrets", AuthorizationPolicies.Admin, null },
+        { "POST", "/api/backup/import", "importBackup", AuthorizationPolicies.Admin, null },
     };
 
     [Fact]

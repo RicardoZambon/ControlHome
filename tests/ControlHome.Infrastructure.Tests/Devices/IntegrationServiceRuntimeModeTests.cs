@@ -5,6 +5,7 @@ using ControlHome.Application.Devices;
 using ControlHome.Application.Integrations;
 using ControlHome.Application.Realtime;
 using ControlHome.Application.Runtime;
+using ControlHome.Application.Security;
 using NSubstitute;
 
 namespace ControlHome.Infrastructure.Tests.Devices;
@@ -28,6 +29,40 @@ public sealed class IntegrationServiceRuntimeModeTests
         result.Error.ShouldNotBeNull();
         result.Error.Code.ShouldBe(code);
         result.Error.Kind.ShouldBe(kind);
+        await runtime.DidNotReceive().StartAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(RuntimeMode.Standby, ErrorCodes.RuntimeStandby)]
+    [InlineData(RuntimeMode.Starting, ErrorCodes.RuntimeStarting)]
+    public async Task Flows_are_refused_unless_this_process_runs_the_devices(RuntimeMode mode, string code)
+    {
+        var status = Substitute.For<IRuntimeStatus>();
+        status.Mode.Returns(mode);
+        status.Enabled.Returns(true);
+        var runtime = Substitute.For<IIntegrationRuntimeControl>();
+        var store = new IntegrationFlowStore(TimeProvider.System);
+        var flows = new IntegrationFlowService(
+            Substitute.For<IControlHomeDb>(),
+            new ConnectorCatalog([]),
+            store,
+            Substitute.For<IIntegrationSecretProtector>(),
+            NoIntegrationSecretStores.Instance,
+            runtime,
+            status,
+            new AppRuntimeClock(TimeProvider.System),
+            Substitute.For<ICurrentActor>(),
+            Substitute.For<IAuditLog>(),
+            new KnownSecrets(),
+            TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<IntegrationFlowService>.Instance);
+
+        var started = await flows.StartAsync(new StartFlowRequest("simulated"), TestContext.Current.CancellationToken);
+        var continued = await flows.ContinueAsync(Guid.NewGuid(), new ContinueFlowRequest(null), TestContext.Current.CancellationToken);
+
+        started.Error.ShouldNotBeNull().Code.ShouldBe(code);
+        continued.Error.ShouldNotBeNull().Code.ShouldBe(ErrorCodes.FlowsNotFound, "an unknown flow is unknown whatever the mode");
+        store.Count.ShouldBe(0);
         await runtime.DidNotReceive().StartAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
