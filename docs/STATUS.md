@@ -12,13 +12,13 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-12 — Tagged **v0.0.1** (Phase 0 complete); release workflow publishes ghcr.io/ricardozambon/controlhome (amd64 + arm64).
 - 2026-10-12 — Milestones 0.3 + 0.4 (PR #3): ui primitives, app shell + auth UI (en/pt-BR), Playwright E2E + screenshots + visual review, Docker image/compose/release/CodeQL/Dependabot, pre-DB setup mode.
 
-## In progress (2026-10-20)
-- Branch `milestone/1.2-devices-core` = main + 1.2 backend (merge 9851968). Uncommitted: fixes from the 1.2 adversarial review (workflow `m1.2-review`, run wf_488b45fd-359) incl. SignalR revocation (R1) and supervisor tests (R2).
-- 1.2-E devices UI pipeline (run wf_5f5ef08c-70b) and 1.4-C MQTT connector (run wf_bfd9a31d-0d4) in isolated worktrees, both based on 9851968.
-- Security hotfix branch `fix/dotnet-10.0.13-security` (agent): .NET 10.0.13 packages + transitive System.Security.Cryptography.Pkcs/Xml pins + Docker base images; CI on main is red until it merges (NuGet audit NU1902/NU1903).
-- Next: merge hotfix → tag v0.0.3; merge review fixes + UI + MQTT into 1.2 → PR; then 1.3 (placement, integrations flow, dashboard v1, demo seed, export/import), 1.4-A/B (history).
-- Running background tasks (for the usage guard / TaskStop): `wefx2u4p8` = m1.2-review (run wf_488b45fd-359), `wo9tf5o8m` = 1.2-E devices UI (run wf_5f5ef08c-70b), `wkfargr1c` = 1.4-C MQTT (run wf_bfd9a31d-0d4). Security hotfix PR #13 open (branch fix/dotnet-10.0.13-security, commit 40ae961).
-- Work pauses when the 5-hour usage limit reaches 95% (a session cron `[usage-guard]` checks every 10 min and pauses at ≥ 90%); resume after reset.
+## In progress (2026-10-20 21:22 local) — PAUSED for the 5-hour usage limit (90%)
+- Resumes automatically ~23:57 local (limit resets 02:50 UTC 2026-10-21) via a one-shot session cron.
+- Branch `milestone/1.2-devices-core` (local, not yet pushed): main (incl. #13 .NET 10.0.13 hotfix, tag v0.0.3) + 1.2 backend + 1.2 review fixes (d1d4333) + Logging.Abstractions 10.0.13 + 1.4-C MQTT connector (merge 3c858f9). Full .NET suite green: 1373/1374.
+- PAUSED run to resume: 1.2-E devices UI — `Workflow({scriptPath: <session>/workflows/scripts/m1-2-devices-ui-wf_b05b2e2a-c7e.js, resumeFromRunId: "wf_5f5ef08c-70b"})`; build (5d0f070), e2e (f169b66) and visual review are cached, only the final fix agent re-runs.
+- After it finishes: merge its final branch into milestone/1.2-devices-core, regenerate OpenAPI, run tests + E2E, push, PR (merge commit), tag after CI.
+- Then: 1.3 (placement, integrations flow UI, dashboard v1, demo seed, export/import) and 1.4-A/B (history + charts). Phase 2/3 plans drafted in the session scratchpad (phase-2 committed in docs/plans; phase-3 draft at scratchpad/phase-3-automation.md).
+- Usage guard: recurring 10-min check (re-create on resume) pauses at ≥ 90% of the 5-hour limit.
 
 ## Decisions taken (defaults chosen without the user)
 - Package pins: Microsoft.* 10.0.12 (local runtime is 10.0.10; servicing-compatible). TypeScript pinned `~6.0.3` (npm latest is 7.x, unsupported by vue-tsc).
