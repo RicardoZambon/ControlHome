@@ -147,12 +147,17 @@ function onOpenChange(value: boolean): void {
         <DialogDescription>{{ t('safety.dialog.enterPin') }}</DialogDescription>
       </DialogHeader>
 
-      <!-- No PIN yet: where to set one -->
+      <!-- No PIN yet: where to set one (with the account password, so it says so before the trip to the profile) -->
       <div v-if="notSet" class="grid gap-4 text-center" role="alert">
-        <p class="flex items-start gap-2 text-left text-sm">
-          <ShieldAlert class="mt-0.5 size-4 shrink-0 text-state-warn" aria-hidden="true" />
-          {{ t('errors.safety.pin_not_set') }}
-        </p>
+        <div class="grid gap-1 text-left">
+          <p class="flex items-start gap-2 text-sm">
+            <ShieldAlert class="mt-0.5 size-4 shrink-0 text-state-warn" aria-hidden="true" />
+            {{ t('errors.safety.pin_not_set') }}
+          </p>
+          <p class="pl-6 text-xs text-muted-foreground" data-slot="pin-set-hint">
+            {{ t('safety.dialog.setPinHint') }}
+          </p>
+        </div>
         <Button as-child>
           <RouterLink :to="{ name: 'profile', hash: '#safety-pin' }" @click="store.complete(false)">
             {{ t('safety.dialog.setPin') }}

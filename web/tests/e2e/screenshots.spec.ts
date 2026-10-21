@@ -954,7 +954,7 @@ for (const width of WIDTHS) {
           // after a wrong PIN). The pad is a dialog: the screen as it is, not the whole page.
           const pin = await page.request.put('/api/auth/me/pin', {
             headers: mutationHeaders(),
-            data: { currentPin: null, newPin: '4826' },
+            data: { currentPin: null, newPin: '4826', currentPassword: testData.admin.password },
           })
           expect(pin.status(), await pin.text()).toBe(204)
           await capture({

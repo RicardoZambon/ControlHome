@@ -134,6 +134,7 @@ describe('SafetyPinDialog', () => {
     press('Enter')
     await flushPromises()
     expect(dialog()?.textContent).toContain('Set a safety PIN in your profile first.')
+    expect(dialog()?.textContent).toContain("You'll need your account password to set it.")
     expect(wrapper.findComponent(RouterLinkStub).props('to')).toEqual({
       name: 'profile',
       hash: '#safety-pin',

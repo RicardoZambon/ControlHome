@@ -123,7 +123,8 @@
       "erase": "Delete the last digit",
       "confirm": "Confirm",
       "lockoutHint": "After 5 wrong PINs, safety actions lock for 15 minutes.",
-      "setPin": "Set your PIN in your profile"
+      "setPin": "Set your PIN in your profile",
+      "setPinHint": "You'll need your account password to set it."
     }
   },
   "schema": {

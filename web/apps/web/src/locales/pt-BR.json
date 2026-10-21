@@ -123,7 +123,8 @@
       "erase": "Apagar o último dígito",
       "confirm": "Confirmar",
       "lockoutHint": "Após 5 PINs errados, as ações de segurança ficam bloqueadas por 15 minutos.",
-      "setPin": "Defina seu PIN no perfil"
+      "setPin": "Defina seu PIN no perfil",
+      "setPinHint": "Você vai precisar da senha da sua conta para defini-lo."
     }
   },
   "schema": {

@@ -6,6 +6,7 @@ import {
   createSimulatedHome,
   createUser,
   expect,
+  mutationHeaders,
   resetApp,
   signIn,
   test,
@@ -14,10 +15,12 @@ import {
 } from './fixtures'
 import { t } from './i18n'
 
-// Task 1.2-E: the safety PIN. It is set in the profile; unlocking the simulated lock opens the PIN pad, a wrong PIN is
-// refused (and nothing is sent to the lock), the right one unlocks it once; a Viewer has no unlock control at all.
+// Task 1.2-E: the safety PIN. It is set in the profile (the first one, or one replacing a forgotten PIN, with the
+// account password); unlocking the simulated lock opens the PIN pad, a wrong PIN is refused (and nothing is sent to the
+// lock), the right one unlocks it once; a Viewer has no unlock control at all.
 
 const PIN = '4826'
+const NEW_PIN = '730519'
 const WRONG_PIN = '1111'
 
 const tile = (page: Page, name: string) => page.locator('[data-slot="device-tile"]').filter({ hasText: name })
@@ -52,10 +55,11 @@ test.beforeEach(async ({ page, request }) => {
 })
 
 test('sets the PIN in the profile, then unlocks the lock with it', async ({ page, gates }) => {
-  // Profile: no PIN yet → set one.
+  // Profile: no PIN yet → set one, confirmed with the account password.
   await page.goto('/profile')
   const section = page.locator('#safety-pin')
   await expect(section.getByText(t('profile.pin.notSet'))).toBeVisible()
+  await section.getByLabel(t('profile.pin.currentPassword'), { exact: true }).fill(testData.admin.password)
   await section.getByLabel(t('profile.pin.pin'), { exact: true }).fill(PIN)
   await section.getByLabel(t('profile.pin.confirm'), { exact: true }).fill(PIN)
   await section.getByRole('button', { name: t('profile.pin.set') }).click()
@@ -95,6 +99,50 @@ test('sets the PIN in the profile, then unlocks the lock with it', async ({ page
   await expect.poll(() => attributeValue(page.request, SIMULATED.lock, 'lock', 'lockState')).toBe('locked')
   await expect(dialog).toBeHidden()
   await expect(lockState).toHaveText(t('device.values.lockState.locked'))
+})
+
+test('the first PIN needs the right account password, which also replaces a forgotten PIN', async ({
+  page,
+  gates,
+}) => {
+  await page.goto('/profile')
+  const section = page.locator('#safety-pin')
+  await expect(section.getByText(t('profile.pin.notSet'))).toBeVisible()
+  const password = section.getByLabel(t('profile.pin.currentPassword'), { exact: true })
+  await expect(password).toHaveAttribute('autocomplete', 'current-password')
+
+  // A wrong account password: refused on its field, and still no PIN.
+  await password.fill('not the account password')
+  await section.getByLabel(t('profile.pin.pin'), { exact: true }).fill(PIN)
+  await section.getByLabel(t('profile.pin.confirm'), { exact: true }).fill(PIN)
+  await section.getByRole('button', { name: t('profile.pin.set') }).click()
+  await expect(section.getByText(t('errors.auth.password_incorrect'))).toBeVisible()
+  await expect(password).toHaveAttribute('aria-invalid', 'true')
+  await expect(section.getByText(t('profile.pin.notSet'))).toBeVisible()
+  await gates.check('profile with a wrong account password')
+
+  // The right one sets it.
+  await password.fill(testData.admin.password)
+  await section.getByRole('button', { name: t('profile.pin.set') }).click()
+  await expect(page.getByText(t('profile.pin.saved'))).toBeVisible()
+  await expect(section.getByText(t('profile.pin.isSet'))).toBeVisible()
+
+  // Forgotten: the account password takes the current PIN's place and replaces it.
+  await expect(section.getByLabel(t('profile.pin.current'), { exact: true })).toBeVisible()
+  await section.getByRole('button', { name: t('profile.pin.forgot') }).click()
+  await expect(section.getByLabel(t('profile.pin.current'), { exact: true })).toHaveCount(0)
+  await expect(password).toBeFocused()
+  await password.fill(testData.admin.password)
+  await section.getByLabel(t('profile.pin.new'), { exact: true }).fill(NEW_PIN)
+  await section.getByLabel(t('profile.pin.confirm'), { exact: true }).fill(NEW_PIN)
+  await section.getByRole('button', { name: t('profile.pin.change') }).click()
+  await expect(page.getByText(t('profile.pin.changed'))).toBeVisible()
+  // Back to "change with the current PIN"; the new PIN is the one that counts now.
+  await expect(section.getByLabel(t('profile.pin.current'), { exact: true })).toBeVisible()
+  const stepUp = (pin: string) =>
+    page.request.post('/api/auth/step-up', { headers: mutationHeaders(), data: { pin } })
+  expect((await stepUp(PIN)).status()).toBe(400)
+  expect((await stepUp(NEW_PIN)).status()).toBe(204)
 })
 
 test('without a PIN the dialog points to the profile', async ({ page }) => {
