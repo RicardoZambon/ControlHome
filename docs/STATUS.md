@@ -12,12 +12,12 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-12 — Tagged **v0.0.1** (Phase 0 complete); release workflow publishes ghcr.io/ricardozambon/controlhome (amd64 + arm64).
 - 2026-10-12 — Milestones 0.3 + 0.4 (PR #3): ui primitives, app shell + auth UI (en/pt-BR), Playwright E2E + screenshots + visual review, Docker image/compose/release/CodeQL/Dependabot, pre-DB setup mode.
 
-## In progress (2026-10-21 04:18 local) — PAUSED for the 5-hour usage limit (90%); auto-resume ~04:57 local
+## In progress (resumed 2026-10-21 04:57 local)
 - PRs #14 (milestone 1.2) and #15 (milestone 1.4-A history) are MERGED into main (0e0cf2e).
-- PAUSED run to resume: 1.3 + 1.4-B — `Workflow({scriptPath: <session>/workflows/scripts/m1-3-plan-flows-dashboard-wf_1639393c-289.js, resumeFromRunId: "wf_1639393c-289"})`; backend (2c18e9e) and review (cfb5876) are cached; frontend was interrupted and re-runs (it may find partial work only in its own new worktree).
+- Running `wg6oa5w2z` = 1.3 + 1.4-B (resumed) — `Workflow({scriptPath: <session>/workflows/scripts/m1-3-plan-flows-dashboard-wf_1639393c-289.js, resumeFromRunId: "wf_1639393c-289"})`; backend (2c18e9e) and review (cfb5876) are cached; frontend was interrupted and re-runs (it may find partial work only in its own new worktree).
 - PR #14 `milestone/1.2-devices-core` (devices core + MQTT + devices UI; CodeQL now excludes tests) — CI running; merge with a merge commit when green.
 - Branch `milestone/1.4-history` (pushed, f596adf) = 1.2 + 1.4-A history storage/rollups/energy/retention + API (review fixes ffaabf8). Open its PR against main AFTER #14 merges (stacked).
-- (paused) milestones 1.3 + 1.4-B (run wf_1639393c-289, base f596adf): placement, integration flows + merge rules, more Simulated types, demo seed, export/import, dashboard v1, history charts → backend, review, frontend, E2E, visual review, fix. When done: merge its final branch into milestone/1.4-history (or a new 1.3 branch), verify (test-docker -UseDevServer, web checks with Node 24 on PATH, scripts/e2e.ps1), PR, tag v0.1.0 after merge (Phase 1 complete; 1.5 Umbrel template remains).
+- milestones 1.3 + 1.4-B (run wf_1639393c-289, base f596adf): placement, integration flows + merge rules, more Simulated types, demo seed, export/import, dashboard v1, history charts → backend, review, frontend, E2E, visual review, fix. When done: merge its final branch into milestone/1.4-history (or a new 1.3 branch), verify (test-docker -UseDevServer, web checks with Node 24 on PATH, scripts/e2e.ps1), PR, tag v0.1.0 after merge (Phase 1 complete; 1.5 Umbrel template remains).
 - Next phases: Phase 2 (docs/plans/phase-2-vendor-connectors.md: LG ThinQ, DahuaHttp + go2rtc, SmartThings), Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
 - Usage guard: session cron every 10 min, pause at ≥ 90% of the 5-hour limit (TaskStop running tasks, one-shot resume after reset).
 - Host notes: default node is now v22 — prepend C:/Users/samur/AppData/Local/nvm/v24.21.0 to PATH for web commands.
