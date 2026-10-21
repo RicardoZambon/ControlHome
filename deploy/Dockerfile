@@ -58,6 +58,10 @@ RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing
 # The committed web/packages/api-client/openapi.json is the source of the API client: no build-time OpenAPI generation here
 # (it would run the freshly built app, which cannot work when cross-compiling).
 COPY src/ src/
+# Optional version override (release.yml): VERSION=0.1.0 for a tag, or VERSION_SUFFIX=edge.42 on main. Unset, the
+# version is Directory.Build.props' VersionPrefix.
+ARG VERSION=
+ARG VERSION_SUFFIX=
 RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing=locked \
     dotnet publish src/ControlHome.Api/ControlHome.Api.csproj \
         -c Release \
@@ -66,7 +70,9 @@ RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing
         -o /out \
         -p:UseAppHost=false \
         -p:OpenApiGenerateDocuments=false \
-        -p:OpenApiGenerateDocumentsOnBuild=false
+        -p:OpenApiGenerateDocumentsOnBuild=false \
+        ${VERSION:+"-p:Version=$VERSION"} \
+        ${VERSION_SUFFIX:+"-p:VersionSuffix=$VERSION_SUFFIX"}
 
 # ---------------------------------------------------------------------------------------------------------------------
 # final: chiseled ASP.NET Core runtime (non-root, no shell or package manager; "extra" adds ICU and tzdata)
