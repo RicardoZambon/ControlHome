@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using ControlHome.Application.Dashboard;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Realtime;
 using ControlHome.Application.Runtime;
@@ -123,6 +124,52 @@ public sealed class DevicePipelineTests(DevicesApiFactory factory) : DevicesTest
         using var response = await client.PostAsJsonAsync("/api/_test/devices/999999/state", new { value = StateValue.True }, Ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_device_reported_offline_in_testing_is_offline_for_reads_the_dashboard_and_the_hub()
+    {
+        var (admin, _, viewer) = await SignInAllAsync();
+        await CreateIntegrationAsync(admin);
+        var plug = DeviceOfClass(await WaitForDevicesAsync(viewer, 5), DeviceClasses.Outlet);
+
+        using var response = await admin.PostAsJsonAsync(
+            $"/api/_test/devices/{plug.Id}/availability",
+            new { availability = "Offline" },
+            Ct);
+
+        await response.ShouldHaveStatusAsync(HttpStatusCode.NoContent);
+        (await viewer.GetFromJsonAsync<DeviceDetailDto>($"/api/devices/{plug.Id}", Ct))!.Availability.ShouldBe(nameof(Availability.Offline));
+        var dashboard = (await viewer.GetFromJsonAsync<DashboardDto>("/api/dashboard", Ct))!;
+        dashboard.OfflineDevices.ShouldHaveSingleItem().Id.ShouldBe(plug.Id);
+        await RecordingRealtimePublisher.WaitUntilAsync(
+            () => Factory.Realtime.Messages.Any(m => m.Payload is AvailabilityChangedDto { Availability: "Offline" } change && change.DeviceId == plug.Id),
+            "AvailabilityChanged(Offline) is pushed");
+
+        // Online again: off the dashboard's list.
+        using var back = await admin.PostAsJsonAsync($"/api/_test/devices/{plug.Id}/availability", new { availability = "Online" }, Ct);
+        await back.ShouldHaveStatusAsync(HttpStatusCode.NoContent);
+        (await viewer.GetFromJsonAsync<DashboardDto>("/api/dashboard", Ct))!.OfflineDevices.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Reporting_the_availability_of_an_unknown_device_or_an_unknown_value_is_refused()
+    {
+        var (admin, _, viewer) = await SignInAllAsync();
+        await CreateIntegrationAsync(admin);
+        var plug = DeviceOfClass(await WaitForDevicesAsync(viewer, 5), DeviceClasses.Outlet);
+
+        using var unknownDevice = await admin.PostAsJsonAsync(
+            $"/api/_test/devices/{Guid.NewGuid()}/availability",
+            new { availability = "Offline" },
+            Ct);
+        using var unknownValue = await admin.PostAsJsonAsync(
+            $"/api/_test/devices/{plug.Id}/availability",
+            new { availability = "Sleeping" },
+            Ct);
+
+        unknownDevice.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        unknownValue.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [Fact]
