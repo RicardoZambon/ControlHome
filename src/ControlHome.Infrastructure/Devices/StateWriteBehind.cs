@@ -1,5 +1,6 @@
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Devices;
+using ControlHome.Infrastructure.History;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -8,8 +9,17 @@ namespace ControlHome.Infrastructure.Devices;
 /// <summary>An attribute's current value waiting to be written (<c>AttributeState</c>).</summary>
 public sealed record PendingAttributeState(int AttributeId, StateValue Value, DateTimeOffset ObservedAtUtc, DateTimeOffset LastChangedAtUtc);
 
-/// <summary>A history row waiting to be written (a change of a recorded attribute, or a momentary event).</summary>
-public sealed record PendingHistoryRow(int AttributeId, DateTimeOffset TsUtc, StateValue Value);
+/// <summary>
+/// A history row waiting to be written: a change of a recorded attribute (→ <c>StateLog</c>), or a momentary event
+/// (<see cref="IsEvent"/> → <c>DeviceEvent</c>; <see cref="Value"/> is the event name).
+/// </summary>
+public sealed record PendingHistoryRow(int AttributeId, DateTimeOffset TsUtc, StateValue Value)
+{
+    public bool IsEvent { get; init; }
+
+    /// <summary>An event's details (a JSON object), if any.</summary>
+    public string? EventPayload { get; init; }
+}
 
 /// <summary>A device's availability and/or last-seen time waiting to be written (<c>null</c> members are left as they are).</summary>
 public sealed record PendingDeviceUpdate(Guid DeviceId, Availability? Availability, DateTimeOffset? LastSeenAtUtc);
@@ -29,7 +39,8 @@ public interface IStateStore
 
 /// <summary>
 /// Write-behind of the state pipeline: current values (coalesced per attribute — the latest wins, never dropped), history
-/// rows (in order) and device availability/last-seen (coalesced per device) are buffered in memory and written every
+/// rows (in order; appended to <c>StateLog</c> / <c>DeviceEvent</c>) and device availability/last-seen (coalesced per device)
+/// are buffered in memory and written every
 /// <see cref="DeviceRuntimeOptions.FlushInterval"/>. While the database is unavailable everything stays buffered; history
 /// beyond <see cref="DeviceRuntimeOptions.MaxPendingHistoryRows"/> is dropped oldest-first and the runtime reports
 /// <c>HistoryPaused</c> until a flush succeeds again. Control keeps working meanwhile.
@@ -39,14 +50,16 @@ public sealed partial class StateWriteBehind(
     DeviceRuntimeState runtimeState,
     TimeProvider timeProvider,
     IOptions<DeviceRuntimeOptions> options,
-    ILogger<StateWriteBehind> logger)
+    ILogger<StateWriteBehind> logger) : IPendingHistory
 {
     private readonly Lock _lock = new();
     private readonly SemaphoreSlim _flushGate = new(1, 1);
     private Dictionary<int, PendingAttributeState> _states = [];
     private LinkedList<PendingHistoryRow> _history = new();
     private Dictionary<Guid, PendingDeviceUpdate> _devices = [];
+    private DateTimeOffset? _oldestHistoryInFlight;
     private long _droppedHistory;
+    private long _enqueuedHistory;
     private CancellationTokenSource? _stop;
     private Task _loop = Task.CompletedTask;
 
@@ -86,6 +99,33 @@ public sealed partial class StateWriteBehind(
     /// <summary>History rows dropped because the buffer was full (since start).</summary>
     public long DroppedHistory => Interlocked.Read(ref _droppedHistory);
 
+    /// <summary>History rows queued (since start).</summary>
+    public long HistoryEnqueued => Interlocked.Read(ref _enqueuedHistory);
+
+    /// <summary>
+    /// The oldest observation among the state history rows (not events) still waiting or being written, or <c>null</c>. The
+    /// rollups never close a bucket at or after it: its rows are not in <c>StateLog</c> yet.
+    /// </summary>
+    public DateTimeOffset? OldestPendingHistoryUtc
+    {
+        get
+        {
+            lock (_lock)
+            {
+                var oldest = _oldestHistoryInFlight;
+                foreach (var row in _history)
+                {
+                    if (!row.IsEvent && (oldest is null || row.TsUtc < oldest))
+                    {
+                        oldest = row.TsUtc;
+                    }
+                }
+
+                return oldest;
+            }
+        }
+    }
+
     public void EnqueueState(PendingAttributeState state)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -105,6 +145,7 @@ public sealed partial class StateWriteBehind(
         lock (_lock)
         {
             _history.AddLast(row);
+            Interlocked.Increment(ref _enqueuedHistory);
             dropped = TrimHistoryLocked();
         }
 
@@ -142,6 +183,7 @@ public sealed partial class StateWriteBehind(
                     _states = [];
                     _history = new LinkedList<PendingHistoryRow>();
                     _devices = [];
+                    _oldestHistoryInFlight = batch.History.Where(h => !h.IsEvent).Select(h => (DateTimeOffset?)h.TsUtc).Min();
                 }
             }
 
@@ -161,6 +203,13 @@ public sealed partial class StateWriteBehind(
                 {
                     Restore(batch);
                     throw;
+                }
+                finally
+                {
+                    lock (_lock)
+                    {
+                        _oldestHistoryInFlight = null;
+                    }
                 }
             }
 

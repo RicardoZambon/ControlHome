@@ -19,7 +19,7 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("ch")
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -488,6 +488,227 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                     b.HasIndex("Purpose");
 
                     b.ToTable("StoredFiles", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.History.DeviceEvent", b =>
+                {
+                    b.Property<int>("AttributeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Payload")
+                        .HasColumnType("json");
+
+                    b.Property<DateTime>("TsUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasIndex("AttributeId", "TsUtc")
+                        .HasDatabaseName("IX_DeviceEvent_AttributeId_TsUtc");
+
+                    SqlServerIndexBuilderExtensions.UseDataCompression(b.HasIndex("AttributeId", "TsUtc"), DataCompressionType.Page);
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("AttributeId", "TsUtc"), new[] { "EventType" });
+
+                    b.HasIndex("TsUtc", "AttributeId")
+                        .HasDatabaseName("CIX_DeviceEvent");
+
+                    SqlServerIndexBuilderExtensions.IsClustered(b.HasIndex("TsUtc", "AttributeId"));
+                    SqlServerIndexBuilderExtensions.UseDataCompression(b.HasIndex("TsUtc", "AttributeId"), DataCompressionType.Page);
+
+                    b.ToTable("DeviceEvent", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.History.EnergyHourly", b =>
+                {
+                    b.Property<Guid>("EndpointId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("HourStartUtc")
+                        .HasColumnType("datetime2(0)");
+
+                    b.Property<bool>("Estimated")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<double>("Wh")
+                        .HasColumnType("float");
+
+                    b.HasKey("EndpointId", "HourStartUtc");
+
+                    b.HasIndex("HourStartUtc");
+
+                    SqlServerIndexBuilderExtensions.UseDataCompression(b.HasIndex("HourStartUtc"), DataCompressionType.Page);
+
+                    b.ToTable("EnergyHourly", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.History.EnergySourceSelection", b =>
+                {
+                    b.Property<Guid>("EndpointId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("AttributeId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsUserOverride")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("EndpointId");
+
+                    b.ToTable("EnergySourceSelection", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.History.HourlyStatistic", b =>
+                {
+                    b.Property<int>("AttributeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("BucketStartUtc")
+                        .HasColumnType("datetime2(0)");
+
+                    b.Property<double?>("LastCounter")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Max")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Mean")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Min")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Sum")
+                        .HasColumnType("float");
+
+                    b.HasKey("AttributeId", "BucketStartUtc");
+
+                    b.ToTable("StatHourly", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.History.RetentionSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AuditLogDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DeviceEventDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ShortTermStatsDays")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StateLogDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("RetentionSettings", "ch", t =>
+                        {
+                            t.HasCheckConstraint("CK_RetentionSettings_Singleton", "[Id] = 1");
+                        });
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.History.RollupProgress", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTime>("WatermarkUtc")
+                        .HasColumnType("datetime2(0)");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("RollupProgress", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.History.ShortTermStatistic", b =>
+                {
+                    b.Property<int>("AttributeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("BucketStartUtc")
+                        .HasColumnType("datetime2(0)");
+
+                    b.Property<double?>("LastCounter")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Max")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Mean")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Min")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("Sum")
+                        .HasColumnType("float");
+
+                    b.HasKey("AttributeId", "BucketStartUtc");
+
+                    b.HasIndex("BucketStartUtc");
+
+                    SqlServerIndexBuilderExtensions.UseDataCompression(b.HasIndex("BucketStartUtc"), DataCompressionType.Page);
+
+                    b.ToTable("StatShortTerm", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.History.StateLogEntry", b =>
+                {
+                    b.Property<int>("AttributeId")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("Num")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Str")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime>("TsUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasIndex("AttributeId", "TsUtc")
+                        .HasDatabaseName("IX_StateLog_AttributeId_TsUtc");
+
+                    SqlServerIndexBuilderExtensions.UseDataCompression(b.HasIndex("AttributeId", "TsUtc"), DataCompressionType.Page);
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("AttributeId", "TsUtc"), new[] { "Num", "Str" });
+
+                    b.HasIndex("TsUtc", "AttributeId")
+                        .HasDatabaseName("CIX_StateLog");
+
+                    SqlServerIndexBuilderExtensions.IsClustered(b.HasIndex("TsUtc", "AttributeId"));
+                    SqlServerIndexBuilderExtensions.UseDataCompression(b.HasIndex("TsUtc", "AttributeId"), DataCompressionType.Page);
+
+                    b.ToTable("StateLog", "ch");
                 });
 
             modelBuilder.Entity("ControlHome.Domain.Homes.Floor", b =>

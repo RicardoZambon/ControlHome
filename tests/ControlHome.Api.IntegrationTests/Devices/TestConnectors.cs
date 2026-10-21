@@ -182,7 +182,8 @@ public sealed class BurstConnectorFactory(ConnectorSpy spy) : IConnectorFactory
                 CapabilityIds.Generic,
                 1,
                 Enumerable.Range(0, attributes)
-                    .Select(i => new AttributeDefinition($"m{i}", new NumberSchema(), null, StateClass.Measurement, AttributeCategory.Diagnostic, false, false))
+                    // Recorded: every processed value is also appended to StateLog by the write-behind.
+                    .Select(i => new AttributeDefinition($"m{i}", new NumberSchema(), null, StateClass.Measurement, AttributeCategory.Diagnostic, true, false))
                     .ToList(),
                 []);
             await context.UpsertDeviceAsync(

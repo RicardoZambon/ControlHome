@@ -4,8 +4,10 @@ using ControlHome.Api.Features.Capabilities;
 using ControlHome.Api.Features.Devices;
 using ControlHome.Api.Features.Files;
 using ControlHome.Api.Features.Floors;
+using ControlHome.Api.Features.History;
 using ControlHome.Api.Features.Home;
 using ControlHome.Api.Features.Integrations;
+using ControlHome.Api.Features.Settings;
 using ControlHome.Api.Features.Setup;
 using ControlHome.Api.Features.SystemStatus;
 using ControlHome.Api.Features.Testing;
@@ -20,6 +22,7 @@ using ControlHome.Application.Auth;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Files;
 using ControlHome.Application.Floors;
+using ControlHome.Application.History;
 using ControlHome.Application.Homes;
 using ControlHome.Application.Integrations;
 using ControlHome.Application.Security;
@@ -94,6 +97,7 @@ try
     builder.Services.AddDevices();
     builder.Services.AddIntegrations();
     builder.Services.AddSafety();
+    builder.Services.AddHistory();
 
     var app = builder.Build();
 
@@ -131,6 +135,8 @@ try
     app.MapDeviceEndpoints();
     app.MapIntegrationEndpoints();
     app.MapSystemEndpoints();
+    app.MapHistoryEndpoints();
+    app.MapSettingsEndpoints();
     app.MapHomeHub();
     if (app.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
     {

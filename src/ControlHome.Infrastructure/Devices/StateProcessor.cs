@@ -4,6 +4,7 @@ using ControlHome.Application.Realtime;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Devices;
+using ControlHome.Domain.History;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -154,7 +155,11 @@ public sealed partial class StateProcessor : IAsyncDisposable
                 0,
                 StateValue.String(report.Event),
                 report.OccurredAtUtc ?? _clock.Time.GetUtcNow(),
-                default));
+                default)
+            {
+                // Storable JSON (SQL Server's json type rejects some valid JSON; one bad payload must not fail a flush).
+                EventPayload = DeviceEvent.StoredPayload(report.Data),
+            });
     }
 
     /// <summary>Queues a device's availability (the latest per device wins).</summary>
@@ -382,7 +387,15 @@ public sealed partial class StateProcessor : IAsyncDisposable
                         current.ObservedAtUtc,
                         current.LastChangedAtUtc));
                     var changed = result.Outcome == StateApplyOutcome.Changed;
-                    if (changed && (isEvent || attribute.Definition?.Recorded == true))
+                    if (changed && isEvent)
+                    {
+                        _writeBehind.EnqueueHistory(new PendingHistoryRow(attribute.AttributeId, change.ObservedAtUtc, change.Value)
+                        {
+                            IsEvent = true,
+                            EventPayload = change.EventPayload,
+                        });
+                    }
+                    else if (changed && attribute.Definition?.Recorded == true)
                     {
                         _writeBehind.EnqueueHistory(new PendingHistoryRow(attribute.AttributeId, change.ObservedAtUtc, change.Value));
                     }
@@ -558,5 +571,9 @@ public sealed partial class StateProcessor : IAsyncDisposable
         int AttributeId,
         StateValue Value,
         DateTimeOffset ObservedAtUtc,
-        Availability Availability);
+        Availability Availability)
+    {
+        /// <summary>An event's details (JSON text), if any.</summary>
+        public string? EventPayload { get; init; }
+    }
 }

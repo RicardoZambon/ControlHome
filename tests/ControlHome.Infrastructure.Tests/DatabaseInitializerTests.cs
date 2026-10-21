@@ -46,6 +46,8 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
                     "auth.Users", "ch.AuditLog", "ch.DataProtectionKeys", "ch.Homes", "ch.__EFMigrationsHistory",
                     "ch.Floors", "ch.Rooms", "ch.StoredFiles",
                     "ch.Integrations", "ch.Devices", "ch.Endpoints", "ch.EndpointCapabilities", "ch.DeviceAttributes", "ch.AttributeState",
+                    "ch.StateLog", "ch.DeviceEvent", "ch.StatShortTerm", "ch.StatHourly", "ch.RollupProgress", "ch.EnergyHourly",
+                    "ch.EnergySourceSelection", "ch.RetentionSettings",
                 ],
                 ignoreOrder: true);
             (await ColumnTypeAsync(name, "ch.Homes", "Tariff", ct)).ShouldBe("json");
