@@ -3,7 +3,7 @@ import { normalizeText } from '../../components/floorplan/placements'
 
 /**
  * The import review after a new integration: every device it brought, kept (shown) or hidden, and the room each one
- * goes to — suggested from its name ("Living room light" → Living room) when the device has none yet.
+ * goes to — the room its vendor app suggested, else one suggested from its name ("Living room light" → Living room).
  */
 
 function words(text: string): string {
@@ -30,18 +30,37 @@ export function suggestRoom(
   return best?.id ?? null
 }
 
+/** Where a room suggestion comes from: the integration (its vendor app's room) or the device's name. */
+export interface RoomSuggestion {
+  roomId: number
+  source: 'integration' | 'name'
+}
+
+/**
+ * The room suggested for a device of a new integration: the one the integration already put it in (a device just
+ * imported has a room only when its vendor app named one of this home's rooms), else the room its name points to.
+ */
+export function roomSuggestion(
+  device: Pick<DeviceSummaryDto, 'name' | 'roomId'>,
+  rooms: readonly Pick<RoomListItemDto, 'id' | 'name'>[],
+): RoomSuggestion | null {
+  if (device.roomId !== null) return { roomId: device.roomId, source: 'integration' }
+  const byName = suggestRoom(device.name, rooms)
+  return byName === null ? null : { roomId: byName, source: 'name' }
+}
+
 /** One device in the review: keep it (shown) or not, and its room. */
 export interface ReviewChoice {
   keep: boolean
   roomId: number | null
 }
 
-/** The starting choice for a device: kept, in its own room, else the suggested one. */
+/** The starting choice for a device: kept, in the suggested room (if any). */
 export function initialChoice(
   device: Pick<DeviceSummaryDto, 'name' | 'roomId'>,
   rooms: readonly Pick<RoomListItemDto, 'id' | 'name'>[],
 ): ReviewChoice {
-  return { keep: true, roomId: device.roomId ?? suggestRoom(device.name, rooms) }
+  return { keep: true, roomId: roomSuggestion(device, rooms)?.roomId ?? null }
 }
 
 export type ReviewChange =

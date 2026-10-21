@@ -1,21 +1,20 @@
 import { BarChart, LineChart, type BarSeriesOption, type LineSeriesOption } from 'echarts/charts'
 import {
   GridComponent,
-  LegendComponent,
   TooltipComponent,
   type GridComponentOption,
-  type LegendComponentOption,
   type TooltipComponentOption,
 } from 'echarts/components'
 import { use, type ComposeOption } from 'echarts/core'
 import { SVGRenderer } from 'echarts/renderers'
 
 /**
- * ECharts, tree-shaken: only the line and bar charts, the grid, tooltip and legend, drawn as SVG (crisp at any zoom,
- * and printable). Charts get every color from `useChartTheme()` / `useThemeTokens()` (docs/architecture.md §11).
+ * ECharts, tree-shaken: only the line and bar charts, the grid and the tooltip, drawn as SVG (crisp at any zoom, and
+ * printable). Charts get every color from `useChartTheme()` / `useThemeTokens()` (docs/architecture.md §11). Imported by
+ * the chart components only, which load with the device page's History tab.
  */
-use([SVGRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
+use([SVGRenderer, LineChart, BarChart, GridComponent, TooltipComponent])
 
 export type ChartOption = ComposeOption<
-  LineSeriesOption | BarSeriesOption | GridComponentOption | TooltipComponentOption | LegendComponentOption
+  LineSeriesOption | BarSeriesOption | GridComponentOption | TooltipComponentOption
 >

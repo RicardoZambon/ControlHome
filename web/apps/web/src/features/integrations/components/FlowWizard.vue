@@ -103,8 +103,11 @@ watch(
   () => flow.progressEndsAt.value,
   (endsAt) => (total.value = endsAt === null ? null : Math.max(1, secondsLeft(endsAt, Date.now()) ?? 1)),
 )
+// `now` ticks every half second, so right after a step changes it can lag behind the moment `total` was taken.
 const progressValue = computed(() =>
-  left.value === null || !total.value ? 0 : Math.round((left.value / total.value) * 100),
+  left.value === null || !total.value
+    ? 0
+    : Math.min(100, Math.max(0, Math.round((left.value / total.value) * 100))),
 )
 
 // --- Choose ------------------------------------------------------------------------------------------------------------

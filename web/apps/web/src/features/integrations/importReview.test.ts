@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { basicHome } from '../../test/devices'
-import { initialChoice, reviewChanges, suggestRoom, type ReviewChoice } from './importReview'
+import { initialChoice, reviewChanges, roomSuggestion, suggestRoom, type ReviewChoice } from './importReview'
 
 const ROOMS = [
   { id: 1, name: 'Living room' },
@@ -26,6 +26,18 @@ describe('suggestRoom', () => {
   it('ignores case, accents and punctuation', () => {
     expect(suggestRoom('Luz do escritorio', ROOMS)).toBe(4)
     expect(suggestRoom('LIVING-ROOM TV', ROOMS)).toBe(1)
+  })
+})
+
+describe('roomSuggestion', () => {
+  it('takes the room the integration put the device in, else the one its name points to', () => {
+    const [light, , , contact] = basicHome()
+    expect(roomSuggestion(light!, ROOMS)).toEqual({ roomId: 10, source: 'integration' })
+    expect(roomSuggestion({ ...contact!, name: 'Bedroom window' }, ROOMS)).toEqual({
+      roomId: 2,
+      source: 'name',
+    })
+    expect(roomSuggestion(contact!, ROOMS)).toBeNull()
   })
 })
 

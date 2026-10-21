@@ -24,7 +24,16 @@ import {
   cn,
   toast,
 } from '@controlhome/ui'
-import { ArrowLeft, ChevronRight, KeyRound, RefreshCw, SearchX, Trash, TriangleAlert } from '@lucide/vue'
+import {
+  ArrowLeft,
+  ChevronRight,
+  EyeOff,
+  KeyRound,
+  RefreshCw,
+  SearchX,
+  Trash,
+  TriangleAlert,
+} from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -119,6 +128,8 @@ const deviceRows = computed(() =>
       room: device.roomId === null ? undefined : devices.roomsById.get(device.roomId)?.name,
       availability: devices.availabilityOf(device),
       capabilities: device.endpoints.flatMap((endpoint) => endpoint.capabilities.map((c) => c.capabilityId)),
+      /** Left out of dashboards and lists (every endpoint hidden, e.g. in the import review). */
+      hidden: device.endpoints.length > 0 && device.endpoints.every((endpoint) => endpoint.hidden),
     })),
 )
 const orphanedCount = computed(() => deviceRows.value.filter((row) => row.device.isOrphaned).length)
@@ -313,10 +324,23 @@ function onDeleteOpenChange(open: boolean): void {
                   :class="row.device.isOrphaned && 'opacity-60'"
                 />
                 <span class="grid min-w-0 flex-1">
-                  <span class="truncate text-sm font-medium">{{ row.device.name }}</span>
-                  <span class="truncate text-xs text-muted-foreground">{{
-                    row.room ?? t('device.noRoom')
-                  }}</span>
+                  <span class="flex min-w-0 items-center gap-1.5">
+                    <span class="truncate text-sm font-medium">{{ row.device.name }}</span>
+                    <EyeOff
+                      v-if="row.hidden"
+                      class="size-3.5 shrink-0 text-muted-foreground"
+                      :aria-label="t('device.hidden')"
+                      role="img"
+                      data-slot="device-hidden"
+                    />
+                  </span>
+                  <span class="truncate text-xs text-muted-foreground">
+                    <!-- Phones have no room for the badge: the line under the name says it -->
+                    <span v-if="row.device.isOrphaned" class="font-medium text-foreground sm:hidden">
+                      {{ t('device.orphaned') }} ·
+                    </span>
+                    {{ row.room ?? t('device.noRoom') }}
+                  </span>
                 </span>
                 <StateBadge
                   v-if="row.device.isOrphaned || row.availability !== 'Online'"

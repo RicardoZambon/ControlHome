@@ -20,11 +20,12 @@ import DeviceIcon from '../../../components/devices/DeviceIcon.vue'
 import { useProblem } from '../../../composables/useProblem'
 import { unwrap } from '../../../lib/problem'
 import { useDevicesStore } from '../../../stores/devices'
-import { initialChoice, reviewChanges, suggestRoom, type ReviewChoice } from '../importReview'
+import { initialChoice, reviewChanges, roomSuggestion, type ReviewChoice } from '../importReview'
 
 /**
  * After a new integration: the devices it brought (they arrive a moment after it starts), each kept or hidden, and the
- * room it goes to — suggested from its name. "Finish" saves only what changed; "Skip" keeps everything as it came.
+ * room it goes to — the one its vendor app suggested, else one suggested from its name (marked as such until changed).
+ * "Finish" saves only what changed; "Skip" keeps everything as it came.
  */
 const props = defineProps<{ integrationId: string }>()
 const emit = defineEmits<{ finish: [] }>()
@@ -78,14 +79,18 @@ onMounted(async () => {
 onBeforeUnmount(() => clearTimeout(timer))
 
 const keptCount = computed(() => [...choices.values()].filter((choice) => choice.keep).length)
-const suggestedIds = computed(
-  () =>
-    new Set(
-      devices.value
-        .filter((device) => device.roomId === null && suggestRoom(device.name, rooms.value) !== null)
-        .map((device) => device.id),
-    ),
+const suggestions = computed(
+  () => new Map(devices.value.map((device) => [device.id, roomSuggestion(device, rooms.value)])),
 )
+
+/** What the mark beside a room says, while the room chosen is still the one suggested. */
+function suggestionLabel(id: string): string | null {
+  const suggestion = suggestions.value.get(id)
+  if (!suggestion || choices.get(id)?.roomId !== suggestion.roomId) return null
+  return suggestion.source === 'integration'
+    ? t('integrations.review.suggestedByIntegration')
+    : t('integrations.review.suggested')
+}
 
 function setKeep(id: string, keep: boolean | 'indeterminate'): void {
   const current = choices.get(id)
@@ -229,15 +234,16 @@ async function finish(): Promise<void> {
               </SelectItem>
             </SelectContent>
           </Select>
-          <Sparkles
-            v-if="
-              suggestedIds.has(device.id) &&
-              choices.get(device.id)?.roomId === suggestRoom(device.name, rooms)
-            "
-            class="size-4 shrink-0 text-primary"
-            :aria-label="t('integrations.review.suggested')"
-            role="img"
-          />
+          <!-- The room was suggested (by the integration, or from the name): a mark until it is changed -->
+          <span
+            class="flex size-4 shrink-0 text-primary"
+            :role="suggestionLabel(device.id) ? 'img' : undefined"
+            :aria-label="suggestionLabel(device.id) ?? undefined"
+            :title="suggestionLabel(device.id) ?? undefined"
+            data-slot="review-suggested"
+          >
+            <Sparkles v-if="suggestionLabel(device.id)" class="size-4" aria-hidden="true" />
+          </span>
         </div>
       </li>
     </ul>

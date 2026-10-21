@@ -11,10 +11,13 @@ import {
   dismissToasts,
   expect,
   mutationHeaders,
+  placeEndpoint,
+  planPoint,
   resetApp,
   savePreferences,
   sendCommand,
   signIn,
+  tapPlan,
   test,
   testData,
   waitForLive,
@@ -97,8 +100,8 @@ const signedInRoutes: Route[] = [
   {
     path: '/',
     name: 'dashboard',
-    // Captured once the simulated home is in: the devices ("active now", the favorite light) have loaded too.
-    ready: (page) => page.locator('[data-slot="active-now"]'),
+    // Captured once the simulated home is in: the summary, and the devices (the favorite light) have loaded too.
+    ready: (page) => page.locator('[data-slot="dashboard-favorites"] [data-slot="device-tile"]'),
   },
   {
     path: '/users',
@@ -230,28 +233,66 @@ const emptyDeviceRoutes: Route[] = [
 type SimulatedHome = Awaited<ReturnType<typeof createSimulatedHome>>
 
 /**
- * The Simulated connector's basic home, its devices spread over the seeded floor's rooms (the lock and the door sensor
- * stay without a room, so the "No room" group shows too) and the light marked as a favorite.
+ * The Simulated connector's basic home, its devices spread over the seeded floor's rooms and placed on its plan (the
+ * lock and the door sensor stay without a room and off the plan, so the "No room" group and the editor's "Not on a
+ * plan" list show too) and the light marked as a favorite.
  */
-async function seedDevices(request: APIRequestContext): Promise<SimulatedHome> {
+async function seedDevices(request: APIRequestContext, floorId: number): Promise<SimulatedHome> {
   const home = await createSimulatedHome(request)
-  const rooms = (await (await request.get('/api/rooms')).json()) as { id: number }[]
-  const place = async (device: SimulatedHome[keyof SimulatedHome], roomId: number | undefined) => {
-    const response = await request.put(`/api/devices/${device.id}`, {
-      headers: mutationHeaders(),
-      data: { name: device.name, icon: null, roomId: roomId ?? null },
-    })
-    expect(response.status(), await response.text()).toBe(200)
-  }
-  await place(home.light, rooms[0]?.id)
-  await place(home.plug, rooms[1]?.id)
-  await place(home.ac, rooms[2]?.id)
+  // Living room (100–1000 × 100–750), kitchen (1000–1900 × 100–900), bedroom (100–1000 × 750–1400).
+  await placeEndpoint(request, home.light, floorId, 520, 380)
+  await placeEndpoint(request, home.plug, floorId, 1450, 420)
+  await placeEndpoint(request, home.ac, floorId, 560, 1080)
   const favorite = await request.put(`/api/endpoints/${home.light.endpoints[0]!.id}/favorite`, {
     headers: mutationHeaders(),
     data: { favorite: true },
   })
   expect(favorite.status(), await favorite.text()).toBe(200)
   return home
+}
+
+/**
+ * The pages of milestones 1.3 and 1.4: the integrations catalogue, the Simulated setup flow's first step, the
+ * integration's own page, the editor's Devices tab, a device's history, and the settings pages.
+ */
+function homeRoutes(home: SimulatedHome, floor: { id: number }, integrationId: string): Route[] {
+  return [
+    {
+      path: '/integrations/add',
+      name: 'integrations-catalog',
+      ready: (page) => page.locator('[data-connector="simulated"]'),
+    },
+    {
+      path: '/integrations/add/simulated',
+      name: 'integration-setup',
+      ready: (page) => page.locator('[data-slot="flow-wizard"][data-step="form"]'),
+    },
+    {
+      path: `/integrations/${integrationId}`,
+      name: 'integration-detail',
+      ready: (page) => page.locator('[data-slot="integration-devices"]').getByText(home.lock.name),
+    },
+    {
+      path: `/floors/${floor.id}/edit?tab=devices`,
+      name: 'floor-edit-devices',
+      ready: (page) => page.locator('[data-slot="unplaced-device"]').filter({ hasText: home.lock.name }),
+    },
+    {
+      path: `/devices/${home.plug.id}?tab=history`,
+      name: 'device-plug-history',
+      ready: (page) => page.locator('[data-slot="energy-history"] [data-slot="energy-bars"]'),
+    },
+    {
+      path: '/settings/backup',
+      name: 'settings-backup',
+      ready: (page) => page.locator('[data-slot="backup-export"]'),
+    },
+    {
+      path: '/settings/history',
+      name: 'settings-history',
+      ready: (page) => page.locator('[data-slot="retention-form"] input').first(),
+    },
+  ]
 }
 
 /** The devices grid, a device page per kind of control, and the integrations list. */
@@ -352,30 +393,6 @@ async function simulateDeviceStates(page: Page, home: SimulatedHome): Promise<vo
     }))
     await route.fulfill({ response, json: [...((await response.json()) as unknown[]), ...extra] })
   })
-}
-
-/** Where floor point (x, y) cm is on the screen: from the plan SVG's viewBox (cm) and its box (px). */
-async function planPoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
-  const svg = page.locator('[data-slot="floor-plan"] svg').first()
-  const box = (await svg.boundingBox())!
-  const [vx, vy, vw, vh] = (await svg.getAttribute('viewBox'))!.split(' ').map(Number) as [
-    number,
-    number,
-    number,
-    number,
-  ]
-  const scale = Math.min(box.width / vw, box.height / vh)
-  // preserveAspectRatio xMidYMid meet: the view box is centred in the element.
-  const left = box.x + (box.width - vw * scale) / 2
-  const top = box.y + (box.height - vh * scale) / 2
-  return { x: left + (x - vx) * scale, y: top + (y - vy) * scale }
-}
-
-/** A tap on a touch screen (phones, `hasTouch`), a click elsewhere. */
-async function tapPlan(page: Page, x: number, y: number, touch: boolean): Promise<void> {
-  const point = await planPoint(page, x, y)
-  if (touch) await page.touchscreen.tap(point.x, point.y)
-  else await page.mouse.click(point.x, point.y)
 }
 
 // Interaction states (English, both widths and themes) into ./screenshots/state-<name>-<width>-<theme>.png: field errors,
@@ -534,9 +551,12 @@ for (const width of WIDTHS) {
         await expect(page).toHaveURL(/\/$/)
         await page.unroute('**/api/auth/login')
 
-        // Dashboard: hover on a card row, keyboard focus in the navigation (the menu sheet on phones).
+        // Dashboard: hover on a first step's action, keyboard focus in the navigation (the menu sheet on phones).
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-        await page.getByRole('link', { name: new RegExp(`^${t('dashboard.start.profileTitle')}`) }).hover()
+        await page
+          .locator('[data-slot="dashboard-start"] [data-step="floors"]')
+          .getByRole('link', { name: t('dashboard.start.floorsAction') })
+          .hover()
         await capture('hover-card')
         if (phone) {
           await page.getByRole('button', { name: t('shell.openNavigation') }).click()
@@ -879,9 +899,27 @@ for (const width of WIDTHS) {
           const floor = await seedFloor(page.request, locale)
           // No integration yet: the empty devices and integrations pages. Then the simulated home in those rooms.
           for (const route of emptyDeviceRoutes) await capture(route)
-          const home = await seedDevices(page.request)
-          for (const route of [...signedInRoutes, ...floorRoutes(floor), ...deviceRoutes(home)])
+          const home = await seedDevices(page.request, floor.id)
+          const integrations = (await (await page.request.get('/api/integrations')).json()) as {
+            id: string
+          }[]
+          for (const route of [
+            ...signedInRoutes,
+            ...floorRoutes(floor),
+            ...deviceRoutes(home),
+            ...homeRoutes(home, floor, integrations[0]!.id),
+          ])
             await capture(route)
+
+          // A device on the plan, tapped: its controls beside it (a sheet on phones).
+          await page.goto(`/floors/${floor.id}`)
+          await waitForLive(page)
+          await expect(page.locator('[data-slot="placed-device"]')).toHaveCount(3)
+          await tapPlan(page, 520, 380, false)
+          await expect(page.locator('[data-slot="device-quick-panel"]')).toBeVisible()
+          await captureScreen('floor-view-device')
+          await page.keyboard.press('Escape')
+          await expect(page.locator('[data-slot="device-quick-panel"]')).toBeHidden()
 
           // The device info opened: every attribute as a table, or as a stacked list on phones.
           await page.goto(`/devices/${home.contact.id}`)

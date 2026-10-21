@@ -355,6 +355,7 @@ function toggleRoom(id: number): void {
       <PopoverContent
         v-if="activeMarker"
         :reference="anchor ?? undefined"
+        :aria-label="activeMarker.name"
         side="right"
         align="start"
         :side-offset="12"

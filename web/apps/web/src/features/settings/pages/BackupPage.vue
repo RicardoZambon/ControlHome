@@ -326,7 +326,6 @@ const restored = computed(() => {
               cn(
                 'relative grid justify-items-center gap-2 rounded-xl border-2 border-dashed p-6 text-center transition-colors',
                 dragging ? 'border-primary bg-accent/50' : 'bg-muted/30',
-                notEmpty && 'opacity-60',
               )
             "
             @dragover.prevent="dragging = !notEmpty"
