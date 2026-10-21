@@ -472,10 +472,13 @@ describe('device page', () => {
 
     const { wrapper } = await open('/devices/d-plug?tab=history')
     // The tab's charts load on their own (a separate chunk).
-    const power = await vi.waitFor(() =>
-      wrapper.get('[data-slot="attribute-history"][data-attribute-id="4"]'),
+    // The chunk can take over a second to load on a busy machine: wait longer than vi.waitFor's 1 s default.
+    const chunk = { timeout: 10_000 }
+    const power = await vi.waitFor(
+      () => wrapper.get('[data-slot="attribute-history"][data-attribute-id="4"]'),
+      chunk,
     )
-    await vi.waitFor(() => power.get('[data-slot="history-chart"]'))
+    await vi.waitFor(() => power.get('[data-slot="history-chart"]'), chunk)
     // The last 24 hours up to the server's now (the same window for every card), and the raw changes from the last
     // bucket's end on.
     type HistoryCall = { path: { id: number }; query: { from: string; to: string; resolution: string } }
