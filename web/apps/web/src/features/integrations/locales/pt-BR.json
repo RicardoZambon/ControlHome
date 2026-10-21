@@ -8,32 +8,111 @@
   "add": "Adicionar integração",
   "added": "Adicionada em {date}",
   "deviceCount": "Nenhum dispositivo | 1 dispositivo | {count} dispositivos",
-  "actions": "Ações de {name}",
-  "comingSoon": "Mais integrações, com configuração guiada, chegam na próxima atualização.",
-  "status": {
-    "Ok": "Conectada",
-    "Connecting": "Conectando",
-    "Degraded": "Funcionando em parte",
-    "NeedsReauth": "Precisa entrar de novo",
-    "PlanRequired": "Plano necessário",
-    "QuotaExceeded": "Cota atingida",
-    "Error": "Erro",
-    "Stopped": "Parada"
-  },
-  "demo": {
-    "add": "Adicionar demonstração simulada",
-    "option": "Casa simulada (demonstração)",
-    "name": "Casa simulada",
-    "added": "Casa simulada adicionada. Os dispositivos aparecem em instantes."
-  },
+  "disabled": "Desligada",
   "empty": {
     "title": "Conecte seus primeiros dispositivos",
-    "description": "A configuração guiada de integrações reais chega na próxima atualização. Enquanto isso, a casa simulada traz uma luz com dimmer, uma tomada, um ar-condicionado, um sensor de porta e uma fechadura inteligente para experimentar todos os controles."
+    "description": "Escolha o que seus dispositivos usam — o app do fabricante, um hub ou um protocolo como MQTT — e siga a configuração guiada. Só explorando? A casa simulada traz uma casa inteira de dispositivos para experimentar todos os controles.",
+    "browse": "Ver integrações",
+    "demo": "Experimentar a casa simulada"
   },
   "delete": {
     "title": "Remover {name}?",
     "description": "Ela não tem dispositivos. | O dispositivo dela sai junto, com o histórico. | Os {count} dispositivos dela saem junto, com o histórico.",
     "confirm": "Remover integração",
     "done": "{name} removida."
+  },
+  "catalog": {
+    "title": "Adicionar uma integração",
+    "description": "Escolha por onde seus dispositivos se conectam. Cada uma guia você pela configuração.",
+    "search": "Buscar integrações",
+    "categories": {
+      "vendor": "Nuvens e hubs de fabricantes",
+      "protocol": "Protocolos da sua rede",
+      "virtual": "Virtuais e demonstração",
+      "other": "Outras"
+    },
+    "about": {
+      "simulated": "Uma casa simulada que se comporta como a de verdade: luzes, tomadas, climatização, fechaduras, lavadora, câmeras e mais.",
+      "mqtt": "Seu broker MQTT: dispositivos Zigbee2MQTT, descoberta do Home Assistant e Tasmota."
+    }
+  },
+  "features": {
+    "cloud": "Nuvem",
+    "local": "Local",
+    "guided": "Configuração guiada",
+    "discovery": "Encontra dispositivos",
+    "pairing": "Pareamento"
+  },
+  "setup": {
+    "title": "Configurar uma integração",
+    "eyebrow": "Nova integração",
+    "reauthEyebrow": "Entrar de novo",
+    "reauthTitle": "Entrar de novo",
+    "reauthDone": "{name} entrou de novo. Os dispositivos continuam como estavam.",
+    "notFound": "Esta integração não está disponível",
+    "progress": "Andamento da configuração",
+    "stepConnect": "Conectar",
+    "stepReview": "Revisar dispositivos"
+  },
+  "flow": {
+    "starting": "Iniciando a configuração de {name}…",
+    "restart": "Começar de novo",
+    "step": "Etapa {n}",
+    "external": "Esta etapa acontece em {host}. Abra, conclua por lá e volte.",
+    "openPage": "Abrir {host}",
+    "unsafeUrl": "A página desta etapa não tem um endereço seguro (https), por isso não é mostrada.",
+    "finishedThere": "Já concluí por lá",
+    "waiting": "Aguardando o dispositivo",
+    "secondsLeft": "faltam {s} s",
+    "timeLeft": "Tempo restante",
+    "retrying": "A conexão com o servidor caiu por um instante; tentando de novo…",
+    "choose": "Escolha uma opção",
+    "done": "Conectado",
+    "abortedTitle": "A configuração parou",
+    "aborted": "Não foi possível continuar a configuração.",
+    "back": "Voltar",
+    "options": {
+      "preset": {
+        "basic": "Básico: cinco dispositivos",
+        "demo": "Casa de demonstração: cerca de vinte dispositivos"
+      }
+    }
+  },
+  "review": {
+    "eyebrow": "Revisar dispositivos",
+    "title": "Nenhum dispositivo encontrado | 1 dispositivo encontrado | {count} dispositivos encontrados",
+    "waitingTitle": "Procurando dispositivos…",
+    "description": "Mantenha os que você quer ver e coloque cada um no seu cômodo. Os cômodos são sugeridos pelos nomes; dá para mudar tudo depois.",
+    "waiting": "Os dispositivos chegam alguns instantes depois que a integração começa.",
+    "none": "Nenhum dispositivo apareceu ainda. Eles podem demorar; vão surgindo na sua lista de dispositivos.",
+    "keep": "Manter {name}",
+    "kept": "Aparece na sua casa",
+    "hidden": "Oculto dos painéis e listas",
+    "room": "Cômodo de {name}",
+    "suggested": "Sugerido pelo nome",
+    "noRooms": "Desenhe seus andares e cômodos para colocar os dispositivos neles.",
+    "stillArriving": "Ainda podem chegar mais dispositivos…",
+    "skip": "Pular",
+    "finish": "Concluir",
+    "saved": "Pronto: nenhum dispositivo mantido. | Pronto: 1 dispositivo está pronto. | Pronto: {count} dispositivos estão prontos."
+  },
+  "detail": {
+    "title": "Integração",
+    "notFound": "Integração não encontrada",
+    "reauth": "Entrar de novo",
+    "needsReauthTitle": "Esta integração precisa que você entre de novo",
+    "needsReauth": "Os dispositivos são mantidos; eles voltam assim que ela entrar de novo.",
+    "statusTitle": "Situação",
+    "devices": "Dispositivos",
+    "openGrid": "Abrir em Dispositivos",
+    "orphaned": "Nenhum dispositivo órfão | 1 dispositivo não é mais informado por esta integração. | {n} dispositivos não são mais informados por esta integração.",
+    "noDevices": "Ainda não há dispositivos. Eles aparecem aqui conforme a integração os encontra.",
+    "noDevicesOff": "Nenhum dispositivo. Ligue a integração para encontrá-los.",
+    "settings": "Configurações da integração",
+    "enabled": "Ligada",
+    "enabledHelp": "Desligada, ela para de falar com os dispositivos; eles continuam, com o histórico.",
+    "enabledToast": "{name} está ligada.",
+    "disabledToast": "{name} está desligada.",
+    "remove": "Remover integração"
   }
 }

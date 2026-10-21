@@ -37,7 +37,11 @@
     "roomLabel": "{name}, {area}",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "fit": "Fit to screen"
+    "fit": "Fit to screen",
+    "devices": {
+      "openDevice": "Open device",
+      "panelDescription": "The device's controls and state."
+    }
   },
   "theme": {
     "label": "Theme",
@@ -648,5 +652,44 @@
     "demo": {
       "not_empty": "The demo home can only be loaded into an empty home."
     }
+  },
+  "integrationStatus": {
+    "Ok": "Connected",
+    "Connecting": "Connecting",
+    "Degraded": "Partly working",
+    "NeedsReauth": "Needs sign-in",
+    "PlanRequired": "Plan required",
+    "QuotaExceeded": "Quota reached",
+    "Error": "Error",
+    "Stopped": "Stopped"
+  },
+  "history": {
+    "description": "What this device recorded. Recent ranges show every change; longer ones, averages with their lows and highs.",
+    "range": "Period",
+    "ranges": {
+      "24h": "last 24 hours",
+      "7d": "last 7 days",
+      "30d": "last 30 days"
+    },
+    "rangesShort": {
+      "24h": "24 h",
+      "7d": "7 days",
+      "30d": "30 days"
+    },
+    "resolution": {
+      "raw": "Every change",
+      "5m": "5-minute averages",
+      "1h": "Hourly averages"
+    },
+    "chartLabel": "{name}, {range}",
+    "empty": "Nothing recorded in this period yet.",
+    "nothingRecorded": "This device keeps no history: none of its readings are recorded.",
+    "energy": "Energy used",
+    "energyLabel": "Energy used, {range}",
+    "perHour": "Per hour",
+    "perDay": "Per day",
+    "noEnergy": "No energy used in this period yet.",
+    "estimated": "estimated",
+    "partlyEstimated": "Partly estimated from power readings"
   }
 }

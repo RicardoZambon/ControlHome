@@ -202,7 +202,7 @@ function onPointerMove(event: PointerEvent): void {
   }
   const pointer = pointerOf(event)
   props.handler?.move?.(pointer)
-  if (props.mode === 'view' && !props.handler) {
+  if (props.mode === 'view' && !props.handler?.move) {
     const room = event.pointerType === 'mouse' ? roomAt(pointer.cm) : undefined
     ownHover.value = room ? keyOf(room) : null
   }

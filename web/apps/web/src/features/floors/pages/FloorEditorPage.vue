@@ -18,7 +18,7 @@ import {
   cn,
   toast,
 } from '@controlhome/ui'
-import { Check, ChevronUp, ImageUp, Layers, Pentagon, RefreshCw, Undo2, X } from '@lucide/vue'
+import { Check, ChevronUp, ImageUp, Layers, MapPin, Pentagon, RefreshCw, Undo2, X } from '@lucide/vue'
 import { useEventListener, useMediaQuery } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -31,8 +31,11 @@ import {
   type RouteLocationRaw,
 } from 'vue-router'
 import KeyHint from '../../../components/KeyHint.vue'
-import FloorPlanCanvas from '../../../components/floorplan/FloorPlanCanvas.vue'
+import FloorPlanCanvas, { type CanvasPointerHandler } from '../../../components/floorplan/FloorPlanCanvas.vue'
+import PlacementLayer from '../../../components/floorplan/PlacementLayer.vue'
 import type { Point } from '../../../components/floorplan/geometry'
+import { MARKER_HIT_SLOP_PX, MARKER_RADIUS_PX } from '../../../components/floorplan/markerTone'
+import { hitMarker } from '../../../components/floorplan/placements'
 import { formatArea, formatDimensions, formatLength, roomAreaM2 } from '../../../components/floorplan/measure'
 import { roomColorClasses } from '../../../components/floorplan/roomColors'
 import { roomIcon } from '../../../components/floorplan/roomIcons'
@@ -50,6 +53,7 @@ import { canCloseDraw, removeLastDrawPoint } from '../editor/tools/drawTool'
 import { clampMove, removeVertex, translatePolygon } from '../editor/tools/selectTool'
 import { useEditorPointer } from '../editor/useEditorPointer'
 import { provideEditor, useEditorState, type DeletedRoom } from '../editor/useEditorState'
+import { providePlacementEditor, usePlacementEditor } from '../editor/usePlacementEditor'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -72,6 +76,63 @@ const coarse = useMediaQuery('(pointer: coarse)')
 const touchUi = computed(() => coarse.value || !isLarge.value)
 const mod = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
 
+// --- Devices on the plan (the Devices tab): saved at once, outside the draft -------------------------------------------
+const canvas = ref<InstanceType<typeof FloorPlanCanvas> | null>(null)
+const planBox = ref<HTMLElement | null>(null)
+const sheetOpen = ref(false)
+
+const placements = usePlacementEditor({
+  floorId: () => state.floorId.value,
+  floorSize: () => ({
+    widthCm: state.server.value?.widthCm ?? 0,
+    heightCm: state.server.value?.heightCm ?? 0,
+  }),
+  toCm: (clientX, clientY) => canvas.value?.toCm(clientX, clientY),
+  planRect: () => planBox.value?.getBoundingClientRect(),
+  onArm: () => {
+    if (!isLarge.value) sheetOpen.value = false
+  },
+  onError: (error) => toast.error(`${t('floors.editor.devices.saveFailed')} ${problem.message(error)}`),
+})
+providePlacementEditor(placements)
+
+const devicesMode = computed(() => state.panelTab.value === 'devices')
+watch(devicesMode, (on) => {
+  if (on) {
+    state.setTool('select')
+    state.select(null)
+  } else {
+    placements.select(null)
+    placements.disarm()
+  }
+})
+// Drawing a room leaves the Devices tab (the toolbar and the R key work from any tab).
+watch(state.tool, (tool) => {
+  if (tool === 'draw' && devicesMode.value) state.panelTab.value = 'rooms'
+})
+
+/** On the Devices tab a tap places the armed device, or selects the device under it. Dragging pans. */
+const devicesHandler: CanvasPointerHandler = {
+  tap(pointer) {
+    const armed = placements.armed.value
+    if (armed) {
+      void placements.place(armed.target, pointer.cm)
+      return true
+    }
+    const radius = (touchUi.value ? MARKER_RADIUS_PX.coarse : MARKER_RADIUS_PX.fine) + MARKER_HIT_SLOP_PX
+    const hit = hitMarker(placements.markers.value, pointer.cm, radius / (canvas.value?.scale ?? 1))
+    placements.select(hit ? hit.placement.id : null)
+    return true
+  },
+}
+const canvasHandler = computed(() => (devicesMode.value ? devicesHandler : pointer.handler))
+const canvasCursor = computed(() => {
+  if (spaceDown.value) return 'cursor-grab'
+  if (devicesMode.value) return placements.armed.value ? 'cursor-crosshair' : 'cursor-grab'
+  return pointer.cursorClass.value
+})
+const toCm = (clientX: number, clientY: number) => canvas.value?.toCm(clientX, clientY) ?? { x: 0, y: 0 }
+
 // --- Loading ----------------------------------------------------------------------------------------------------------
 const floorId = computed(() => Number(route.params.id))
 const loading = ref(true)
@@ -81,7 +142,10 @@ async function load(): Promise<void> {
   loading.value = true
   loadError.value = null
   try {
-    state.load(unwrap(await getFloor({ path: { id: floorId.value } })))
+    const floor = unwrap(await getFloor({ path: { id: floorId.value } }))
+    state.load(floor)
+    void placements.load(floor.placements)
+    if (route.query.tab === 'devices') state.panelTab.value = 'devices'
   } catch (error) {
     loadError.value = error
   } finally {
@@ -104,7 +168,6 @@ usePageTrail(() =>
 )
 
 // --- Canvas and pointer -------------------------------------------------------------------------------------------------
-const canvas = ref<InstanceType<typeof FloorPlanCanvas> | null>(null)
 const spaceDown = ref(false)
 const calibrationOpen = ref(false)
 const calibrationPoints = ref<{ a: Point; b: Point } | null>(null)
@@ -164,6 +227,10 @@ watch(calibrationOpen, (open) => {
 
 // --- Hints ---------------------------------------------------------------------------------------------------------------
 const hint = computed(() => {
+  if (devicesMode.value)
+    return placements.armed.value
+      ? t('floors.editor.devices.tapToPlace', { name: placements.armed.value.name })
+      : t('floors.editor.devices.planHint')
   switch (state.tool.value) {
     case 'draw': {
       const count = state.drawing.value.points.length
@@ -196,7 +263,8 @@ const coordinates = computed(() => {
 })
 
 const showEmpty = computed(
-  () => !loading.value && state.rooms.value.length === 0 && state.tool.value === 'select',
+  () =>
+    !loading.value && state.rooms.value.length === 0 && state.tool.value === 'select' && !devicesMode.value,
 )
 
 // --- Drawing on a touch screen: Finish, Undo corner, Cancel ---------------------------------------------------------
@@ -218,7 +286,6 @@ function cancelDrawing(): void {
 }
 
 // --- Side panel / sheet ----------------------------------------------------------------------------------------------
-const sheetOpen = ref(false)
 watch(isLarge, (large) => {
   if (large) sheetOpen.value = false
 })
@@ -235,6 +302,12 @@ const selectedSummary = computed(() => {
   const size = sizeOf(room.polygon)
   return `${formatArea(roomAreaM2(room.polygon), locale.value)} · ${formatDimensions(size.width, size.height, locale.value)}`
 })
+const devicesSummary = computed(() =>
+  t('floors.editor.devices.summary', {
+    placed: placements.markers.value.length,
+    unplaced: placements.groups.value.length,
+  }),
+)
 const floorSummary = computed(() => {
   const rooms = state.rooms.value
   const count = t('floors.roomCount', rooms.length)
@@ -328,6 +401,11 @@ const activatesWithKey = (target: EventTarget | null) =>
   target.closest('button, a, [role="button"], [role="radio"], [role="tab"]') !== null
 
 function deleteSelection(): void {
+  if (devicesMode.value) {
+    const id = placements.selectedId.value
+    if (id !== null) void placements.remove(id)
+    return
+  }
   if (state.tool.value === 'draw' && state.drawing.value.points.length > 0) {
     undoCorner()
     return
@@ -400,6 +478,11 @@ function onKeydown(event: KeyboardEvent): void {
       pointer.finishDrawing()
       break
     case 'cancel':
+      if (devicesMode.value) {
+        if (placements.armed.value) placements.disarm()
+        else placements.select(null)
+        break
+      }
       if (pointer.cancelTool()) break
       if (state.selection.value.vertex !== null) state.select(state.selection.value.roomKey)
       else if (state.selection.value.roomKey) state.select(null)
@@ -490,26 +573,67 @@ useEventListener(window, 'blur', () => (spaceDown.value = false))
     <template v-else>
       <div class="flex min-h-0 flex-1 gap-3">
         <div
-          class="relative -mx-3 min-w-0 flex-1 overflow-hidden border-y shadow-sm sm:mx-0 sm:rounded-2xl sm:border"
+          ref="planBox"
+          :class="
+            cn(
+              'relative -mx-3 min-w-0 flex-1 overflow-hidden border-y shadow-sm transition-shadow sm:mx-0 sm:rounded-2xl sm:border',
+              placements.drag.value?.overPlan && 'ring-2 ring-ring ring-offset-2 ring-offset-background',
+            )
+          "
+          :data-drop-target="placements.drag.value ? 'true' : undefined"
         >
           <FloorPlanCanvas
             ref="canvas"
             class="size-full"
             mode="edit"
             :floor="plan"
-            :selected-room-id="state.tool.value === 'select' ? state.selection.value.roomKey : null"
-            :hover-room-id="state.tool.value === 'select' ? state.hoverRoomKey.value : null"
+            :selected-room-id="
+              state.tool.value === 'select' && !devicesMode ? state.selection.value.roomKey : null
+            "
+            :hover-room-id="state.tool.value === 'select' && !devicesMode ? state.hoverRoomKey.value : null"
             :invalid-room-ids="state.invalidRoomKeys.value"
-            :handler="pointer.handler"
+            :handler="canvasHandler"
             :force-pan="spaceDown"
-            :cursor-class="spaceDown ? 'cursor-grab' : pointer.cursorClass.value"
+            :cursor-class="canvasCursor"
             @background-loaded="state.backgroundSize.value = $event"
             @room-click="(_room, key) => state.select(key)"
           >
             <template #overlay="{ scale }">
-              <EditorOverlay :scale="scale" :pointer="pointer" :coarse="touchUi" />
+              <EditorOverlay v-if="!devicesMode" :scale="scale" :pointer="pointer" :coarse="touchUi" />
+              <PlacementLayer
+                :markers="placements.markers.value"
+                :scale="scale"
+                mode="edit"
+                :muted="!devicesMode"
+                :coarse="touchUi"
+                :selected-id="devicesMode ? placements.selectedId.value : null"
+                :to-cm="toCm"
+                :width-cm="state.server.value?.widthCm"
+                :height-cm="state.server.value?.heightCm"
+                @select="(marker) => placements.select(marker.placement.id)"
+                @move="(marker, point) => placements.move(marker.placement.id, point)"
+              />
             </template>
             <template #controls>
+              <!-- Tap-to-place: what the next tap does -->
+              <div
+                v-if="devicesMode && placements.armed.value"
+                class="pointer-events-none absolute inset-x-2 bottom-14 flex justify-center sm:bottom-16"
+              >
+                <div
+                  class="pointer-events-auto flex max-w-full items-center gap-2 rounded-xl border bg-background/95 py-1.5 pr-1.5 pl-3 text-sm shadow-md backdrop-blur-md motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2"
+                  role="status"
+                  data-slot="place-hint"
+                >
+                  <MapPin class="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span class="min-w-0 truncate">
+                    {{ t('floors.editor.devices.tapToPlace', { name: placements.armed.value.name }) }}
+                  </span>
+                  <Button size="sm" variant="ghost" class="shrink-0" @click="placements.disarm()">
+                    {{ t('common.cancel') }}
+                  </Button>
+                </div>
+              </div>
               <div
                 class="pointer-events-none absolute inset-x-2 top-2 flex flex-col items-start gap-2 sm:inset-x-3 sm:top-3"
               >
@@ -672,6 +796,12 @@ useEventListener(window, 'blur', () => (spaceDown.value = false))
                 </span>
                 <span class="truncate text-xs text-muted-foreground tabular-nums">{{ selectedSummary }}</span>
               </template>
+              <template v-else-if="devicesMode">
+                <span class="truncate text-sm font-medium">{{
+                  placements.selected.value?.name ?? t('floors.editor.tabs.devices')
+                }}</span>
+                <span class="truncate text-xs text-muted-foreground tabular-nums">{{ devicesSummary }}</span>
+              </template>
               <template v-else>
                 <span class="truncate text-sm font-medium">{{ t('floors.editor.tabs.rooms') }}</span>
                 <span class="truncate text-xs text-muted-foreground tabular-nums">{{ floorSummary }}</span>
@@ -680,7 +810,11 @@ useEventListener(window, 'blur', () => (spaceDown.value = false))
             <span class="sr-only">{{ t('floors.editor.openPanel') }}</span>
             <ChevronUp class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
-          <Button v-if="!selected" variant="outline" class="shrink-0" @click="state.setTool('draw')">
+          <Button v-if="devicesMode" variant="outline" class="shrink-0" @click="sheetOpen = true">
+            <MapPin />
+            {{ t('floors.editor.devices.placeShort') }}
+          </Button>
+          <Button v-else-if="!selected" variant="outline" class="shrink-0" @click="state.setTool('draw')">
             <Pentagon />
             {{ t('floors.editor.drawing.start') }}
           </Button>
@@ -703,6 +837,30 @@ useEventListener(window, 'blur', () => (spaceDown.value = false))
         </div>
       </SheetContent>
     </Sheet>
+
+    <!-- A device dragged from the Devices tab: it follows the pointer until it is dropped on the plan -->
+    <Teleport v-if="placements.drag.value" to="body">
+      <div
+        class="pointer-events-none fixed z-50 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border bg-background/95 py-1.5 pr-3.5 pl-1.5 text-sm font-medium shadow-lg backdrop-blur-md"
+        :style="{ left: `${placements.drag.value.x}px`, top: `${placements.drag.value.y}px` }"
+        data-slot="drag-ghost"
+      >
+        <span
+          :class="
+            cn(
+              'flex size-7 items-center justify-center rounded-full border-2 bg-card transition-colors',
+              placements.drag.value.overPlan
+                ? 'border-primary text-primary'
+                : 'border-border text-muted-foreground',
+            )
+          "
+          aria-hidden="true"
+        >
+          <MapPin class="size-3.5" />
+        </span>
+        {{ placements.drag.value.name }}
+      </div>
+    </Teleport>
 
     <CalibrationDialog
       v-model:open="calibrationOpen"

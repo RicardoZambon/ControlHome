@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DeviceSummaryDto, EndpointDto } from '@controlhome/api-client'
 import { cn } from '@controlhome/ui'
-import { EyeOff, Star, WifiOff } from '@lucide/vue'
+import { EyeOff, Star, Unlink, WifiOff } from '@lucide/vue'
 import { useNow } from '@vueuse/core'
 import { computed, useId, type HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -26,6 +26,7 @@ import { TONES, iconToneOf } from './tone'
  *   the bottom edge).
  * - Needs attention (unlocked, open, alarm): the warning or danger border and glow.
  * - Offline: dashed outline, muted icon and name, and "Offline · 12 minutes ago" in place of the quick action.
+ * - No longer reported by its integration (orphaned): a broken-link mark beside the name.
  * - A command on its way: the state says what is happening ("Turning on…", "Locked · Waiting for your PIN").
  */
 const props = withDefaults(
@@ -224,6 +225,13 @@ const iconTone = computed(() => iconToneOf(summary.value.tone, lit.value))
           class="size-3.5 shrink-0 fill-state-energy text-state-energy"
           :aria-label="t('device.favorite')"
           role="img"
+        />
+        <Unlink
+          v-if="device.isOrphaned"
+          class="size-3.5 shrink-0 text-state-warn"
+          :aria-label="t('device.orphaned')"
+          role="img"
+          data-slot="tile-orphaned"
         />
         <EyeOff
           v-if="endpoint.hidden"

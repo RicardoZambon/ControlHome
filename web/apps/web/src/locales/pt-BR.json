@@ -37,7 +37,11 @@
     "roomLabel": "{name}, {area}",
     "zoomIn": "Aproximar",
     "zoomOut": "Afastar",
-    "fit": "Ajustar à tela"
+    "fit": "Ajustar à tela",
+    "devices": {
+      "openDevice": "Abrir dispositivo",
+      "panelDescription": "Os controles e o estado do dispositivo."
+    }
   },
   "theme": {
     "label": "Tema",
@@ -648,5 +652,44 @@
     "demo": {
       "not_empty": "A casa de demonstração só pode ser carregada numa casa vazia."
     }
+  },
+  "integrationStatus": {
+    "Ok": "Conectada",
+    "Connecting": "Conectando",
+    "Degraded": "Funcionando em parte",
+    "NeedsReauth": "Precisa entrar de novo",
+    "PlanRequired": "Plano necessário",
+    "QuotaExceeded": "Cota atingida",
+    "Error": "Erro",
+    "Stopped": "Parada"
+  },
+  "history": {
+    "description": "O que este dispositivo registrou. Períodos recentes mostram cada mudança; os mais longos, médias com mínimas e máximas.",
+    "range": "Período",
+    "ranges": {
+      "24h": "últimas 24 horas",
+      "7d": "últimos 7 dias",
+      "30d": "últimos 30 dias"
+    },
+    "rangesShort": {
+      "24h": "24 h",
+      "7d": "7 dias",
+      "30d": "30 dias"
+    },
+    "resolution": {
+      "raw": "Cada mudança",
+      "5m": "Médias de 5 minutos",
+      "1h": "Médias por hora"
+    },
+    "chartLabel": "{name}, {range}",
+    "empty": "Nada registrado neste período ainda.",
+    "nothingRecorded": "Este dispositivo não guarda histórico: nenhuma das leituras dele é registrada.",
+    "energy": "Energia usada",
+    "energyLabel": "Energia usada, {range}",
+    "perHour": "Por hora",
+    "perDay": "Por dia",
+    "noEnergy": "Nenhum consumo neste período ainda.",
+    "estimated": "estimado",
+    "partlyEstimated": "Em parte estimado pelas leituras de potência"
   }
 }

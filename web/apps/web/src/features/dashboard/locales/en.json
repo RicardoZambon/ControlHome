@@ -7,25 +7,68 @@
     "evening": "Good evening, {name}",
     "night": "Good night, {name}"
   },
-  "welcome": "{home} is set up and ready for what comes next.",
+  "welcome": "Here's {home} right now.",
   "localTime": "Local time at home",
+  "loadFailed": "Couldn't load the home's summary.",
   "planTeaser": "Your floor plan will live here",
   "planTeaserDetail": "Draw your floors and rooms to see your home at a glance.",
-  "devices": {
-    "heading": "Your devices",
-    "all": "All devices",
-    "active": "Nothing active right now | 1 device active | {count} devices active",
-    "noFavorites": "Mark devices as favorites with the star on their page to control them from here."
+  "planBanner": "Draw your floor plan in Floors.",
+  "plan": {
+    "open": "Open plan",
+    "draw": "Draw a floor",
+    "openFloors": "Open Floors"
+  },
+  "glance": {
+    "heading": "At a glance",
+    "power": "Power now",
+    "powerHint": "No meters | From 1 meter | From {n} meters",
+    "noPower": "No power readings yet",
+    "active": "On now",
+    "activeHint": "Of no devices | Of 1 device | Of {total} devices",
+    "offline": "Offline",
+    "offlineHint": "See them below",
+    "allReachable": "Everything is reachable",
+    "integrations": "Integrations",
+    "noIntegrations": "None connected yet",
+    "allConnected": "All working",
+    "attention": "None needs you | 1 needs attention | {n} need attention"
   },
   "start": {
-    "heading": "Make it yours",
-    "floorsTitle": "Floors and rooms",
-    "floorsDescription": "Draw each floor, trace the rooms and give every space its color.",
-    "profileTitle": "Your profile",
-    "profileDescription": "Your name, language, theme and password.",
-    "usersTitle": "Users",
-    "usersDescription": "Add the people who live here and choose what each one can do.",
-    "open": "Open"
+    "heading": "Get started",
+    "intro": "Three steps to see your home here: its floors, its devices, and where each one is.",
+    "introMember": "An admin sets up the home: its floors, its devices and where each one is.",
+    "step": "Step {n}",
+    "done": "Done",
+    "floorsTitle": "Draw your floors",
+    "floorsDescription": "Each floor to scale, with its rooms traced on a grid or over a picture of your plan.",
+    "floorsAction": "Draw a floor",
+    "devicesTitle": "Bring in your devices",
+    "devicesDescription": "Connect a vendor's app, a hub or MQTT — or try the simulated home.",
+    "devicesAction": "Add an integration",
+    "placeTitle": "Put devices on the plan",
+    "placeDescription": "Drag each device to where it is: tap it on the plan to control it.",
+    "placeAction": "Place devices"
+  },
+  "favorites": {
+    "heading": "Favorites",
+    "all": "All devices",
+    "none": "Mark devices as favorites with the star on their page to control them from here."
+  },
+  "rooms": {
+    "heading": "Rooms",
+    "active": "{active} of {total} on",
+    "noDevices": "No devices yet",
+    "temperature": "Temperature",
+    "power": "Power",
+    "empty": "Rooms show up here once an admin draws the floors.",
+    "emptyAdmin": "Draw your floors and rooms to see each room here."
+  },
+  "offline": {
+    "heading": "Offline devices",
+    "none": "Every device is reachable."
+  },
+  "integrations": {
+    "heading": "Integrations"
   },
   "details": {
     "heading": "Home details",
@@ -36,17 +79,5 @@
     "price": "Electricity price",
     "perKwh": "{price} per kWh",
     "loadFailed": "Couldn't load the home details."
-  },
-  "next": {
-    "heading": "Coming next",
-    "planned": "Planned",
-    "energyTitle": "Energy and history",
-    "energyDescription": "See what each device uses and what it costs at your electricity price."
-  },
-  "planBanner": "Draw your floor plan in Floors.",
-  "plan": {
-    "open": "Open plan",
-    "draw": "Draw a floor",
-    "openFloors": "Open Floors"
   }
 }

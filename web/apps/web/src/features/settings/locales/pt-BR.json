@@ -1,0 +1,93 @@
+{
+  "eyebrow": "Configurações",
+  "backup": {
+    "nav": "Backup",
+    "title": "Backup",
+    "description": "Guarde uma cópia da configuração da sua casa e traga-a de volta em um servidor novo.",
+    "export": {
+      "title": "Baixar um backup",
+      "description": "Andares com as plantas, cômodos, integrações, dispositivos, os lugares deles nas plantas e as contas (sem senhas).",
+      "secrets": "Incluir as credenciais das integrações",
+      "secretsHelp": "Logins e tokens vão criptografados com uma frase-senha. Sem elas, as integrações pedem as credenciais de novo depois de restaurar.",
+      "passphrase": "Frase-senha",
+      "passphraseHelp": "Pelo menos {min} caracteres. Você vai precisar dela para restaurar as credenciais; ela não pode ser recuperada.",
+      "confirm": "Frase-senha de novo",
+      "problems": {
+        "required": "Digite uma frase-senha para incluir as credenciais.",
+        "tooShort": "Use pelo menos {min} caracteres.",
+        "tooLong": "Use no máximo {max} caracteres.",
+        "mismatch": "As frases-senha não conferem."
+      },
+      "noHistory": "O histórico não vai junto.",
+      "action": "Baixar backup",
+      "done": "Backup baixado.",
+      "doneWithSecrets": "Backup baixado, com as credenciais criptografadas. Guarde a frase-senha em um lugar seguro."
+    },
+    "import": {
+      "title": "Restaurar um backup",
+      "description": "Traz um backup para uma casa nova e vazia: tudo volta como foi salvo.",
+      "notEmpty": "Esta casa já tem andares, integrações ou dispositivos. Um backup só pode ser restaurado em uma casa vazia.",
+      "drop": "Solte aqui um arquivo de backup (.zip)",
+      "choose": "Escolher arquivo",
+      "another": "Escolher outro arquivo",
+      "notZip": "Esse não é um arquivo de backup. Escolha o .zip que o ControlHome baixou.",
+      "passphrase": "Frase-senha",
+      "passphraseHelp": "Só se o backup incluir as credenciais das integrações.",
+      "action": "Restaurar",
+      "done": "Backup restaurado.",
+      "restored": "Sua casa está de volta.",
+      "counts": {
+        "floors": "Andares",
+        "rooms": "Cômodos",
+        "integrations": "Integrações",
+        "devices": "Dispositivos",
+        "placements": "Nas plantas",
+        "users": "Contas novas"
+      },
+      "secretsBack": "As credenciais das integrações também voltaram; elas estão iniciando agora.",
+      "secretsMissing": "O backup não tinha credenciais: entre de novo em cada integração pela página dela.",
+      "usersNote": "Nenhuma conta foi adicionada | A conta restaurada ainda não tem senha: defina uma em Usuários. | As {n} contas restauradas ainda não têm senha: defina uma para cada em Usuários.",
+      "openHome": "Abrir a casa"
+    },
+    "daily": {
+      "title": "Um backup por dia",
+      "description": "O ControlHome também salva sozinho um backup por dia na pasta backups dos dados dele, mantendo os sete últimos. Eles não incluem credenciais; copie-os para um lugar seguro de vez em quando."
+    }
+  },
+  "history": {
+    "nav": "Histórico",
+    "title": "Histórico",
+    "description": "Por quanto tempo o ControlHome guarda o que seus dispositivos fizeram. Mais tempo significa bancos de dados maiores; médias por hora e energia ficam sempre.",
+    "tiers": {
+      "heading": "Como uma leitura envelhece",
+      "raw": "Cada mudança",
+      "short": "Médias de 5 minutos",
+      "hourly": "Médias por hora e energia"
+    },
+    "forever": "Para sempre",
+    "foreverNote": "Médias por hora e energia por hora ficam para sempre, assim gráficos longos e totais de energia nunca perdem o passado.",
+    "fields": {
+      "stateLogDays": {
+        "label": "Cada mudança",
+        "help": "Cada valor como mudou: gráficos das últimas horas."
+      },
+      "shortTermStatsDays": {
+        "label": "Médias de 5 minutos",
+        "help": "Com mínimas e máximas: gráficos de até uma semana."
+      },
+      "deviceEventDays": {
+        "label": "Toques de botão e outros eventos",
+        "help": "Eventos momentâneos, como um toque ou a campainha."
+      },
+      "auditLogDays": {
+        "label": "Registro de auditoria",
+        "help": "Quem fez o quê: entradas, configurações, ações de segurança."
+      }
+    },
+    "days": "nenhum dia | 1 dia | {n} dias",
+    "daysUnit": "dias",
+    "limits": "de {min} a {max}",
+    "range": "Use um número inteiro de dias de {min} a {max}.",
+    "saved": "Configurações de histórico salvas."
+  }
+}

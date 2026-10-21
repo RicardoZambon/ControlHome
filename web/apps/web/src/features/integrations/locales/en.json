@@ -8,32 +8,111 @@
   "add": "Add integration",
   "added": "Added {date}",
   "deviceCount": "No devices | 1 device | {count} devices",
-  "actions": "Actions for {name}",
-  "comingSoon": "More integrations, with guided setup, arrive in the next update.",
-  "status": {
-    "Ok": "Connected",
-    "Connecting": "Connecting",
-    "Degraded": "Partly working",
-    "NeedsReauth": "Needs sign-in",
-    "PlanRequired": "Plan required",
-    "QuotaExceeded": "Quota reached",
-    "Error": "Error",
-    "Stopped": "Stopped"
-  },
-  "demo": {
-    "add": "Add simulated demo",
-    "option": "Simulated home (demo)",
-    "name": "Simulated home",
-    "added": "Simulated home added. Its devices appear in a moment."
-  },
+  "disabled": "Turned off",
   "empty": {
     "title": "Connect your first devices",
-    "description": "Guided setup for real integrations arrives in the next update. Meanwhile, the simulated home brings a dimmable light, a plug, an air conditioner, a door sensor and a smart lock to try every control."
+    "description": "Pick what your devices use — a vendor's app, a hub, or a protocol such as MQTT — and follow the guided setup. Just looking around? The simulated home brings a whole house of devices to try every control.",
+    "browse": "Browse integrations",
+    "demo": "Try the simulated home"
   },
   "delete": {
     "title": "Remove {name}?",
     "description": "It has no devices. | Its device goes with it, including its history. | Its {count} devices go with it, including their history.",
     "confirm": "Remove integration",
     "done": "{name} removed."
+  },
+  "catalog": {
+    "title": "Add an integration",
+    "description": "Choose what your devices connect through. Each one walks you through its setup.",
+    "search": "Search integrations",
+    "categories": {
+      "vendor": "Vendor clouds and hubs",
+      "protocol": "Protocols on your network",
+      "virtual": "Virtual and demo",
+      "other": "Other"
+    },
+    "about": {
+      "simulated": "A simulated home that behaves like the real thing: lights, plugs, climate, locks, a washer, cameras and more.",
+      "mqtt": "Your MQTT broker: Zigbee2MQTT, Home Assistant discovery and Tasmota devices."
+    }
+  },
+  "features": {
+    "cloud": "Cloud",
+    "local": "Local",
+    "guided": "Guided setup",
+    "discovery": "Finds devices",
+    "pairing": "Pairing"
+  },
+  "setup": {
+    "title": "Set up an integration",
+    "eyebrow": "New integration",
+    "reauthEyebrow": "Sign in again",
+    "reauthTitle": "Sign in again",
+    "reauthDone": "{name} is signed in again. Its devices stay as they were.",
+    "notFound": "This integration isn't available",
+    "progress": "Setup progress",
+    "stepConnect": "Connect",
+    "stepReview": "Review devices"
+  },
+  "flow": {
+    "starting": "Starting the {name} setup…",
+    "restart": "Start again",
+    "step": "Step {n}",
+    "external": "This step happens on {host}. Open it, finish there, then come back.",
+    "openPage": "Open {host}",
+    "unsafeUrl": "The page this step points to isn't a secure (https) address, so it isn't shown.",
+    "finishedThere": "I've finished there",
+    "waiting": "Waiting for the device",
+    "secondsLeft": "{s} s left",
+    "timeLeft": "Time left",
+    "retrying": "Lost touch with the server for a moment; trying again…",
+    "choose": "Choose one",
+    "done": "Connected",
+    "abortedTitle": "The setup stopped",
+    "aborted": "The setup couldn't continue.",
+    "back": "Back",
+    "options": {
+      "preset": {
+        "basic": "Basic: five devices",
+        "demo": "Demo home: about twenty devices"
+      }
+    }
+  },
+  "review": {
+    "eyebrow": "Review devices",
+    "title": "No devices found | 1 device found | {count} devices found",
+    "waitingTitle": "Looking for devices…",
+    "description": "Keep the ones you want to see, and put each in its room. Rooms are suggested from the device names; you can change everything later.",
+    "waiting": "The devices arrive a moment after the integration starts.",
+    "none": "No devices showed up yet. They can take a while; they'll appear in your device list as they come in.",
+    "keep": "Keep {name}",
+    "kept": "Shown in your home",
+    "hidden": "Hidden from dashboards and lists",
+    "room": "Room of {name}",
+    "suggested": "Suggested from the name",
+    "noRooms": "Draw your floors and rooms to put devices in them.",
+    "stillArriving": "More devices may still be arriving…",
+    "skip": "Skip",
+    "finish": "Finish",
+    "saved": "All set: no devices kept. | All set: 1 device is ready. | All set: {count} devices are ready."
+  },
+  "detail": {
+    "title": "Integration",
+    "notFound": "Integration not found",
+    "reauth": "Sign in again",
+    "needsReauthTitle": "This integration needs you to sign in again",
+    "needsReauth": "Its devices are kept; they come back once it is signed in.",
+    "statusTitle": "Status",
+    "devices": "Devices",
+    "openGrid": "Open in Devices",
+    "orphaned": "No devices are orphaned | 1 device is no longer reported by this integration. | {n} devices are no longer reported by this integration.",
+    "noDevices": "No devices yet. They appear here as the integration finds them.",
+    "noDevicesOff": "No devices. Turn the integration on to find them.",
+    "settings": "Integration settings",
+    "enabled": "Turned on",
+    "enabledHelp": "Turned off, it stops talking to its devices; they stay, with their history.",
+    "enabledToast": "{name} is on.",
+    "disabledToast": "{name} is off.",
+    "remove": "Remove integration"
   }
 }

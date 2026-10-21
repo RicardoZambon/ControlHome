@@ -6,7 +6,7 @@ import type { AppLocale } from '../../../i18n'
 import { mountWithApp } from '../../../test/app'
 import { CATALOGUE, INTEGRATIONS, OBSERVED, ROOMS, basicHome } from '../../../test/devices'
 
-// The device pages and the integrations page mounted in the real app (router, guards, i18n that throws on a missing
+// The device pages mounted in the real app (router, guards, i18n that throws on a missing
 // key), in both languages and for each role, against a mocked API.
 
 const api = vi.hoisted(() => ({
@@ -17,11 +17,9 @@ const api = vi.hoisted(() => ({
   listCapabilities: vi.fn(),
   listRooms: vi.fn(),
   listIntegrations: vi.fn(),
-  listConnectors: vi.fn(),
   getDevice: vi.fn(),
   sendCommand: vi.fn(),
   setEndpointFavorite: vi.fn(),
-  createIntegration: vi.fn(),
 }))
 
 vi.mock('@controlhome/api-client', async (importOriginal) => ({
@@ -379,60 +377,5 @@ describe('device page', () => {
     const { wrapper } = await open('/devices/nope')
     expect(wrapper.find('h1').text()).toBe('Device not found')
     wrapper.unmount()
-  })
-})
-
-describe('integrations page', () => {
-  beforeEach(() => {
-    api.listConnectors.mockResolvedValue(
-      ok([
-        {
-          key: 'simulated',
-          displayName: { en: 'Simulated home', ptBr: 'Casa simulada' },
-          icon: 'flask-conical',
-          category: 'virtual',
-          configFields: [],
-          deviceConfigFields: [],
-          features: {
-            setupFlow: false,
-            reauth: false,
-            pushInventory: true,
-            permitJoin: false,
-            cloud: false,
-            polling: false,
-          },
-        },
-      ]),
-    )
-  })
-
-  it('lists the integrations with their status and devices', async () => {
-    signedIn('Admin', 'pt-BR')
-    const { wrapper } = await open('/integrations', 'pt-BR')
-    expect(wrapper.find('h1').text()).toBe('Integrações')
-    expect(wrapper.get('[data-slot="integration-status"]').text()).toBe('Conectada')
-    expect(wrapper.get('a[href="/devices?integration=int-1"]').text()).toContain('5 dispositivos')
-    wrapper.unmount()
-  })
-
-  it('adds the simulated demo home', async () => {
-    api.listIntegrations.mockResolvedValue(ok([]))
-    api.createIntegration.mockResolvedValue(ok(INTEGRATIONS[0], 201))
-    signedIn('Admin', 'en')
-    const { wrapper } = await open('/integrations')
-    const add = wrapper.findAll('button').find((button) => button.text() === 'Add simulated demo')!
-    await add.trigger('click')
-    await flushPromises()
-    expect(api.createIntegration).toHaveBeenCalledWith({
-      body: { connectorKey: 'simulated', name: 'Simulated home', config: { preset: 'basic' } },
-    })
-    expect(wrapper.findAll('[data-integration-id]')).toHaveLength(1)
-    wrapper.unmount()
-  })
-
-  it('is for Admins only', async () => {
-    signedIn('Member', 'en')
-    const { router } = await open('/integrations')
-    expect(router.currentRoute.value.name).toBe('forbidden')
   })
 })

@@ -49,7 +49,14 @@ describe('setup wizard model', () => {
         currency: 'BRL',
         pricePerKwh: null,
       },
+      loadDemoHome: false,
     })
+  })
+
+  it('asks for the demo home when chosen', () => {
+    const draft = createDraft('pt-BR')
+    draft.loadDemoHome = true
+    expect(toRequest(draft).loadDemoHome).toBe(true)
   })
 
   it('normalizes the setup code', () => {

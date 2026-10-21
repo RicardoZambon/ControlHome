@@ -57,7 +57,10 @@
     "noRooms": "An admin can draw the rooms of this floor.",
     "noRoomsAdmin": "Open the editor to draw the rooms of this floor.",
     "noRoomsShort": "No rooms on this floor yet.",
-    "drawRooms": "Draw rooms"
+    "drawRooms": "Draw rooms",
+    "deviceCount": "No devices | 1 device | {n} devices",
+    "noDevicesAdmin": "No devices on this floor yet.",
+    "placeDevices": "Place devices"
   },
   "editor": {
     "title": "Edit plan",
@@ -128,7 +131,8 @@
     "tabs": {
       "rooms": "Rooms",
       "floor": "Floor",
-      "background": "Image"
+      "background": "Image",
+      "devices": "Devices"
     },
     "empty": {
       "title": "Draw your first room",
@@ -248,6 +252,31 @@
       "description": "Your changes to this floor plan haven't been saved and will be lost.",
       "stay": "Keep editing",
       "discard": "Discard changes"
+    },
+    "devices": {
+      "unplaced": "Not on a plan",
+      "onFloor": "On this floor",
+      "hint": "Drag a device by its handle onto the plan, or press Place and tap the spot.",
+      "planHint": "Drag a device to move it · tap one to select it · drag the plan to pan",
+      "tapToPlace": "Tap the plan where “{name}” goes",
+      "place": "Place",
+      "placeShort": "Place a device",
+      "placeNamed": "Place {name} on the plan",
+      "drag": "Drag {name} onto the plan",
+      "whole": "Whole device · no controls | Whole device · 1 control | Whole device · {count} controls",
+      "outside": "Outside the rooms",
+      "moveHint": "Drag it on the plan to move it; the room follows its spot.",
+      "remove": "Take off the plan",
+      "removeNamed": "Take {name} off the plan",
+      "deselect": "Clear the selection",
+      "search": "Search devices",
+      "none": "No devices yet.",
+      "addIntegration": "Add an integration",
+      "allPlaced": "Every device is on a plan.",
+      "noneHere": "Nothing on this floor yet.",
+      "elsewhere": "No devices on other floors | 1 more device is on another floor | {n} more devices are on other floors",
+      "summary": "{placed} here · {unplaced} to place",
+      "saveFailed": "Couldn't save the device's place."
     }
   }
 }
