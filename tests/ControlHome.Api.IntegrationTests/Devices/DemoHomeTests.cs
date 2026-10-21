@@ -232,4 +232,41 @@ public sealed class DemoHomeDataTests
         DemoHome.PortugueseDeviceNames.Keys.ShouldBe(devices.Select(d => d.ExternalId), ignoreOrder: true);
         DemoHome.Favorites.ShouldAllBe(f => devices.Any(d => d.ExternalId == f.ExternalId && d.Endpoints.Any(e => e.Key == f.EndpointKey)));
     }
+
+    [Fact]
+    public void Demo_markers_keep_clear_of_the_room_labels_and_of_each_other()
+    {
+        // A room's label is drawn at its centroid (inside every demo room); a marker is about 40 cm across on a plan
+        // fitted to a laptop screen.
+        const double LabelClearanceCm = 100;
+        const double MarkerSpacingCm = 60;
+        static double Distance(DemoPlacement placement, PointCm point) =>
+            Math.Sqrt(Math.Pow(placement.XCm - point.X, 2) + Math.Pow(placement.YCm - point.Y, 2));
+
+        foreach (var floor in DemoHome.Floors)
+        {
+            var placed = DemoHome.Placements.Where(p => p.FloorKey == floor.Key).ToList();
+            foreach (var room in floor.Rooms)
+            {
+                var label = PolygonMath.Centroid(room.Polygon);
+                PolygonMath.Contains(room.Polygon, label).ShouldBeTrue(room.NameEn);
+                foreach (var placement in placed)
+                {
+                    Distance(placement, label).ShouldBeGreaterThanOrEqualTo(
+                        LabelClearanceCm,
+                        $"{placement.ExternalId}/{placement.EndpointKey} covers the {room.NameEn} label");
+                }
+            }
+
+            for (var i = 0; i < placed.Count; i++)
+            {
+                for (var j = i + 1; j < placed.Count; j++)
+                {
+                    Distance(placed[i], new PointCm(placed[j].XCm, placed[j].YCm)).ShouldBeGreaterThanOrEqualTo(
+                        MarkerSpacingCm,
+                        $"{placed[i].ExternalId}/{placed[i].EndpointKey} overlaps {placed[j].ExternalId}/{placed[j].EndpointKey}");
+                }
+            }
+        }
+    }
 }

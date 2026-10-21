@@ -61,6 +61,8 @@ public static class DemoHome
             ]),
     ];
 
+    // Markers keep clear of the room labels (drawn at each room's centroid), of each other, and of the plan's bottom-left
+    // corner (the scale bar on phones).
     public static IReadOnlyList<DemoPlacement> Placements { get; } =
     [
         // Ground floor: living room.
@@ -69,14 +71,14 @@ public static class DemoHome
         new("contact-1", "main", Ground, 650, 650),
         new("lock-1", "main", Ground, 720, 650),
         new("blinds-1", "main", Ground, 1150, 900),
-        new("switch3-1", "l1", Ground, 800, 450),
+        new("switch3-1", "l1", Ground, 740, 450),
         new("switch3-1", "l2", Ground, 1050, 650),
         new("switch3-1", "l3", Ground, 660, 770), // porch: outside every room
 
         // Kitchen and laundry.
         new("plug-1", "main", Ground, 1300, 200),
         new("plug-2", "main", Ground, 1440, 320),
-        new("washer-1", "main", Ground, 1300, 900),
+        new("washer-1", "main", Ground, 1250, 950),
         new("tank-1", "main", Ground, 1450, 950),
 
         // Garage, gate and cameras (two of them outside).
@@ -84,14 +86,14 @@ public static class DemoHome
         new("nvr-1", null, Ground, 550, 150),
         new("cam-1", "main", Ground, 130, 130),
         new("cam-2", "main", Ground, 570, 570),
-        new("cam-3", "main", Ground, 300, 1100),
-        new("cam-4", "main", Ground, 620, 740),
+        new("cam-3", "main", Ground, 300, 950),
+        new("cam-4", "main", Ground, 540, 760),
 
         // Upper floor.
         new("ac-1", "main", Upper, 800, 150),
         new("light-2", "main", Upper, 900, 450),
         new("motion-1", "main", Upper, 650, 600),
-        new("climate-1", "main", Upper, 1150, 700),
+        new("climate-1", "main", Upper, 1060, 800),
     ];
 
     /// <summary>Endpoints on the dashboard's favorites grid: (external device id, endpoint key).</summary>
