@@ -983,7 +983,7 @@ These protect a public repository and a real home; they apply to people and agen
 - **Test hooks**
   - Setup code override (`Setup__Code`).
   - `ASPNETCORE_ENVIRONMENT=Testing`-only endpoints `/api/_test/{reset, seed-demo, clock, devices/{id}/state,
-    connector-event}`, plus a test that they return 404 in Production. Anonymous, but like every mutation they need
+    devices/{id}/availability, connector-event}`, plus a test that they return 404 in Production. Anonymous, but like every mutation they need
     the same-origin `Origin` and `X-ControlHome: 1`. Landed in 1.2:
     - `POST /api/_test/reset` → 204: stops every integration runtime, empties the database (roles kept), resets the setup
       code, step-up grants/lockouts and command idempotency keys.
@@ -997,6 +997,11 @@ These protect a public repository and a real home; they apply to people and agen
       this clock's now. Flows use it too (the Simulated "press the button" step completes 2 s of it after it starts).
     - `POST /api/_test/seed-demo?locale=en|pt-BR` (1.3) → 204: loads the demo home into an empty home (409
       `demo.not_empty` otherwise).
+    - `POST /api/_test/devices/{deviceId}/availability` with `{ "availability": "Online"|"Offline"|"Unknown" }` (1.3) →
+      204 once processed: the device's availability goes through the state pipeline as if its connector had reported it
+      (live status, hub `AvailabilityChanged`, write-behind) — the Simulated connector never reports a device offline, so
+      the dashboard's offline devices are exercised with it. 400 unknown value; 404 unknown device; 409 when the runtime
+      is not active.
   - `History:MaintenanceEnabled=false` stops the background rollups and retention job; integration tests that need
     exact timing call `HistoryRollup.RunOnceAsync` / `RetentionPurge.PurgeOnceAsync` themselves. Likewise
     `Backup:ScheduleEnabled=false` (set by `ControlHomeApiFactory`) stops the daily backup; tests call

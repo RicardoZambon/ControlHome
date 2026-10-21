@@ -54,7 +54,7 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
   - Device placement and room auto-assign; dashboard v1 (favorites, rooms, power now, offline).
   - Integrations flow (catalog → flow → discover → import, with merge rules); the remaining Simulated types; demo seed.
   - Logical export / import (scheduled to `/data/backups`).
-  - Specs: `integration-import`, `plan-placement`, `export-import`.
+  - Specs: `integration-import`, `plan-placement`, `export-import`, `dashboard`.
 - [ ] **1.4 History and MQTT**
   - History with rollups, retention, `EnergyHourly` and ECharts history views; MQTT connector.
   - Spec: `history-chart`. Tag **`v0.1`**.

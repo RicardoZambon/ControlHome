@@ -108,6 +108,7 @@ export interface SimulatedDevice {
   id: string
   name: string
   deviceClass: string | null
+  availability: string
   endpoints: {
     id: string
     capabilities: {
@@ -166,6 +167,63 @@ export async function createSimulatedHome(
     contact: byName(SIMULATED.contact),
     lock: byName(SIMULATED.lock),
   }
+}
+
+/**
+ * The first-run setup with the demo home (`loadDemoHome`, what the wizard's "Load demo home" switch sends): two floors,
+ * eight rooms and the Simulated connector's twenty demo devices on the plans, named in `locale`. The admin is signed in
+ * on `request`. Waits until every device is online with its first values, and returns them.
+ */
+export async function setUpDemoHome(
+  request: APIRequestContext,
+  locale: 'en' | 'pt-BR' = 'en',
+): Promise<SimulatedDevice[]> {
+  const response = await request.post('/api/setup/complete', {
+    headers: mutationHeaders(),
+    data: {
+      setupCode: SETUP_CODE,
+      admin: testData.admin,
+      home: { latitude: null, longitude: null, pricePerKwh: null, ...testData.home, locale },
+      loadDemoHome: true,
+    },
+  })
+  expect(response.status(), `POST /api/setup/complete: ${await response.text()}`).toBe(200)
+  let devices: SimulatedDevice[] = []
+  await expect
+    .poll(
+      async () => {
+        devices = await listDevices(request)
+        return devices.length === 20 && devices.every((device) => device.availability === 'Online')
+      },
+      { message: 'the demo devices to come online', timeout: 30_000 },
+    )
+    .toBe(true)
+  return devices
+}
+
+/**
+ * `POST /api/_test/devices/{id}/availability` (Testing environment only): the device's availability goes through the
+ * state pipeline as if its connector had reported it (the Simulated connector never reports a device offline).
+ */
+export async function reportAvailability(
+  request: APIRequestContext,
+  device: Pick<SimulatedDevice, 'id'>,
+  availability: 'Online' | 'Offline',
+): Promise<void> {
+  const response = await request.post(`/api/_test/devices/${device.id}/availability`, {
+    headers: mutationHeaders(),
+    data: { availability },
+  })
+  expect(response.status(), `POST availability ${availability}: ${await response.text()}`).toBe(204)
+}
+
+/** `POST /api/_test/clock`: moves the server's runtime clock forward (connector ticks, history rollups). */
+export async function advanceClock(request: APIRequestContext, seconds: number): Promise<void> {
+  const response = await request.post('/api/_test/clock', {
+    headers: mutationHeaders(),
+    data: { advanceSeconds: seconds },
+  })
+  expect(response.status(), await response.text()).toBe(200)
 }
 
 /** The current value of `capability.attribute` of a device (`GET /api/devices`). */

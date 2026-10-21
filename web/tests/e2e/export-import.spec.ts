@@ -121,6 +121,21 @@ test('a backup with its credentials is restored into a new, empty home', async (
   const placements = await listPlacements(page.request)
   expect(placements).toHaveLength(1)
   expect(placements[0]).toMatchObject({ xCm: 500, yCm: 400 })
+
+  // The restored integration runs again with its credential: its devices come back online, and the light is on the
+  // floor's plan.
+  await expect
+    .poll(
+      async () => {
+        const devices = await listDevices(page.request)
+        return devices.length === 5 && devices.every((device) => device.availability === 'Online')
+      },
+      { message: 'the restored devices to come back online', timeout: 30_000 },
+    )
+    .toBe(true)
+  await page.goto(`/floors/${placements[0]!.floorId}`)
+  await expect(page.locator('[data-slot="placed-device"]')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: new RegExp(`^${SIMULATED.light}`) })).toBeVisible()
 })
 
 test('a file that is not a backup is refused before it is sent', async ({ page, request }, testInfo) => {

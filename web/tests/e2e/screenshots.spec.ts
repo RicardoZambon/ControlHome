@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import {
   SETUP_CODE,
+  advanceClock,
   attributeIdOf,
   attributeValue,
   completeSetup,
@@ -13,9 +14,11 @@ import {
   mutationHeaders,
   placeEndpoint,
   planPoint,
+  reportAvailability,
   resetApp,
   savePreferences,
   sendCommand,
+  setUpDemoHome,
   signIn,
   tapPlan,
   test,
@@ -835,6 +838,177 @@ for (const width of WIDTHS) {
           await confirm.getByRole('button', { name: l('floors.delete.confirm') }).click()
           await expect(page.getByText(l('floors.toast.deleted', { name: upper }))).toBeVisible()
           await capture('floors-deleted-toast')
+        })
+      })
+    }
+  }
+}
+
+/** Demo devices this file needs, by their names in each language (DemoHome.PortugueseDeviceNames). */
+const DEMO_DEVICES = {
+  plug: { en: 'Coffee maker plug', 'pt-BR': 'Tomada da cafeteira' },
+  washer: { en: 'Washing machine', 'pt-BR': 'Máquina de lavar' },
+} as const
+
+// The demo home (the setup's "Load demo home") in every width, theme and language into
+// ./screenshots/demo-<name>-<width>-<theme>-<locale>.png: the dashboard, both floors with their devices on them, the
+// editor's Devices tab, the integration with its twenty devices, the dashboard with an offline device, a device's history
+// after a simulated hour, and a second integration being added (waiting for the hub's button, then the import review).
+for (const width of WIDTHS) {
+  for (const theme of THEMES) {
+    for (const locale of LOCALES) {
+      test.describe(`demo home, ${width} px, ${theme}, ${locale}`, () => {
+        test.use({
+          viewport: { width, height: width < 768 ? 812 : 900 },
+          colorScheme: theme,
+          locale: locale === 'en' ? 'en-US' : 'pt-BR',
+        })
+
+        test('demo home', async ({ page, request, gates }) => {
+          const l = (key: string, params?: Record<string, string | number>) => tr(locale, key, params)
+          await page.addInitScript(
+            ([savedTheme, savedLocale]) => {
+              localStorage.setItem('ch.theme', savedTheme)
+              localStorage.setItem('ch.locale', savedLocale)
+            },
+            [theme, locale] as const,
+          )
+
+          async function shot(name: string): Promise<void> {
+            await expect(page.locator('html')).toHaveAttribute('lang', locale)
+            await page.evaluate(() => document.fonts.ready)
+            await gates.check(`demo ${name} (${width} px, ${theme}, ${locale})`)
+            await screenshotWholePage(page, `${outputDir}demo-${name}-${width}-${theme}-${locale}.png`)
+          }
+
+          async function capture(route: Route): Promise<void> {
+            await page.goto(route.path)
+            await expect(route.ready(page, locale)).toBeVisible()
+            await shot(route.name)
+          }
+
+          await resetApp(request)
+          const devices = await setUpDemoHome(page.request, locale)
+          await savePreferences(page.request, { displayName: testData.admin.displayName, locale, theme })
+          const demoDevice = (names: { en: string; 'pt-BR': string }) => {
+            const device = devices.find((entry) => entry.name === names[locale])
+            expect(device, `the demo home has ${names[locale]}`).toBeDefined()
+            return device!
+          }
+          const plug = demoDevice(DEMO_DEVICES.plug)
+          const washer = demoDevice(DEMO_DEVICES.washer)
+          const floors = (await (await page.request.get('/api/floors')).json()) as {
+            id: number
+            level: number
+          }[]
+          expect(floors).toHaveLength(2)
+          const [ground, upper] = [...floors].sort((a, b) => a.level - b.level)
+          const [integration] = (await (await page.request.get('/api/integrations')).json()) as {
+            id: string
+          }[]
+
+          // The dashboard: the ground floor's plan with its devices, the favorites, every room, the integration working.
+          await page.goto('/')
+          await expect(page.locator('[data-slot="integration-chip"][data-status="Ok"]')).toBeVisible()
+          await expect(
+            page.locator('[data-slot="dashboard-favorites"] [data-slot="device-tile"]'),
+          ).toHaveCount(6)
+          await expect(page.locator('[data-slot="room-card"]')).toHaveCount(8)
+          await expect(page.locator('[data-slot="dashboard-plan"] [data-slot="placed-device"]')).toHaveCount(
+            18,
+          )
+          await shot('dashboard')
+
+          const marker = (page: Page) =>
+            page.locator('[data-slot="floor-plan"] [data-slot="placed-device"]').first()
+          for (const route of [
+            { path: `/floors/${ground!.id}`, name: 'floor-ground', ready: marker },
+            { path: `/floors/${upper!.id}`, name: 'floor-upper', ready: marker },
+            {
+              path: `/floors/${ground!.id}/edit?tab=devices`,
+              name: 'floor-edit-devices',
+              ready: (page: Page) =>
+                width < 1024
+                  ? page.getByRole('button', { name: l('floors.editor.devices.placeShort') })
+                  : page.locator('[data-slot="placed-list"]'),
+            },
+            {
+              path: `/integrations/${integration!.id}`,
+              name: 'integration',
+              ready: (page: Page) => page.locator('[data-slot="integration-devices"] li').nth(19),
+            },
+          ])
+            await capture(route)
+
+          // The washer stops answering: the dashboard lists it, and its marker turns offline.
+          await reportAvailability(page.request, washer, 'Offline')
+          await page.goto('/')
+          await expect(page.locator('[data-slot="dashboard-offline"] li')).toHaveCount(1)
+          await expect(page.locator('[data-slot="dashboard-plan"] [data-slot="placed-device"]')).toHaveCount(
+            18,
+          )
+          await shot('dashboard-offline')
+
+          // The coffee maker on for a simulated hour (the runtime clock moved forward five minutes at a time): its power
+          // charted and the energy it used as bars.
+          await sendCommand(page.request, plug, 'switch', 'turnOn')
+          const powerId = attributeIdOf(plug, 'power', 'power')
+          let advanced = 0
+          await expect
+            .poll(
+              async () => {
+                await advanceClock(page.request, 300)
+                advanced += 300
+                const history = (await (
+                  await page.request.get(`/api/attributes/${powerId}/history`)
+                ).json()) as {
+                  points: { v: number | null }[]
+                }
+                const energy = (await (
+                  await page.request.get(`/api/energy/hourly?endpointId=${plug.endpoints[0]!.id}`)
+                ).json()) as unknown[]
+                return (
+                  advanced >= 3_600 &&
+                  history.points.filter((p) => p.v !== null).length >= 6 &&
+                  energy.length >= 1
+                )
+              },
+              { message: 'an hour of power and energy history', timeout: 120_000, intervals: [500] },
+            )
+            .toBe(true)
+          await page.goto(`/devices/${plug.id}?tab=history`)
+          const chart = page.locator(
+            `[data-slot="attribute-history"][data-attribute-id="${powerId}"] [data-slot="history-chart"]`,
+          )
+          await expect(chart.locator('svg path').first()).toBeAttached()
+          await expect
+            .poll(async () =>
+              Number(await page.locator('[data-slot="energy-bars"]').getAttribute('data-buckets')),
+            )
+            .toBeGreaterThanOrEqual(1)
+          await shot('device-history')
+
+          // A second integration: its setup flow waiting for the hub's button (its polls held back), then the review.
+          let release!: () => void
+          const held = new Promise<void>((resolve) => (release = resolve))
+          let answers = 0
+          const flowUrl = /\/api\/integrations\/flows\/[^/]+$/
+          await page.route(flowUrl, async (route) => {
+            if (route.request().method() === 'POST' && answers++ > 0) await held
+            await route.continue()
+          })
+          await page.goto('/integrations/add/simulated')
+          const wizard = (step: string) => page.locator(`[data-slot="flow-wizard"][data-step="${step}"]`)
+          await expect(wizard('form')).toBeVisible()
+          await wizard('form')
+            .getByRole('button', { name: l('common.continue') })
+            .click()
+          await expect(wizard('progress')).toBeVisible()
+          await shot('integration-progress')
+          release()
+          await page.unroute(flowUrl)
+          await expect(page.locator('[data-slot="review-list"] > li')).toHaveCount(5, { timeout: 30_000 })
+          await shot('integration-review')
         })
       })
     }

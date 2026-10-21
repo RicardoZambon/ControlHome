@@ -1,11 +1,11 @@
 import type { APIRequestContext } from '@playwright/test'
 import {
   SIMULATED,
+  advanceClock,
   attributeIdOf,
   completeSetup,
   createSimulatedHome,
   expect,
-  mutationHeaders,
   resetApp,
   sendCommand,
   test,
@@ -16,15 +16,6 @@ import { t } from './i18n'
 // the runtime clock) runs for a few simulated hours — the test moves the server's clock forward
 // (`POST /api/_test/clock`), so the Simulated home ticks and the history rollups run — then its page charts the power
 // over the last 24 hours and 7 days, and the energy it used as bars.
-
-/** Moves the server's runtime clock forward. */
-async function advanceClock(request: APIRequestContext, seconds: number): Promise<void> {
-  const response = await request.post('/api/_test/clock', {
-    headers: mutationHeaders(),
-    data: { advanceSeconds: seconds },
-  })
-  expect(response.status(), await response.text()).toBe(200)
-}
 
 async function historyPoints(
   request: APIRequestContext,
