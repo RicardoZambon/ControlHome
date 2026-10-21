@@ -2877,6 +2877,14 @@ export type ReplaceDeviceErrors = {
      * Not Found
      */
     404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
 };
 
 export type ReplaceDeviceError = ReplaceDeviceErrors[keyof ReplaceDeviceErrors];

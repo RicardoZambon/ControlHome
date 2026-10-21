@@ -84,6 +84,27 @@ public sealed class IntegrationFlowTests(DevicesApiFactory factory) : DevicesTes
     }
 
     [Fact]
+    public async Task An_empty_secret_field_counts_as_left_empty()
+    {
+        var (admin, _, _) = await SignInAllAsync();
+        var token = $"CANARY-{Guid.NewGuid():N}";
+        var form = await StartAsync(admin, CanaryConnectorFactory.Key);
+
+        // A password box sent empty is no token: required, so the form asks again.
+        var empty = await ContinueAsync(admin, form.FlowId, """{"token":"","label":"x"}""");
+        (empty.Type, empty.Errors.Keys.Single()).ShouldBe(("form", "token"));
+        var done = await ContinueAsync(admin, form.FlowId, $$"""{"token":"{{token}}","label":"porch"}""");
+        var integrationId = done.IntegrationId.ShouldNotBeNull();
+
+        // Reconfiguring with the password box left empty keeps the stored token.
+        var reauth = await StartReauthAsync(admin, integrationId);
+        (await ContinueAsync(admin, reauth.FlowId, """{"token":"","label":"garden"}""")).Type.ShouldBe("done");
+        var after = await QueryDbAsync(db => db.Integrations.AsNoTracking().SingleAsync(i => i.Id == integrationId, Ct));
+        after.ConfigJson.ShouldBe("""{"label":"garden"}""");
+        Factory.Services.GetRequiredService<IIntegrationSecretProtector>().Read(after.SecretsProtected).Values["token"].ShouldBe(token);
+    }
+
+    [Fact]
     public async Task Reauthorizing_clears_expired_credentials_and_keeps_the_devices()
     {
         var (admin, _, viewer) = await SignInAllAsync();
@@ -150,6 +171,7 @@ public sealed class IntegrationFlowTests(DevicesApiFactory factory) : DevicesTes
         using var byMember = await member.PostAsJsonAsync("/api/integrations/flows", new StartFlowRequest("simulated"), Ct);
         await byMember.ShouldBeProblemAsync(HttpStatusCode.Forbidden, "auth.forbidden");
         var form = await StartAsync(admin, "simulated");
+        form.FlowId.Version.ShouldBe(4, "flow ids are random (122 bits), not time-ordered");
 
         using var bySecond = await ContinueRawAsync(second, form.FlowId, "{}");
         await bySecond.ShouldBeProblemAsync(HttpStatusCode.NotFound, "flows.not_found");

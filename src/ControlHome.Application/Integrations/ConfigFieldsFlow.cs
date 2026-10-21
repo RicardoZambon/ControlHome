@@ -7,7 +7,7 @@ namespace ControlHome.Application.Integrations;
 /// <summary>
 /// The flow of a connector without one of its own: a single form with its config fields → done (secret fields go to the
 /// secrets, never the config). For an existing integration the form starts with its settings, and a secret field left empty
-/// keeps the stored value.
+/// (missing, <c>null</c> or <c>""</c>) keeps the stored value; for a new one an empty required secret is missing.
 /// </summary>
 internal sealed class ConfigFieldsFlow(IConnectorDescriptor descriptor) : IConnectorFlow
 {
@@ -32,6 +32,13 @@ internal sealed class ConfigFieldsFlow(IConnectorDescriptor descriptor) : IConne
         }
 
         var (plain, secrets) = IntegrationService.Split(descriptor.ConfigFields, input);
+
+        // An empty password box is no secret: the field was left empty (missing when required; kept on reconfiguration).
+        foreach (var empty in secrets.Where(s => s.Value.Length == 0).Select(s => s.Key).ToList())
+        {
+            secrets.Remove(empty);
+        }
+
         if (context.Existing is { } existing)
         {
             // A secret left empty keeps the stored one (admins never see it).

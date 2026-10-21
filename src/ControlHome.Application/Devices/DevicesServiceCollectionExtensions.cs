@@ -1,5 +1,6 @@
 using ControlHome.Application.Integrations;
 using ControlHome.Application.Realtime;
+using ControlHome.Application.Runtime;
 using ControlHome.Application.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -22,6 +23,7 @@ public static class DevicesServiceCollectionExtensions
         services.TryAddSingleton<KnownSecrets>();
         services.TryAddSingleton<ConnectorCatalog>();
         services.TryAddSingleton<ICommandDispatcher>(NoDeviceRuntime.Instance);
+        services.TryAddSingleton<IRuntimeStatus>(NoDeviceRuntime.Instance);
         services.TryAddSingleton<IRealtimePublisher>(NullRealtimePublisher.Instance);
         services.TryAddScoped<IAttributeStateReader, DbAttributeStateReader>();
         services.TryAddSingleton<IDeviceStatusReader>(NoLiveDeviceStatus.Instance);

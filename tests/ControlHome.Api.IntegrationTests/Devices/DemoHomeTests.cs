@@ -63,6 +63,31 @@ public sealed class DemoHomeTests(DevicesApiFactory factory) : DevicesTestBase(f
     }
 
     [Fact]
+    public async Task Concurrent_loads_fill_the_home_once()
+    {
+        using var admin = await Factory.CompleteSetupAsync(cancellationToken: Ct);
+
+        // Double clicks, or the setup option racing --seed-demo: exactly one of them finds the home empty.
+        var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => admin.PostAsync("/api/_test/seed-demo?locale=en", null, Ct)));
+        try
+        {
+            responses.Count(r => r.StatusCode == HttpStatusCode.NoContent).ShouldBe(1);
+            responses.Count(r => r.StatusCode == HttpStatusCode.Conflict).ShouldBe(3);
+        }
+        finally
+        {
+            foreach (var response in responses)
+            {
+                response.Dispose();
+            }
+        }
+
+        (await QueryDbAsync(db => db.Floors.CountAsync(Ct))).ShouldBe(2);
+        (await QueryDbAsync(db => db.Integrations.CountAsync(Ct))).ShouldBe(1);
+        (await WaitForDevicesAsync(admin, 20)).Count.ShouldBe(20);
+    }
+
+    [Fact]
     public async Task The_seed_demo_command_loads_the_demo_home_once()
     {
         var (first, output, _) = await RunSeedDemoAsync("pt-BR");

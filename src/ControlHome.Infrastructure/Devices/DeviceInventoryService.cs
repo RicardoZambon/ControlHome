@@ -179,18 +179,21 @@ public sealed partial class DeviceInventoryService(
         {
             await using var scope = scopes.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<IControlHomeDb>();
+
+            // The database compares the external ids, as it does when an upsert looks a device up (its collation, the
+            // same as the unique key's): a device reported as "ABC" that was stored as "abc" was just merged, not missing.
+            var ids = listed.ToList();
             var missing = await db.Devices
-                .Where(d => d.IntegrationId == integrationId && !d.IsOrphaned)
+                .Where(d => d.IntegrationId == integrationId && !d.IsOrphaned && !ids.Contains(d.ExternalId))
                 .Select(d => new { d.Id, d.ExternalId })
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
-            missing.RemoveAll(d => listed.Contains(d.ExternalId));
             orphaned = [.. missing.Select(d => d.ExternalId)];
             if (missing.Count > 0)
             {
-                var ids = missing.Select(d => d.Id).ToList();
+                var missingIds = missing.Select(d => d.Id).ToList();
                 await db.Devices
-                    .Where(d => ids.Contains(d.Id))
+                    .Where(d => missingIds.Contains(d.Id))
                     .ExecuteUpdateAsync(
                         s => s.SetProperty(d => d.IsOrphaned, true).SetProperty(d => d.Availability, Availability.Unknown),
                         cancellationToken)

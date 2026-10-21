@@ -41,13 +41,17 @@ public static class BackupCipher
     }
 
     /// <summary>The key for <paramref name="passphrase"/>, or <c>null</c> when the passphrase does not open this backup.</summary>
-    /// <exception cref="FormatException">The parameters are not ones this version writes (unknown algorithm, bad salt, iterations out of range).</exception>
+    /// <exception cref="FormatException">
+    /// The parameters are not ones this version writes (unknown algorithm, missing or bad salt or check value, iterations
+    /// out of range).
+    /// </exception>
     public static byte[]? Open(BackupEncryption encryption, string passphrase)
     {
         ArgumentNullException.ThrowIfNull(encryption);
         ArgumentNullException.ThrowIfNull(passphrase);
         if (encryption.Kdf != Kdf || encryption.Cipher != Cipher
-            || encryption.Iterations is < MinIterations or > MaxIterations)
+            || encryption.Iterations is < MinIterations or > MaxIterations
+            || string.IsNullOrEmpty(encryption.Salt) || string.IsNullOrEmpty(encryption.Check))
         {
             throw new FormatException("Unsupported backup encryption.");
         }

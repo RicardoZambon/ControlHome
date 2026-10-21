@@ -133,16 +133,33 @@ public sealed partial class IntegrationFlowService(
         }
     }
 
-    /// <summary>Abandons a flow (the wizard was closed); 404 <c>flows.not_found</c>.</summary>
-    public async Task<Result> CancelAsync(Guid flowId)
+    /// <summary>
+    /// Abandons a flow (the wizard was closed); 404 <c>flows.not_found</c>. A step in progress finishes first, so a
+    /// connector's flow is never disposed under it and an answer already sent cannot complete the flow after a cancel
+    /// succeeded (it then is 404: the flow is gone).
+    /// </summary>
+    public async Task<Result> CancelAsync(Guid flowId, CancellationToken cancellationToken)
     {
-        if (flows.Find(flowId, OwnerId) is null)
+        if (flows.Find(flowId, OwnerId) is not { } session)
         {
             return FlowNotFound();
         }
 
-        await flows.RemoveAsync(flowId);
-        return Result.Success();
+        await session.Gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (flows.Find(flowId, OwnerId) is null)
+            {
+                return FlowNotFound();
+            }
+
+            await flows.RemoveAsync(flowId);
+            return Result.Success();
+        }
+        finally
+        {
+            session.Gate.Release();
+        }
     }
 
     private Guid OwnerId => actor.UserId ?? Guid.Empty;
@@ -153,7 +170,9 @@ public sealed partial class IntegrationFlowService(
     private async Task<Result<FlowStepDto>> BeginAsync(IConnectorFactory factory, IntegrationInstance? existing, CancellationToken cancellationToken)
     {
         var flow = factory.CreateSetupFlow() ?? new ConfigFieldsFlow(factory.Descriptor);
-        var session = new FlowSession(Guid.CreateVersion7(), factory.Descriptor.Key, existing?.Id, OwnerId, flow);
+
+        // Fully random (not time-ordered like the other ids): a flow id must not be guessable.
+        var session = new FlowSession(Guid.NewGuid(), factory.Descriptor.Key, existing?.Id, OwnerId, flow);
         await flows.AddAsync(session);
         var context = new FlowContext(clock.Time, logger, existing);
         await session.Gate.WaitAsync(cancellationToken);

@@ -50,10 +50,13 @@ public static class DeviceEndpoints
                 "one of each), placements and history (state log, events, statistics, energy) to newDeviceId, then deletes " +
                 "this device. Typically for an orphaned device after re-pairing, or a likely duplicate " +
                 "(possibleDuplicateIds). Returns the new device. 404 devices.not_found; 400 validation.failed with " +
-                "errors.newDeviceId = devices.not_found or devices.replace_same.")
+                "errors.newDeviceId = devices.not_found or devices.replace_same; 409 runtime.standby (this instance is a " +
+                "read-only standby); 503 runtime.starting (still deciding whether it runs the devices).")
             .RequireAuthorization(AuthorizationPolicies.Admin)
             .WithValidation<ReplaceDeviceRequest>()
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         var endpoints = app.MapGroup("/api/endpoints")
             .WithTags("Devices")

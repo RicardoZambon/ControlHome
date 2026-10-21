@@ -120,6 +120,7 @@ public static class SeedDemoCommand
             options.StartupTimeout = options.StartupTimeout < MaxDatabaseWait ? options.StartupTimeout : MaxDatabaseWait);
         builder.Services.AddControlHomeDataProtection();
         builder.Services.AddSingleton<ICurrentActor>(SystemActor.Instance);
+        builder.Services.AddScoped<IExclusiveTransaction, SqlExclusiveTransaction>();
 
         // The device inventory without its host: nothing runs, devices are only imported.
         builder.Services.AddDeviceRuntime();

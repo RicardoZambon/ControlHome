@@ -252,9 +252,11 @@ endpoints and orphaned devices are left out of the rooms.
   `form` | `externalUrl` | `progress` | `choose` | `done` | `abort`); `DELETE …/flows/{flowId}` abandons one;
   `POST /api/integrations/{id}/flows/reauth` runs the connector's flow for an existing integration (`FlowContext.Existing`
   with its secret store). Flows live in memory (`IntegrationFlowStore`) 15 min after their last step, at most 10 per admin,
-  owned by the admin who started them, one answer at a time; typed secret fields are registered with the log redactor
-  before the connector sees them, and form values never echo secrets. A connector without a flow gets one form with its
-  config fields (`ConfigFieldsFlow`; an empty secret keeps the stored one). `done` creates the integration (secrets
+  owned by the admin who started them (flow ids are random v4 GUIDs, never time-ordered), one answer at a time (a cancel
+  waits for the answer in progress); typed secret fields are registered with the log redactor before the connector sees
+  them, and form values never echo secrets. A connector without a flow gets one form with its config fields
+  (`ConfigFieldsFlow`; an empty secret — missing, `null` or `""` — keeps the stored one, and is missing when required for a
+  new integration). `done` creates the integration (secrets
   encrypted) or updates the one being re-authorized — stopped first so its runtime cannot save a rotated token over the new
   secrets, integration-level secrets replaced, per-device secrets kept, devices kept — and starts it. Flows follow the
   standby / starting rules of every integration change. `PUT /api/integrations/{id}` renames, enables and disables.
@@ -263,12 +265,14 @@ endpoints and orphaned devices are left out of the rooms.
   - Vendor fields update; user fields (name, room, icon, placement) are **never overwritten**.
   - A device that disappears becomes **Orphaned** and the automations that use it are flagged. Nothing is deleted
     automatically: `RemoveDeviceAsync`, or a device missing from a full inventory (`IConnectorContext.SyncInventoryAsync`,
-    which upserts parents before children).
+    which upserts parents before children; the database compares external ids — case-insensitively, like the unique key
+    the upsert matched on — so a device reported in another letter case is merged, not orphaned).
   - Capabilities (and endpoints) no longer reported are `Retired` (history kept) and come back when reported again.
   - "Replace device" (`POST /api/devices/{id}/replace`, `ReplaceDeviceRequest(newDeviceId)`) moves name, room, icon,
     endpoint settings and favorites (endpoints matched by key, or the only one of each), placements and history
     (`StateLog`, `DeviceEvent`, statistics and energy re-keyed in one transaction; where the new device already has a
-    bucket its own row wins) to the new device and deletes the old one; automations follow in Phase 3.
+    bucket its own row wins) to the new device and deletes the old one; automations follow in Phase 3. Like integration
+    changes it is refused on a standby (409 `runtime.standby`) and while the runtime starts (503 `runtime.starting`).
   - Likely duplicates across integrations (the same MAC address or serial number, `DeviceIdentity`) are flagged on every
     read: `DeviceSummaryDto` / `DeviceDetailDto.PossibleDuplicateIds`.
 - **Optional runtime/factory interfaces:** `ICameraSnapshotSource` (camera stills, served behind the app's auth as
@@ -692,10 +696,15 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   `files.json` + `files/<id>.<ext>`, `integrations.json`, `devices.json`, `endpoints.json` (capabilities and attribute
   keys), `placements.json`, `users.json` (no password hashes, no PINs); history is not included. `POST /api/backup/import`
   (multipart `file` + optional `passphrase`, at most 200 MB) restores into an empty home only (no floors, integrations or
-  devices: 409 `backup.not_empty`), in one transaction under the `ControlHome.Backup` app lock: ids of integrations,
-  devices, endpoints and files are kept, floors and rooms get new ids, user accounts that do not exist are created without
-  a password (an admin resets it). Every entry is size-bounded and checked (lengths, references, uniqueness, room
-  geometry, file hashes) before anything is written: `backup.invalid`, `backup.unsupported_version`,
+  devices: 409 `backup.not_empty`), in one transaction under the `ControlHome.HomeContent` app lock (shared with the demo
+  home, so the two never both fill the home): ids of integrations, devices, endpoints and files are kept, floors and rooms
+  get new ids, user accounts that do not exist are created without a password (an admin resets it with
+  `POST /api/users/{id}/password`). Nothing is extracted to disk; every entry is read at most once (file records may not
+  repeat an entry), a file at most 10 MB and all entries together at most 256 MB decompressed (zip bombs), and everything
+  is checked before anything is written — lengths, references, uniqueness (case-insensitive, like the database's keys),
+  each target placed at most once and inside its floor, room geometry, file hashes, and the API's own rules for the home
+  (IANA time zone, language, currency) and accounts (user name characters, language, theme). Images are decoded and
+  re-encoded as WebP like uploads, so only pixels are stored. Errors: `backup.invalid`, `backup.unsupported_version`,
   `backup.passphrase_required`, `backup.passphrase_incorrect`. A daily backup without secrets is written on the active
   runtime to `{DataPath}/backups` (`BackupScheduler`, `Backup:Interval` 1 day, `Backup:Keep` 7 newest).
 - **Log redaction:** a `KnownSecretsRedactor` covers every Serilog event, HttpClient/YARP log levels are lowered, and
@@ -983,7 +992,9 @@ These protect a public repository and a real home; they apply to people and agen
   - `FakeTimeProvider`; a seeded RNG for Simulated; the demo home (`DemoHome`: 2 floors, 8 rooms, the Simulated `demo`
     preset's 20 devices placed on the plans, six favorites, Portuguese names for a pt-BR home), loaded by
     `dotnet ControlHome.Api.dll --seed-demo [en|pt-BR]` (run and exit: 0 loaded, 3 the home is not empty, 1 no database),
-    the setup's `CompleteSetupRequest.LoadDemoHome` and the test hook above.
+    the setup's `CompleteSetupRequest.LoadDemoHome` and the test hook above. The emptiness check and the first writes
+    (floors, integration) run together under the `ControlHome.HomeContent` app lock, so concurrent loads (and a backup
+    import) fill the home once.
 - **Per-milestone verification:** `dotnet build -warnaserror`, `dotnet test`, the web suite (`lint`, `typecheck`,
   `test`, `check:colors`, `build`), the milestone's Playwright specs, and a compose smoke
   (`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --profile bundled-db up` →

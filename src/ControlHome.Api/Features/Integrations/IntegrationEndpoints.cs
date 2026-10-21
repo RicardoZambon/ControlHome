@@ -102,7 +102,9 @@ public static class IntegrationEndpoints
         integrations.MapDelete("/flows/{flowId:guid}", CancelFlowAsync)
             .WithName("cancelIntegrationFlow")
             .WithSummary("Abandons a flow (nothing is created or changed).")
-            .WithDescription("404 flows.not_found.")
+            .WithDescription(
+                "An answer still being processed finishes first. 404 flows.not_found (also when that answer finished the " +
+                "flow: then its done step is what happened).")
             .RequireAuthorization(AuthorizationPolicies.Admin)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -141,8 +143,11 @@ public static class IntegrationEndpoints
         CancellationToken cancellationToken) =>
         (await flows.ContinueAsync(flowId, request, cancellationToken)).ToHttpResult();
 
-    private static async Task<Results<NoContent, ProblemHttpResult>> CancelFlowAsync(Guid flowId, IntegrationFlowService flows) =>
-        (await flows.CancelAsync(flowId)).ToHttpResult();
+    private static async Task<Results<NoContent, ProblemHttpResult>> CancelFlowAsync(
+        Guid flowId,
+        IntegrationFlowService flows,
+        CancellationToken cancellationToken) =>
+        (await flows.CancelAsync(flowId, cancellationToken)).ToHttpResult();
 
     private static async Task<Results<Ok<FlowStepDto>, ProblemHttpResult>> StartReauthFlowAsync(
         Guid id,

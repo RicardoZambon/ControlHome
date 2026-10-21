@@ -51,4 +51,15 @@ public sealed class BackupCipherTests
 
         Should.Throw<FormatException>(() => BackupCipher.Open(encryption with { Kdf = kdf, Iterations = iterations, Cipher = cipher }, Passphrase));
     }
+
+    [Fact]
+    public void A_manifest_without_its_salt_or_check_value_is_refused_as_malformed()
+    {
+        var (encryption, _) = BackupCipher.Create(Passphrase);
+
+        // A crafted manifest (JSON null) must be answered like any other malformed backup, not with a server error.
+        Should.Throw<FormatException>(() => BackupCipher.Open(encryption with { Salt = null! }, Passphrase));
+        Should.Throw<FormatException>(() => BackupCipher.Open(encryption with { Check = null! }, Passphrase));
+        Should.Throw<FormatException>(() => BackupCipher.Open(encryption with { Salt = "" }, Passphrase));
+    }
 }

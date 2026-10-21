@@ -20,6 +20,9 @@ internal static class BackupEntries
     public const string Users = "users.json";
     public const string FilesFolder = "files/";
 
+    /// <summary>The JSON documents (file records must name other entries).</summary>
+    public static readonly IReadOnlyList<string> Documents = [Manifest, Home, Floors, Files, Integrations, Devices, Endpoints, Placements, Users];
+
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,

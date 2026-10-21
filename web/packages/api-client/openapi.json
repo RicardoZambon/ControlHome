@@ -2240,7 +2240,7 @@
           "Devices"
         ],
         "summary": "Replaces this device by another: the new one takes over its settings, placements and history.",
-        "description": "Moves name, room, icon, endpoint names/rooms/icons/hidden/favorites (endpoints matched by key, or the only one of each), placements and history (state log, events, statistics, energy) to newDeviceId, then deletes this device. Typically for an orphaned device after re-pairing, or a likely duplicate (possibleDuplicateIds). Returns the new device. 404 devices.not_found; 400 validation.failed with errors.newDeviceId = devices.not_found or devices.replace_same.",
+        "description": "Moves name, room, icon, endpoint names/rooms/icons/hidden/favorites (endpoints matched by key, or the only one of each), placements and history (state log, events, statistics, energy) to newDeviceId, then deletes this device. Typically for an orphaned device after re-pairing, or a likely duplicate (possibleDuplicateIds). Returns the new device. 404 devices.not_found; 400 validation.failed with errors.newDeviceId = devices.not_found or devices.replace_same; 409 runtime.standby (this instance is a read-only standby); 503 runtime.starting (still deciding whether it runs the devices).",
         "operationId": "replaceDevice",
         "parameters": [
           {
@@ -2306,6 +2306,26 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3256,7 +3276,7 @@
           "Integrations"
         ],
         "summary": "Abandons a flow (nothing is created or changed).",
-        "description": "404 flows.not_found.",
+        "description": "An answer still being processed finishes first. 404 flows.not_found (also when that answer finished the flow: then its done step is what happened).",
         "operationId": "cancelIntegrationFlow",
         "parameters": [
           {

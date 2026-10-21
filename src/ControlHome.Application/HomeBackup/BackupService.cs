@@ -6,6 +6,7 @@ using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Common;
 using ControlHome.Application.Devices;
+using ControlHome.Application.Files;
 using ControlHome.Application.Floors;
 using ControlHome.Application.Identity;
 using ControlHome.Application.Integrations;
@@ -27,7 +28,9 @@ namespace ControlHome.Application.HomeBackup;
 /// <c>integrations.json</c> (secrets only when exported with a passphrase, encrypted with <see cref="BackupCipher"/>),
 /// <c>devices.json</c>, <c>endpoints.json</c> (with capabilities and attribute keys), <c>placements.json</c> and
 /// <c>users.json</c> (no password hashes, no PINs). History is not part of a backup. An import goes only into an empty home
-/// (no floors, integrations or devices), in one transaction, and starts the imported integrations.
+/// (no floors, integrations or devices), in one transaction, and starts the imported integrations. Everything in the archive
+/// is checked before anything is written — against the same rules as the API (and the database's case-insensitive unique
+/// keys) — and its images are re-encoded like uploads, so a crafted archive is refused with 400 <c>backup.invalid</c>.
 /// </summary>
 public sealed class BackupService(
     IControlHomeDb db,
@@ -36,18 +39,24 @@ public sealed class BackupService(
     IIntegrationRuntimeControl runtime,
     IRuntimeStatus runtimeStatus,
     IExclusiveTransaction exclusive,
+    IImageProcessor images,
     IRealtimePublisher publisher,
     IAuditLog auditLog,
     TimeProvider timeProvider)
 {
     public const int SchemaVersion = 1;
     public const string AppName = "ControlHome";
-    public const string LockName = "ControlHome.Backup";
+
+    /// <summary>The import's application lock: <see cref="AppLocks.HomeContent"/>, shared with the demo home.</summary>
+    public const string LockName = AppLocks.HomeContent;
     public const string BackupTarget = "backup";
     public const string ContentType = "application/zip";
 
-    /// <summary>Largest archive entry read on import (a floor image is at most 10 MB; JSON documents are far smaller).</summary>
+    /// <summary>Largest JSON document read on import.</summary>
     public const long MaxEntryBytes = 64L * 1024 * 1024;
+
+    /// <summary>Largest decompressed total read on import (every entry together): a zip bomb cannot exhaust memory.</summary>
+    public const long MaxTotalBytes = 256L * 1024 * 1024;
     public const int MaxEntries = 10_000;
 
     /// <summary>
@@ -209,6 +218,20 @@ public sealed class BackupService(
             return AppError.Validation(ErrorCodes.BackupUnsupportedVersion, "This backup comes from a newer version of ControlHome.");
         }
 
+        // Only pixels are ever stored: images are decoded and re-encoded exactly like uploads.
+        var files = new List<ParsedFile>(backup.Files.Count);
+        foreach (var file in backup.Files)
+        {
+            if (ImageSignatures.Detect(file.Data) is not { } format
+                || images.ReencodeAsWebp(file.Data, format, FileService.ImageEncoding) is not { Status: ImageProcessingStatus.Success } image)
+            {
+                return Invalid();
+            }
+
+            files.Add(new ParsedFile(file.Record, image.Data, image.WidthPx, image.HeightPx));
+        }
+
+        backup = backup with { Files = files };
         var secrets = new Dictionary<Guid, IntegrationSecrets>();
         if (backup.Manifest.IncludesSecrets)
         {
@@ -238,6 +261,11 @@ public sealed class BackupService(
                 {
                     var json = BackupCipher.Decrypt(key, integration.Secrets!, SecretsContext(integration.Id));
                     var record = JsonSerializer.Deserialize<SecretsRecord>(json, BackupEntries.Json) ?? throw new JsonException("No secrets.");
+                    if (record.Values is null || record.Devices is null || record.Devices.Values.Any(d => d is null))
+                    {
+                        throw new JsonException("Incomplete secrets.");
+                    }
+
                     secrets[integration.Id] = new IntegrationSecrets(record.Values, record.Devices);
                 }
             }
@@ -247,20 +275,20 @@ public sealed class BackupService(
             }
         }
 
-        var firstFloor = backup.Floors.Count > 0;
+        var parsed = backup;
         var result = await exclusive.RunAsync(
             LockName,
-            token => ImportInTransactionAsync(backup, secrets, token),
-            async token => firstFloor
+            token => ImportInTransactionAsync(parsed, secrets, token),
+            async token => parsed.Floors.Count > 0
                 ? await db.Floors.AnyAsync(token)
-                : backup.Integrations.Count > 0 && await db.Integrations.AnyAsync(token),
+                : parsed.Integrations.Count > 0 && await db.Integrations.AnyAsync(token),
             cancellationToken);
         if (result.IsFailure)
         {
             return result.Error;
         }
 
-        foreach (var integration in backup.Integrations.Where(i => i.Enabled))
+        foreach (var integration in parsed.Integrations.Where(i => i.Enabled))
         {
             await runtime.StartAsync(integration.Id, cancellationToken);
         }
@@ -301,11 +329,11 @@ public sealed class BackupService(
             {
                 Id = file.Record.Id,
                 Purpose = file.Record.Purpose,
-                ContentType = file.Record.ContentType,
+                ContentType = FileService.WebpContentType,
                 Length = file.Data.Length,
-                Sha256 = file.Record.Sha256,
-                WidthPx = file.Record.WidthPx,
-                HeightPx = file.Record.HeightPx,
+                Sha256 = Convert.ToHexStringLower(SHA256.HashData(file.Data)),
+                WidthPx = file.WidthPx,
+                HeightPx = file.HeightPx,
                 Data = file.Data,
                 CreatedAtUtc = file.Record.CreatedAtUtc,
             });
@@ -527,7 +555,9 @@ public sealed class BackupService(
             throw new InvalidDataException("Too many entries.");
         }
 
-        var manifest = Read<BackupManifest>(zip, BackupEntries.Manifest);
+        // Every entry is read at most once, and all of them together at most MaxTotalBytes (zip bombs).
+        var budget = new ReadBudget(MaxTotalBytes);
+        var manifest = Read<BackupManifest>(zip, BackupEntries.Manifest, budget);
         if (manifest.App != AppName || manifest.SchemaVersion < 1)
         {
             throw new InvalidDataException("Not a ControlHome backup.");
@@ -540,34 +570,45 @@ public sealed class BackupService(
 
         var home = zip.GetEntry(BackupEntries.Home) is null
             ? null
-            : JsonSerializer.Deserialize<HomeRecord?>(ReadBytes(zip, BackupEntries.Home), BackupEntries.Json);
-        var floors = Read<List<FloorRecord>>(zip, BackupEntries.Floors);
-        var fileRecords = Read<List<FileRecord>>(zip, BackupEntries.Files);
+            : JsonSerializer.Deserialize<HomeRecord?>(ReadBytes(zip, BackupEntries.Home, MaxEntryBytes, budget), BackupEntries.Json);
+        var floors = Read<List<FloorRecord>>(zip, BackupEntries.Floors, budget);
+        var fileRecords = Read<List<FileRecord>>(zip, BackupEntries.Files, budget);
+        if (fileRecords.Any(r => r is null)
+            || fileRecords.Select(r => r.Id).Distinct().Count() != fileRecords.Count
+            || fileRecords.Select(r => r.Path).Distinct(StringComparer.Ordinal).Count() != fileRecords.Count
+            || fileRecords.Any(r => BackupEntries.Documents.Contains(r.Path, StringComparer.Ordinal)))
+        {
+            throw new InvalidDataException("The file records repeat an id or an entry.");
+        }
+
         var files = new List<ParsedFile>();
         foreach (var record in fileRecords)
         {
-            var data = ReadBytes(zip, record.Path);
+            var data = ReadBytes(zip, record.Path, FileService.MaxUploadBytes, budget);
             if (!FilePurposes.All.Contains(record.Purpose) || record.ContentType is not ("image/webp" or "image/png" or "image/jpeg")
                 || !string.Equals(Convert.ToHexStringLower(SHA256.HashData(data)), record.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidDataException($"File {record.Id} does not match its record.");
             }
 
-            files.Add(new ParsedFile(record, data));
+            files.Add(new ParsedFile(record, data, record.WidthPx, record.HeightPx));
         }
 
-        var integrations = Read<List<IntegrationRecord>>(zip, BackupEntries.Integrations);
-        var devices = Read<List<DeviceRecord>>(zip, BackupEntries.Devices);
-        var endpoints = Read<List<EndpointRecord>>(zip, BackupEntries.Endpoints);
-        var placements = Read<List<PlacementRecord>>(zip, BackupEntries.Placements);
-        var users = Read<List<UserRecord>>(zip, BackupEntries.Users);
+        var integrations = Read<List<IntegrationRecord>>(zip, BackupEntries.Integrations, budget);
+        var devices = Read<List<DeviceRecord>>(zip, BackupEntries.Devices, budget);
+        var endpoints = Read<List<EndpointRecord>>(zip, BackupEntries.Endpoints, budget);
+        var placements = Read<List<PlacementRecord>>(zip, BackupEntries.Placements, budget);
+        var users = Read<List<UserRecord>>(zip, BackupEntries.Users, budget);
 
         var parsed = new ParsedBackup(manifest, home, floors, files, integrations, devices, endpoints, placements, users);
         Check(parsed);
         return parsed;
     }
 
-    /// <summary>The checks the database would otherwise answer with an exception (lengths, references, uniqueness, geometry).</summary>
+    /// <summary>
+    /// The checks the database would otherwise answer with an exception (lengths, references, uniqueness — case-insensitive
+    /// like its collation —, geometry), and the rules the API applies to the same values (time zone, languages, user names).
+    /// </summary>
     private static void Check(ParsedBackup backup)
     {
         void Require(bool condition, string what)
@@ -580,20 +621,45 @@ public sealed class BackupService(
 
         static bool Text(string? value, int max) => !string.IsNullOrWhiteSpace(value) && value.Length <= max;
         static bool Optional(string? value, int max) => value is null || value.Length <= max;
+        static bool Unique<T>(IEnumerable<T> values, IEqualityComparer<T>? comparer = null)
+        {
+            var seen = new HashSet<T>(comparer);
+            return values.All(seen.Add);
+        }
+
+        var keys = StringComparer.OrdinalIgnoreCase;
+        Require(backup.Floors.All(f => f is { Rooms: not null } && f.Rooms.All(r => r is { Polygon: not null } && r.Polygon.All(p => p is not null)))
+            && backup.Integrations.All(i => i is not null)
+            && backup.Devices.All(d => d is not null)
+            && backup.Endpoints.All(e => e is { Capabilities: not null } && e.Capabilities.All(c => c is { Attributes: not null }))
+            && backup.Placements.All(p => p is not null)
+            && backup.Users.All(u => u is not null), "missing values");
 
         if (backup.Home is { } home)
         {
-            Require(Text(home.Name, ValidationRules.HomeNameMaxLength) && Text(home.TimeZoneId, 64) && Text(home.Locale, 16) && Text(home.Currency, 3) && Text(home.TariffKind, 32), "home");
+            Require(Text(home.Name, ValidationRules.HomeNameMaxLength)
+                && ValidationRules.IsIanaTimeZoneId(home.TimeZoneId)
+                && Locales.All.Contains(home.Locale, StringComparer.Ordinal)
+                && home.Currency is { Length: 3 } currency && currency.All(char.IsAsciiLetterUpper)
+                && home.Latitude is null or (>= -90 and <= 90)
+                && home.Longitude is null or (>= -180 and <= 180)
+                && home.TariffKind == Tariff.FlatKind
+                && home.PricePerKwh is null or >= 0, "home");
         }
 
         Require(backup.Floors.Select(f => f.Id).Distinct().Count() == backup.Floors.Count, "floor ids");
         Require(backup.Floors.SelectMany(f => f.Rooms).Select(r => r.Id).Distinct().Count() == backup.Floors.Sum(f => f.Rooms.Count), "room ids");
+        var backgrounds = new FloorBackgroundDtoValidator();
         foreach (var floor in backup.Floors)
         {
             Require(Text(floor.Name, FloorRules.NameMaxLength)
+                && floor.Level is >= FloorRules.MinLevel and <= FloorRules.MaxLevel
                 && floor.WidthCm is >= FloorRules.MinSizeCm and <= FloorRules.MaxSizeCm
                 && floor.HeightCm is >= FloorRules.MinSizeCm and <= FloorRules.MaxSizeCm
-                && floor.GridCm is >= FloorRules.MinGridCm and <= FloorRules.MaxGridCm, "floor");
+                && floor.GridCm is >= FloorRules.MinGridCm and <= FloorRules.MaxGridCm
+                && floor.Rooms.Count <= FloorRules.MaxRooms
+                && (floor.Background is not { } background || backgrounds.Validate(
+                    new FloorBackgroundDto(background.FileId, background.Opacity, background.OffsetXCm, background.OffsetYCm, background.CmPerPx)).IsValid), "floor");
             foreach (var room in floor.Rooms)
             {
                 Require(Text(room.Name, FloorRules.NameMaxLength)
@@ -613,7 +679,7 @@ public sealed class BackupService(
 
         var integrationIds = backup.Integrations.Select(i => i.Id).ToHashSet();
         Require(backup.Devices.Select(d => d.Id).Distinct().Count() == backup.Devices.Count, "device ids");
-        Require(backup.Devices.Select(d => (d.IntegrationId, d.ExternalId)).Distinct().Count() == backup.Devices.Count, "device external ids");
+        Require(backup.Devices.GroupBy(d => d.IntegrationId).All(g => Unique(g.Select(d => d.ExternalId), keys)), "device external ids");
         foreach (var device in backup.Devices)
         {
             Require(integrationIds.Contains(device.IntegrationId)
@@ -629,45 +695,60 @@ public sealed class BackupService(
 
         var deviceIds = backup.Devices.Select(d => d.Id).ToHashSet();
         Require(backup.Endpoints.Select(e => e.Id).Distinct().Count() == backup.Endpoints.Count, "endpoint ids");
-        Require(backup.Endpoints.Select(e => (e.DeviceId, e.Key)).Distinct().Count() == backup.Endpoints.Count, "endpoint keys");
+        Require(backup.Endpoints.GroupBy(e => e.DeviceId).All(g => Unique(g.Select(e => e.Key), keys)), "endpoint keys");
         foreach (var endpoint in backup.Endpoints)
         {
             Require(deviceIds.Contains(endpoint.DeviceId)
                 && Text(endpoint.Key, DeviceLimits.EndpointKeyMaxLength)
                 && Optional(endpoint.Name, DeviceLimits.NameMaxLength)
                 && Optional(endpoint.Icon, DeviceLimits.IconMaxLength)
-                && endpoint.Capabilities.Select(c => c.CapabilityId).Distinct().Count() == endpoint.Capabilities.Count
+                && Unique(endpoint.Capabilities.Select(c => c.CapabilityId), keys)
                 && endpoint.Capabilities.All(c => Text(c.CapabilityId, DeviceLimits.CapabilityIdMaxLength)
-                    && c.Attributes.All(a => Text(a, DeviceLimits.AttributeKeyMaxLength))), "endpoint");
+                    && c.Attributes.All(a => Text(a, DeviceLimits.AttributeKeyMaxLength))
+                    && Unique(c.Attributes.Distinct(StringComparer.Ordinal), keys)), "endpoint");
         }
 
-        Require(backup.Placements.Count(p => p.EndpointId is not null) == backup.Placements.Where(p => p.EndpointId is not null).Select(p => p.EndpointId).Distinct().Count(), "placements");
-        Require(backup.Placements.All(p => (p.EndpointId is null) != (p.DeviceId is null) && double.IsFinite(p.XCm) && double.IsFinite(p.YCm)), "placement");
-        Require(backup.Users.Select(u => u.UserName).Distinct(StringComparer.OrdinalIgnoreCase).Count() == backup.Users.Count, "users");
-        Require(backup.Users.All(u => Text(u.UserName, 64) && Text(u.DisplayName, 128) && Text(u.Locale, 16) && Text(u.Theme, 16)), "user");
+        // Each endpoint and each device is on the plan at most once, inside its floor.
+        var floorsById = backup.Floors.ToDictionary(f => f.Id);
+        Require(Unique(backup.Placements.Where(p => p.EndpointId is not null).Select(p => p.EndpointId))
+            && Unique(backup.Placements.Where(p => p.EndpointId is null && p.DeviceId is not null).Select(p => p.DeviceId)), "placements");
+        Require(backup.Placements.All(p => (p.EndpointId is null) != (p.DeviceId is null)
+            && double.IsFinite(p.XCm) && double.IsFinite(p.YCm) && p.XCm >= 0 && p.YCm >= 0
+            && (!floorsById.TryGetValue(p.FloorId, out var floor) || (p.XCm <= floor.WidthCm && p.YCm <= floor.HeightCm))), "placement");
+
+        Require(Unique(backup.Users.Select(u => u.UserName), keys), "users");
+        Require(backup.Users.All(u => u.UserName is { Length: >= ValidationRules.UserNameMinLength and <= ValidationRules.UserNameMaxLength } userName
+            && userName.All(c => ValidationRules.UserNameCharacters.Contains(c, StringComparison.Ordinal))
+            && Text(u.DisplayName, ValidationRules.DisplayNameMaxLength)
+            && Locales.All.Contains(u.Locale, StringComparer.Ordinal)
+            && Themes.All.Contains(u.Theme, StringComparer.Ordinal)), "user");
     }
 
-    private static T Read<T>(ZipArchive zip, string name)
+    private static T Read<T>(ZipArchive zip, string name, ReadBudget budget)
     {
-        var bytes = ReadBytes(zip, name);
+        var bytes = ReadBytes(zip, name, MaxEntryBytes, budget);
         return JsonSerializer.Deserialize<T>(bytes, BackupEntries.Json) ?? throw new JsonException($"{name} is empty.");
     }
 
-    private static byte[] ReadBytes(ZipArchive zip, string name)
+    /// <summary>The entry's bytes; at most <paramref name="maxBytes"/>, and taken from <paramref name="budget"/>.</summary>
+    private static byte[] ReadBytes(ZipArchive zip, string name, long maxBytes, ReadBudget budget)
     {
         var entry = zip.GetEntry(name) ?? throw new InvalidDataException($"{name} is missing.");
-        if (entry.Length > MaxEntryBytes)
+        var limit = Math.Min(maxBytes, budget.Remaining);
+
+        // The declared length is checked first, the bytes actually inflated too (a crafted header may lie).
+        if (entry.Length > limit)
         {
             throw new InvalidDataException($"{name} is too large.");
         }
 
         using var stream = entry.Open();
-        using var memory = new MemoryStream((int)Math.Min(entry.Length, MaxEntryBytes));
+        using var memory = new MemoryStream((int)Math.Min(entry.Length, limit));
         var buffer = new byte[81920];
         int read;
         while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
         {
-            if (memory.Length + read > MaxEntryBytes)
+            if (memory.Length + read > limit)
             {
                 throw new InvalidDataException($"{name} is too large.");
             }
@@ -675,6 +756,7 @@ public sealed class BackupService(
             memory.Write(buffer, 0, read);
         }
 
+        budget.Remaining -= memory.Length;
         return memory.ToArray();
     }
 
@@ -721,7 +803,14 @@ public sealed class BackupService(
 
     private static AppError Invalid() => AppError.Validation(ErrorCodes.BackupInvalid, "This file is not a ControlHome backup, or it is damaged.");
 
-    private sealed record ParsedFile(FileRecord Record, byte[] Data);
+    /// <summary>A file of the backup: its bytes, re-encoded as WebP (with its size) before the import writes it.</summary>
+    private sealed record ParsedFile(FileRecord Record, byte[] Data, int WidthPx, int HeightPx);
+
+    /// <summary>How many more decompressed bytes an import may read.</summary>
+    private sealed class ReadBudget(long bytes)
+    {
+        public long Remaining { get; set; } = bytes;
+    }
 
     private sealed record ParsedBackup(
         BackupManifest Manifest,

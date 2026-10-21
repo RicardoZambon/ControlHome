@@ -355,7 +355,7 @@ export const updateDevice = <ThrowOnError extends boolean = false>(options: Opti
 /**
  * Replaces this device by another: the new one takes over its settings, placements and history.
  *
- * Moves name, room, icon, endpoint names/rooms/icons/hidden/favorites (endpoints matched by key, or the only one of each), placements and history (state log, events, statistics, energy) to newDeviceId, then deletes this device. Typically for an orphaned device after re-pairing, or a likely duplicate (possibleDuplicateIds). Returns the new device. 404 devices.not_found; 400 validation.failed with errors.newDeviceId = devices.not_found or devices.replace_same.
+ * Moves name, room, icon, endpoint names/rooms/icons/hidden/favorites (endpoints matched by key, or the only one of each), placements and history (state log, events, statistics, energy) to newDeviceId, then deletes this device. Typically for an orphaned device after re-pairing, or a likely duplicate (possibleDuplicateIds). Returns the new device. 404 devices.not_found; 400 validation.failed with errors.newDeviceId = devices.not_found or devices.replace_same; 409 runtime.standby (this instance is a read-only standby); 503 runtime.starting (still deciding whether it runs the devices).
  */
 export const replaceDevice = <ThrowOnError extends boolean = false>(options: Options<ReplaceDeviceData, ThrowOnError>): RequestResult<ReplaceDeviceResponses, ReplaceDeviceErrors, ThrowOnError> => (options.client ?? client).post<ReplaceDeviceResponses, ReplaceDeviceErrors, ThrowOnError>({
     url: '/api/devices/{id}/replace',
@@ -480,7 +480,7 @@ export const startIntegrationFlow = <ThrowOnError extends boolean = false>(optio
 /**
  * Abandons a flow (nothing is created or changed).
  *
- * 404 flows.not_found.
+ * An answer still being processed finishes first. 404 flows.not_found (also when that answer finished the flow: then its done step is what happened).
  */
 export const cancelIntegrationFlow = <ThrowOnError extends boolean = false>(options: Options<CancelIntegrationFlowData, ThrowOnError>): RequestResult<CancelIntegrationFlowResponses, CancelIntegrationFlowErrors, ThrowOnError> => (options.client ?? client).delete<CancelIntegrationFlowResponses, CancelIntegrationFlowErrors, ThrowOnError>({ url: '/api/integrations/flows/{flowId}', ...options });
 

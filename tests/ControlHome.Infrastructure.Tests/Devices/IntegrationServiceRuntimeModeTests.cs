@@ -66,6 +66,32 @@ public sealed class IntegrationServiceRuntimeModeTests
         await runtime.DidNotReceive().StartAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
+    [Theory]
+    [InlineData(RuntimeMode.Standby, ErrorCodes.RuntimeStandby)]
+    [InlineData(RuntimeMode.Starting, ErrorCodes.RuntimeStarting)]
+    public async Task Device_replacements_are_refused_unless_this_process_runs_the_devices(RuntimeMode mode, string code)
+    {
+        var status = Substitute.For<IRuntimeStatus>();
+        status.Mode.Returns(mode);
+        status.Enabled.Returns(true);
+        var inventory = Substitute.For<IDeviceInventoryAdmin>();
+        var db = Substitute.For<IControlHomeDb>();
+        var devices = new DeviceAdminService(
+            db,
+            new DeviceQueryService(db, Substitute.For<IAttributeStateReader>(), NoLiveDeviceStatus.Instance),
+            inventory,
+            status,
+            Substitute.For<IRealtimePublisher>(),
+            Substitute.For<IAuditLog>());
+
+        // The active process keeps the devices in memory: a standby deleting one and moving its attributes would leave it
+        // writing to attributes that no longer exist.
+        var result = await devices.ReplaceAsync(Guid.NewGuid(), new ReplaceDeviceRequest(Guid.NewGuid()), TestContext.Current.CancellationToken);
+
+        result.Error.ShouldNotBeNull().Code.ShouldBe(code);
+        await inventory.DidNotReceive().ReplaceAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task Without_a_device_runtime_nothing_is_refused_for_the_mode()
     {

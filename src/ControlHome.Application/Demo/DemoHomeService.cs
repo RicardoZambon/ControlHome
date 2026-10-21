@@ -19,13 +19,16 @@ public sealed record DemoHomeSummary(int Floors, int Rooms, int Devices, int Pla
 /// <summary>
 /// Loads <see cref="DemoHome"/> into an empty home: its floors and rooms, a Simulated integration with the <c>demo</c>
 /// preset whose devices are imported right away (the connector's static inventory) so they can be placed, named and
-/// favorited before the runtime first runs, then starts the integration. Names follow the home's language.
+/// favorited before the runtime first runs, then starts the integration. Names follow the home's language. The emptiness
+/// check and the floors and integration are written together under <see cref="AppLocks.HomeContent"/>, so concurrent loads
+/// (setup option, <c>--seed-demo</c>, a backup import) can never both fill the home.
 /// </summary>
 public sealed class DemoHomeService(
     IControlHomeDb db,
     ConnectorCatalog connectors,
     IDeviceInventoryAdmin inventory,
     IIntegrationRuntimeControl runtime,
+    IExclusiveTransaction exclusive,
     IRealtimePublisher publisher,
     IAuditLog auditLog,
     TimeProvider timeProvider)
@@ -39,13 +42,6 @@ public sealed class DemoHomeService(
     /// <param name="locale"><c>pt-BR</c> for Portuguese names; anything else is English.</param>
     public async Task<Result<DemoHomeSummary>> LoadAsync(string? locale, CancellationToken cancellationToken)
     {
-        if (await db.Floors.AnyAsync(cancellationToken)
-            || await db.Integrations.AnyAsync(cancellationToken)
-            || await db.Devices.AnyAsync(cancellationToken))
-        {
-            return AppError.Conflict(ErrorCodes.DemoNotEmpty, "The demo home can only be loaded into an empty home.");
-        }
-
         if (connectors.Find(DemoHome.ConnectorKey) is not IStaticInventorySource source)
         {
             return AppError.NotFound(ErrorCodes.ConnectorsNotFound, "The Simulated connector is not available in this version.");
@@ -53,49 +49,18 @@ public sealed class DemoHomeService(
 
         var portuguese = string.Equals(locale, "pt-BR", StringComparison.OrdinalIgnoreCase);
         var now = timeProvider.GetUtcNow();
-
-        var floors = new Dictionary<string, Floor>(StringComparer.Ordinal);
-        foreach (var demoFloor in DemoHome.Floors)
+        var integrationId = Guid.CreateVersion7();
+        var created = await exclusive.RunAsync(
+            AppLocks.HomeContent,
+            token => CreateFloorsAndIntegrationAsync(integrationId, portuguese, now, token),
+            token => db.Integrations.AnyAsync(i => i.Id == integrationId, token),
+            cancellationToken);
+        if (created.IsFailure)
         {
-            var floor = new Floor
-            {
-                Name = portuguese ? demoFloor.NamePt : demoFloor.NameEn,
-                Level = demoFloor.Level,
-                WidthCm = demoFloor.WidthCm,
-                HeightCm = demoFloor.HeightCm,
-                GridCm = Floor.DefaultGridCm,
-                CreatedAtUtc = now,
-                UpdatedAtUtc = now,
-                Rooms =
-                [
-                    .. demoFloor.Rooms.Select((room, index) => new Room
-                    {
-                        Name = portuguese ? room.NamePt : room.NameEn,
-                        Icon = room.Icon,
-                        ColorToken = room.ColorToken,
-                        Polygon = [.. room.Polygon],
-                        SortOrder = index,
-                    }),
-                ],
-            };
-            floors[demoFloor.Key] = floor;
-            db.Floors.Add(floor);
+            return created.Error;
         }
 
-        var integration = new Integration
-        {
-            Id = Guid.CreateVersion7(),
-            ConnectorKey = DemoHome.ConnectorKey,
-            Name = portuguese ? DemoHome.IntegrationNamePt : DemoHome.IntegrationNameEn,
-            ConfigJson = DemoHome.IntegrationConfigJson,
-            Status = IntegrationStatus.Connecting,
-            Enabled = true,
-            CreatedAtUtc = now,
-            UpdatedAtUtc = now,
-        };
-        db.Integrations.Add(integration);
-        await db.SaveChangesAsync(cancellationToken);
-
+        var (floors, integration) = created.Value;
         using (var config = JsonDocument.Parse(DemoHome.IntegrationConfigJson))
         {
             foreach (var device in source.DescribeDevices(config.RootElement))
@@ -169,5 +134,63 @@ public sealed class DemoHomeService(
         await runtime.StartAsync(integration.Id, cancellationToken);
         await publisher.DevicesChangedAsync(cancellationToken);
         return summary;
+    }
+
+    /// <summary>The demo floors (with their rooms) and integration, written only into an empty home (inside the lock).</summary>
+    private async Task<Result<(Dictionary<string, Floor> Floors, Integration Integration)>> CreateFloorsAndIntegrationAsync(
+        Guid integrationId,
+        bool portuguese,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (await db.Floors.AnyAsync(cancellationToken)
+            || await db.Integrations.AnyAsync(cancellationToken)
+            || await db.Devices.AnyAsync(cancellationToken))
+        {
+            return AppError.Conflict(ErrorCodes.DemoNotEmpty, "The demo home can only be loaded into an empty home.");
+        }
+
+        var floors = new Dictionary<string, Floor>(StringComparer.Ordinal);
+        foreach (var demoFloor in DemoHome.Floors)
+        {
+            var floor = new Floor
+            {
+                Name = portuguese ? demoFloor.NamePt : demoFloor.NameEn,
+                Level = demoFloor.Level,
+                WidthCm = demoFloor.WidthCm,
+                HeightCm = demoFloor.HeightCm,
+                GridCm = Floor.DefaultGridCm,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                Rooms =
+                [
+                    .. demoFloor.Rooms.Select((room, index) => new Room
+                    {
+                        Name = portuguese ? room.NamePt : room.NameEn,
+                        Icon = room.Icon,
+                        ColorToken = room.ColorToken,
+                        Polygon = [.. room.Polygon],
+                        SortOrder = index,
+                    }),
+                ],
+            };
+            floors[demoFloor.Key] = floor;
+            db.Floors.Add(floor);
+        }
+
+        var integration = new Integration
+        {
+            Id = integrationId,
+            ConnectorKey = DemoHome.ConnectorKey,
+            Name = portuguese ? DemoHome.IntegrationNamePt : DemoHome.IntegrationNameEn,
+            ConfigJson = DemoHome.IntegrationConfigJson,
+            Status = IntegrationStatus.Connecting,
+            Enabled = true,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+        };
+        db.Integrations.Add(integration);
+        await db.SaveChangesAsync(cancellationToken);
+        return (floors, integration);
     }
 }

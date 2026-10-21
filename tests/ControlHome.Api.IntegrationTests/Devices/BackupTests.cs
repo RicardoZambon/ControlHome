@@ -2,13 +2,17 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using ControlHome.Api.IntegrationTests.Files;
 using ControlHome.Api.IntegrationTests.Floors;
+using ControlHome.Application.Auth;
 using ControlHome.Application.HomeBackup;
 using ControlHome.Application.Floors;
 using ControlHome.Application.Integrations;
+using ControlHome.Application.Placements;
 using ControlHome.Application.Users;
 using ControlHome.Infrastructure.HomeBackup;
 using ControlHome.TestSupport;
@@ -149,6 +153,100 @@ public sealed class BackupTests(DevicesApiFactory factory) : DevicesTestBase(fac
     }
 
     [Fact]
+    public async Task Crafted_archives_are_refused_before_anything_is_written()
+    {
+        var (admin, _, viewer) = await SignInAllAsync();
+        var floor = await admin.CreateFloorAsync(Ct);
+        floor = await admin.SaveLayoutOkAsync(floor, [FloorApi.Room("Sala", FloorApi.Square(0, 0, 400))], Ct);
+        var image = await admin.UploadAsync(TestImages.Png(64, 48), "plan.png", Ct);
+        await CreateIntegrationAsync(admin);
+        var devices = await WaitForDevicesAsync(viewer, 5);
+        using (var place = await admin.PutAsJsonAsync("/api/placements", new PlaceRequest(null, devices[0].Id, floor.Id, 100, 100), Ct))
+        {
+            await place.ShouldHaveStatusAsync(HttpStatusCode.OK);
+        }
+
+        using var export = await admin.PostAsJsonAsync("/api/backup/export", new ExportBackupRequest(BackupPassphrase), Ct);
+        var archive = await export.Content.ReadAsByteArrayAsync(Ct);
+        await Factory.ResetAppAsync(Ct);
+        using var fresh = await Factory.CompleteSetupAsync(cancellationToken: Ct);
+
+        // Each would otherwise end in a database error (500) or import something the API never accepts.
+        var crafted = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            ["a device placed twice"] = WithJson(archive, "placements.json", p => p.AsArray().Add(p[0]!.DeepClone())),
+            ["a placement off its floor"] = WithJson(archive, "placements.json", p => p[0]!["xCm"] = 1_000_000),
+            ["two devices whose ids differ only in case"] = WithJson(
+                archive,
+                "devices.json",
+                d => d[1]!["externalId"] = d[0]!["externalId"]!.GetValue<string>().ToUpperInvariant()),
+            ["an unknown time zone"] = WithJson(archive, "home.json", h => h["timeZoneId"] = "Mars/Olympus_Mons"),
+            ["a display name longer than accounts allow"] = WithJson(
+                archive,
+                "users.json",
+                u => u.AsArray().Single(x => x!["userName"]!.GetValue<string>() == "member")!["displayName"] = new string('x', 100)),
+            ["no salt for the secrets"] = WithJson(archive, "manifest.json", m => m["encryption"]!["salt"] = null),
+            ["two file records for one entry"] = WithJson(archive, "files.json", f =>
+            {
+                var copy = f[0]!.DeepClone();
+                copy["id"] = Guid.NewGuid();
+                f.AsArray().Add(copy);
+            }),
+            ["a file that is not an image"] = WithFileBytes(archive, image.Id, Encoding.UTF8.GetBytes("<html><script>alert(1)</script></html>")),
+        };
+
+        foreach (var (what, bytes) in crafted)
+        {
+            using var refused = await ImportAsync(fresh, bytes, BackupPassphrase);
+            var body = await refused.Content.ReadAsStringAsync(Ct);
+            refused.StatusCode.ShouldBe(HttpStatusCode.BadRequest, $"{what}: {body}");
+            body.ShouldContain("\"code\":\"backup.invalid\"", Case.Sensitive, what);
+        }
+
+        (await QueryDbAsync(db => db.Integrations.CountAsync(Ct))).ShouldBe(0);
+        (await QueryDbAsync(db => db.Floors.CountAsync(Ct))).ShouldBe(0);
+        (await QueryDbAsync(db => db.StoredFiles.CountAsync(Ct))).ShouldBe(0);
+
+        // The untouched archive imports: each refusal came from its one change. Images are stored re-encoded, like uploads.
+        using var imported = await ImportAsync(fresh, archive, BackupPassphrase);
+        await imported.ShouldHaveStatusAsync(HttpStatusCode.OK);
+        var stored = await QueryDbAsync(db => db.StoredFiles.AsNoTracking().SingleAsync(Ct));
+        (stored.Id, stored.ContentType, stored.WidthPx, stored.HeightPx).ShouldBe((image.Id, "image/webp", 64, 48));
+    }
+
+    [Fact]
+    public async Task Imported_accounts_have_no_password_until_an_admin_resets_it()
+    {
+        var (admin, _, _) = await SignInAllAsync();
+        using var export = await admin.GetAsync("/api/backup/export", Ct);
+        var archive = await export.Content.ReadAsByteArrayAsync(Ct);
+        await Factory.ResetAppAsync(Ct);
+        using var fresh = await Factory.CompleteSetupAsync(cancellationToken: Ct);
+        using (var imported = await ImportAsync(fresh, archive, null))
+        {
+            await imported.ShouldHaveStatusAsync(HttpStatusCode.OK);
+        }
+
+        // The backup holds no password hash: the old password does not open the account.
+        using var anonymous = Factory.CreateApiClient();
+        using (var login = await anonymous.PostAsJsonAsync("/api/auth/login", new LoginRequest("member", Password, RememberMe: false), Ct))
+        {
+            await login.ShouldBeProblemAsync(HttpStatusCode.Unauthorized, "auth.invalid_credentials");
+        }
+
+        var member = (await fresh.GetFromJsonAsync<UserDto[]>("/api/users", Ct))!.Single(u => u.UserName == "member");
+        using (var reset = await fresh.PostAsJsonAsync($"/api/users/{member.Id}/password", new ResetPasswordRequest("a brand new password"), Ct))
+        {
+            await reset.ShouldHaveStatusAsync(HttpStatusCode.NoContent);
+        }
+
+        using var signedIn = await Factory.LoginAsync("member", "a brand new password", Ct);
+        using var me = await signedIn.GetAsync("/api/auth/me", Ct);
+        await me.ShouldHaveStatusAsync(HttpStatusCode.OK);
+        (await me.BodyAsync()).GetProperty("roles").EnumerateArray().Select(r => r.GetString()).ShouldBe(["Member"]);
+    }
+
+    [Fact]
     public async Task A_backup_is_written_daily_and_seven_are_kept()
     {
         var (admin, _, _) = await SignInAllAsync();
@@ -227,6 +325,55 @@ public sealed class BackupTests(DevicesApiFactory factory) : DevicesTestBase(fac
                 if (entry.FullName == name)
                 {
                     to.Write(Encoding.UTF8.GetBytes(content));
+                }
+                else
+                {
+                    using var from = entry.Open();
+                    from.CopyTo(to);
+                }
+            }
+        }
+
+        return output.ToArray();
+    }
+
+    /// <summary>The archive with one JSON document changed by <paramref name="edit"/>.</summary>
+    private static byte[] WithJson(byte[] archive, string name, Action<JsonNode> edit)
+    {
+        var document = JsonNode.Parse(Utf8Entry(archive, name))!;
+        edit(document);
+        return WithEntry(archive, name, document.ToJsonString());
+    }
+
+    private static byte[] Utf8Entry(byte[] archive, string name)
+    {
+        using var zip = new ZipArchive(new MemoryStream(archive), ZipArchiveMode.Read);
+        using var stream = zip.GetEntry(name)!.Open();
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        return memory.ToArray();
+    }
+
+    /// <summary>The archive with a file's bytes replaced, its record (hash, length) matching the new bytes.</summary>
+    private static byte[] WithFileBytes(byte[] archive, Guid fileId, byte[] bytes)
+    {
+        var records = JsonNode.Parse(Utf8Entry(archive, "files.json"))!.AsArray();
+        var record = records.Single(r => r!["id"]!.GetValue<Guid>() == fileId)!;
+        record["sha256"] = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        record["length"] = bytes.Length;
+        var path = record["path"]!.GetValue<string>();
+
+        using var output = new MemoryStream();
+        using (var source = new ZipArchive(new MemoryStream(WithEntry(archive, "files.json", records.ToJsonString())), ZipArchiveMode.Read))
+        using (var target = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var copy = target.CreateEntry(entry.FullName);
+                using var to = copy.Open();
+                if (entry.FullName == path)
+                {
+                    to.Write(bytes);
                 }
                 else
                 {

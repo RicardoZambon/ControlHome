@@ -209,6 +209,16 @@ public sealed class RuntimeDatabaseTests(SqlServerFixture sql)
         (await inventory.SyncAsync(integration.Id, [Discovered("nvr-1"), Discovered("cam-2", "nvr-1")], Ct)).ShouldBe(["cam-1"]);
         (await database.WithDbAsync(db => db.Devices.AsNoTracking().SingleAsync(d => d.ExternalId == "cam-2", Ct))).IsOrphaned.ShouldBeFalse();
         await Should.ThrowAsync<ArgumentException>(() => inventory.SyncAsync(integration.Id, [Discovered("nvr-1"), Discovered("nvr-1")], Ct));
+
+        // External ids compare like the database's unique key (case-insensitive): "CAM-1" is the stored "cam-1", merged by
+        // the upsert, so it is not missing.
+        (await inventory.SyncAsync(integration.Id, [Discovered("NVR-1"), Discovered("CAM-1", "NVR-1"), Discovered("cam-2", "nvr-1")], Ct)).ShouldBeEmpty();
+        await database.WithDbAsync(async db =>
+        {
+            var devices = await db.Devices.AsNoTracking().ToListAsync(Ct);
+            devices.Count.ShouldBe(3);
+            devices.ShouldAllBe(d => !d.IsOrphaned);
+        });
     }
 
     [Fact]
