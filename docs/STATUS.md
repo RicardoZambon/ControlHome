@@ -13,7 +13,7 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-12 — Milestones 0.3 + 0.4 (PR #3): ui primitives, app shell + auth UI (en/pt-BR), Playwright E2E + screenshots + visual review, Docker image/compose/release/CodeQL/Dependabot, pre-DB setup mode.
 
 ## In progress (resumed 2026-10-20 23:57 local)
-- Running: `wdjm63sux` = 1.2-E devices UI (run wf_5f5ef08c-70b, resumed; only the final fix agent re-runs). Usage guard cron re-created.
+- Running: `wdjm63sux` = 1.2-E devices UI (run wf_5f5ef08c-70b, resumed; only the final fix agent re-runs); `w37smutej` = 1.4-A history storage + API (run wf_b2e2060c-03b, base 157e837). Usage guard cron re-created.
 - Branch `milestone/1.2-devices-core` (local, not yet pushed): main (incl. #13 .NET 10.0.13 hotfix, tag v0.0.3) + 1.2 backend + 1.2 review fixes (d1d4333) + Logging.Abstractions 10.0.13 + 1.4-C MQTT connector (merge 3c858f9). Full .NET suite green: 1373/1374.
 - PAUSED run to resume: 1.2-E devices UI — `Workflow({scriptPath: <session>/workflows/scripts/m1-2-devices-ui-wf_b05b2e2a-c7e.js, resumeFromRunId: "wf_5f5ef08c-70b"})`; build (5d0f070), e2e (f169b66) and visual review are cached, only the final fix agent re-runs.
 - After it finishes: merge its final branch into milestone/1.2-devices-core, regenerate OpenAPI, run tests + E2E, push, PR (merge commit), tag after CI.
