@@ -32,6 +32,9 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
 $envFile = $null
+# Docker Desktop's VM is small (~2 GB): one test run at a time on this machine, across every worktree. Others wait here.
+$runLock = [System.Threading.Mutex]::new($false, 'Global\ControlHome.TestDocker')
+$locked = $false
 $dockerArgs = @('run', '--rm', '-i',
     '-v', 'controlhome-nuget:/root/.nuget/packages',
     '-v', '/var/run/docker.sock:/var/run/docker.sock',
@@ -40,6 +43,17 @@ $dockerArgs = @('run', '--rm', '-i',
     '-e', 'DOTNET_NOLOGO=1')
 
 try {
+    try {
+        if (-not $runLock.WaitOne(0)) {
+            Write-Host 'test-docker: another test run is using Docker; waiting for it to finish...'
+            if (-not $runLock.WaitOne([TimeSpan]::FromHours(3))) { throw 'Timed out waiting for the other test run.' }
+        }
+    }
+    catch [System.Threading.AbandonedMutexException] {
+        # The previous holder exited without releasing (killed): the lock is now ours.
+    }
+    $locked = $true
+
     if ($UseDevServer) {
         $raw = dotnet user-secrets list --project (Join-Path $repo 'src/ControlHome.Api') |
             Where-Object { $_ -like 'ConnectionStrings:ControlHome = *' } |
@@ -88,4 +102,6 @@ try {
 }
 finally {
     if ($envFile) { Remove-Item $envFile -Force -ErrorAction SilentlyContinue }
+    if ($locked) { $runLock.ReleaseMutex() }
+    $runLock.Dispose()
 }
