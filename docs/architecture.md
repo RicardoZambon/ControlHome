@@ -369,8 +369,11 @@ and deleting an integration never waits on years of history. Times are UTC `date
     attribute's next row. Numbers and booleans (1/0) in `Num`, strings (and JSON text) in `Str`, cut to 255 characters;
     both `NULL` = unknown. Diagnostics such as link quality and RSSI are off by default.
 - **`DeviceEvent`** `(AttributeId, TsUtc datetime2(3), EventType nvarchar(64), Payload json NULL)`, no key, clustered on
-  `(TsUtc, AttributeId)`: momentary events (button presses, doorbell rings); a scalar payload is wrapped as
-  `{"value": …}`, payloads over 4 000 characters are not stored.
+  `(TsUtc, AttributeId)`: momentary events (button presses, doorbell rings). The payload is stored as canonical JSON
+  (`DeviceEvent.StoredPayload`: a scalar wrapped as `{"value": …}`, numbers rewritten as plain decimals, comments and
+  trailing commas dropped) and left out when it is over 4 000 characters, nested deeper than 64 levels or holds a number
+  beyond `decimal`'s range: SQL Server's `json` type rejects numbers it cannot hold in 38 digits (even `1e37`), and one
+  rejected payload would fail the whole write-behind flush, current state included, on every retry.
 - **`StatShortTerm` (5-minute) and `StatHourly`**:
   - Primary key `(AttributeId, BucketStartUtc)`; buckets are aligned to UTC.
   - Statistics exist for recorded numbers with a state class (`HistoryClassification`): `measurement` → time-weighted
@@ -389,7 +392,8 @@ and deleting an integration never waits on years of history. Times are UTC `date
   attributes involved that the computation no longer yields are deleted) and its watermark moved in the same
   transaction, so re-running a window gives the same rows. After downtime each stage catches up in bounded windows
   (`ShortTermBatch` 1 h, `HourlyBatch` 1 day, `EnergyBatch` 6 h), one transaction each. Readings that arrive for an
-  already closed bucket stay in the raw history only.
+  already closed bucket stay in the raw history only. An hour whose integrated energy is not finite (readings near
+  `double.MaxValue`) gets no row rather than stalling the energy stage, which would also stop the `StateLog` purge.
 - **`EnergyHourly(EndpointId, HourStartUtc, Wh, Source = counter|delta|vendorWindow|integratedPower, Estimated)`**,
   unique `(EndpointId, HourStartUtc)`, is the **single source for every energy view** and is in place from Phase 1.
   - Each endpoint has exactly one selected source (`EnergySourceSelection`, picked by the rollup: an energy counter in
@@ -406,15 +410,18 @@ and deleting an integration never waits on years of history. Times are UTC `date
   which is the value carried into later buckets; `StatShortTerm` below min(retention, hourly watermark); `DeviceEvent`
   and `AuditLog` by retention only; nothing before the first rollup. Hourly statistics and energy whose attribute or
   endpoint is gone are removed (ids found by skip-scan seeks). Later tables (AutomationRun, Notification) plug in as
-  `IRetentionPurgeTarget`s.
+  `IRetentionPurgeTarget`s. Batches of 5 000 never escalate to a table lock — a test checks SQL Server's lock-promotion
+  counter (one 12 000-row `DELETE` does escalate, and would block the write-behind's inserts while it runs).
 - **Retention defaults** (`GET/PUT /api/settings/retention`, Admin; single row `RetentionSettings`): StateLog and
   5-minute stats 10 days, DeviceEvent 30 days, AuditLog 1 year (365), hourly stats and energy forever; AutomationRun
   30 days or the last 200 and Notification 90 days when they land.
 - **Reading history** (Viewer): `GET /api/attributes/{id}/history?from&to&resolution=auto|raw|5m|1h` →
   `HistorySeriesDto(AttributeId, Resolution, Unit, Points[T, V, Min, Max, S])`, oldest first, at most 5 000 points (the
-  most recent). `auto`: raw up to 6 h, 5-minute statistics up to 7 days, hourly beyond — the finest that fits; attributes
-  without statistics always get raw changes, opened by the value in effect at `from`. Default range: the last 24 h of
-  the runtime clock; at most 366 days. `GET /api/energy/hourly?from&to&endpointId?` → `EnergyHourlyDto[]`.
+  most recent). `auto`: raw up to 6 h, 5-minute statistics up to 7 days, hourly beyond — the finest that fits and whose
+  retention still covers `from` (an older range gets the next coarser resolution, never an empty or cut series);
+  attributes without statistics always get raw changes, opened by the value in effect at `from`. Default range: the last
+  24 h of the runtime clock; at most 366 days. `GET /api/energy/hourly?from&to&endpointId?` → `EnergyHourlyDto[]`, at
+  most 20 000 rows (more: 400 `energy.too_many_rows`, never a silently cut list; a year of one endpoint always fits).
 - **Automation and scene definitions**
   - `Automation.Definition` is a single `json` column holding polymorphic System.Text.Json (`[JsonPolymorphic]`,
     discriminator `type`) with a `schemaVersion`. Golden-file tests cover the upgrade functions.

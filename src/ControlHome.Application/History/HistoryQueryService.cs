@@ -27,6 +27,12 @@ public sealed class HistoryQueryService(IControlHomeDb db, IRuntimeClock clock)
     /// <summary>…5-minute statistics up to this long, and hourly statistics beyond.</summary>
     public static readonly TimeSpan ShortTermUpTo = TimeSpan.FromDays(7);
 
+    /// <summary>
+    /// The most hourly energy rows one request returns (more: 400 <c>energy.too_many_rows</c>). A year of one endpoint
+    /// (8 784 hours) always fits; all endpoints need a shorter range.
+    /// </summary>
+    public const int MaxEnergyRows = 20_000;
+
     public async Task<Result<HistorySeriesDto>> GetSeriesAsync(int attributeId, HistoryQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -76,8 +82,11 @@ public sealed class HistoryQueryService(IControlHomeDb db, IRuntimeClock clock)
                 return new HistorySeriesDto(attributeId, resolution, unit, (await HourlyAsync(attributeId, from, to, cancellationToken)).Points);
         }
 
-        // auto: the finest resolution for the range that fits in MaxPoints.
-        if (span <= RawUpTo)
+        // auto: the finest resolution for the range that fits in MaxPoints and whose rows the range still has — raw
+        // history and 5-minute statistics are purged after their retention (hourly statistics are kept forever).
+        var retention = await db.RetentionSettings.AsNoTracking().SingleOrDefaultAsync(cancellationToken) ?? new RetentionSettings();
+        var now = clock.Time.GetUtcNow();
+        if (span <= RawUpTo && from >= now - TimeSpan.FromDays(retention.StateLogDays))
         {
             var raw = await RawAsync(attributeId, from, to, cancellationToken);
             if (!raw.Truncated)
@@ -86,7 +95,7 @@ public sealed class HistoryQueryService(IControlHomeDb db, IRuntimeClock clock)
             }
         }
 
-        if (span <= ShortTermUpTo)
+        if (span <= ShortTermUpTo && from >= now - TimeSpan.FromDays(retention.ShortTermStatsDays))
         {
             var shortTerm = await ShortTermAsync(attributeId, from, to, cancellationToken);
             if (!shortTerm.Truncated)
@@ -122,7 +131,16 @@ public sealed class HistoryQueryService(IControlHomeDb db, IRuntimeClock clock)
             .Where(e => e.HourStartUtc >= firstHour && e.HourStartUtc < range.To)
             .OrderBy(e => e.HourStartUtc)
             .ThenBy(e => e.EndpointId)
+            .Take(MaxEnergyRows + 1)
             .ToListAsync(cancellationToken);
+        if (hours.Count > MaxEnergyRows)
+        {
+            // Never a silently cut list: a total over the range would come out too low.
+            return AppError.Validation(
+                ErrorCodes.EnergyTooManyRows,
+                $"The range holds more than {MaxEnergyRows} hourly energy rows: pick a shorter range or one endpoint.");
+        }
+
         return hours.Select(e => new EnergyHourlyDto(e.EndpointId, e.HourStartUtc, e.Wh, EnergySources.Name(e.Source), e.Estimated)).ToList();
     }
 

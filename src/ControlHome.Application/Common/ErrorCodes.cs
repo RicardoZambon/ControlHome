@@ -117,4 +117,5 @@ public static class ErrorCodes
     public const string HistoryInvalidRange = "history.invalid_range";
     public const string HistoryRangeTooLarge = "history.range_too_large";
     public const string HistoryInvalidResolution = "history.invalid_resolution";
+    public const string EnergyTooManyRows = "energy.too_many_rows";
 }

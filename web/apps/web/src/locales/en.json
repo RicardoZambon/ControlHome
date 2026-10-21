@@ -230,6 +230,9 @@
       "invalid_range": "The start of the period must be before its end.",
       "range_too_large": "Pick a period of at most a year.",
       "invalid_resolution": "That history resolution doesn't exist. Use auto, raw, 5 min or 1 h."
+    },
+    "energy": {
+      "too_many_rows": "That's too much energy data for one request. Pick a shorter period or a single device."
     }
   }
 }

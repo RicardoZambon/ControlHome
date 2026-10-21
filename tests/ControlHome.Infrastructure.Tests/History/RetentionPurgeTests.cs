@@ -123,6 +123,31 @@ public sealed class RetentionPurgeTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task Purge_batches_stay_below_the_lock_escalation_threshold()
+    {
+        // A DELETE holding too many row locks on one index escalates to a table lock, which blocks the write-behind's
+        // StateLog inserts (and history reads) while it runs. One 12 000-row DELETE does escalate (this assertion then
+        // fails); the default DELETE TOP (5000) batches do not.
+        await using var history = await CreateAsync(sql, Ct, o => o.ShortTermBatch = TimeSpan.FromDays(1));
+        const int Rows = 12_000;
+        await history.Database.WithDbAsync(db => db.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO [ch].[StateLog] (AttributeId, TsUtc, Num)
+            SELECT TOP (@rows) 987654, DATEADD(millisecond, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), @start), 1
+            FROM sys.all_columns AS a CROSS JOIN sys.all_columns AS b;
+            """,
+            [new Microsoft.Data.SqlClient.SqlParameter("@rows", Rows), new Microsoft.Data.SqlClient.SqlParameter("@start", T0.UtcDateTime)],
+            Ct));
+        await history.RollUpAtAsync(Day(12));
+        var escalationsBefore = await LockEscalationsAsync(history);
+
+        var deleted = await history.Purge.PurgeOnceAsync(Ct);
+
+        deleted["StateLog"].ShouldBe(Rows); // an attribute that no longer exists keeps nothing
+        (await LockEscalationsAsync(history) - escalationsBefore).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Nothing_is_purged_before_the_first_rollup()
     {
         await using var history = await CreateAsync(sql, Ct);
@@ -132,4 +157,13 @@ public sealed class RetentionPurgeTests(SqlServerFixture sql)
 
         (await history.StateLogAsync(history.Temperature)).Count.ShouldBe(2);
     }
+
+    /// <summary>Lock escalations on <c>StateLog</c>'s indexes so far (SQL Server's own counter).</summary>
+    private static Task<long> LockEscalationsAsync(HistoryHarness history) =>
+        history.Database.WithDbAsync(db => db.Database.SqlQueryRaw<long>(
+                """
+                SELECT CAST(ISNULL(SUM(index_lock_promotion_count), 0) AS bigint) AS [Value]
+                FROM sys.dm_db_index_operational_stats(DB_ID(), OBJECT_ID(N'ch.StateLog'), NULL, NULL)
+                """)
+            .SingleAsync(Ct));
 }

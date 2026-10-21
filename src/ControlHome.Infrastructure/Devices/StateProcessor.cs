@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Threading.Channels;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Realtime;
@@ -158,7 +157,8 @@ public sealed partial class StateProcessor : IAsyncDisposable
                 report.OccurredAtUtc ?? _clock.Time.GetUtcNow(),
                 default)
             {
-                EventPayload = EventPayloadJson(report.Data),
+                // Storable JSON (SQL Server's json type rejects some valid JSON; one bad payload must not fail a flush).
+                EventPayload = DeviceEvent.StoredPayload(report.Data),
             });
     }
 
@@ -564,24 +564,6 @@ public sealed partial class StateProcessor : IAsyncDisposable
 
     /// <summary>An address the inventory did not resolve: dropped until <see cref="Until"/>; <see cref="Failures"/> failed lookups in a row.</summary>
     private readonly record struct UnknownAddress(DateTimeOffset Until, int Failures);
-
-    /// <summary>
-    /// An event's details as JSON text for <c>DeviceEvent.Payload</c> (SQL Server's <c>json</c> type holds objects and
-    /// arrays: a scalar is wrapped as <c>{"value": …}</c>); <c>null</c> when absent or longer than
-    /// <see cref="DeviceEvent.MaxPayloadLength"/>.
-    /// </summary>
-    private static string? EventPayloadJson(JsonElement? data)
-    {
-        if (data is not { } element || element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
-        {
-            return null;
-        }
-
-        var json = element.ValueKind is JsonValueKind.Object or JsonValueKind.Array
-            ? element.GetRawText()
-            : "{\"value\":" + element.GetRawText() + "}";
-        return json.Length <= DeviceEvent.MaxPayloadLength ? json : null;
-    }
 
     private sealed record PendingChange(
         ChangeKind Kind,

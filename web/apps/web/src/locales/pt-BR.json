@@ -230,6 +230,9 @@
       "invalid_range": "O início do período precisa ser antes do fim.",
       "range_too_large": "Escolha um período de até um ano.",
       "invalid_resolution": "Essa resolução do histórico não existe. Use automática, bruta, 5 min ou 1 h."
+    },
+    "energy": {
+      "too_many_rows": "São dados de energia demais para uma consulta. Escolha um período menor ou um único dispositivo."
     }
   }
 }

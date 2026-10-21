@@ -289,7 +289,10 @@ public sealed partial class HistoryRollup(
                         foreach (var selection in power)
                         {
                             var window = readings[selection.AttributeId!.Value];
+                            // Readings near double.MaxValue (a device's "invalid" sentinel) integrate to infinity: such an hour
+                            // gets no row rather than failing the window on every run.
                             rows.AddRange(RollupMath.IntegratePower(window.Before, window.Within, window.After, start, end, _hour, Options.PowerInterpolationLimit)
+                                .Where(b => double.IsFinite(b.Wh))
                                 .Select(b => new EnergyRow(selection.EndpointId, b.BucketStartUtc, b.Wh, EnergySource.IntegratedPower, Estimated: true)));
                         }
                     }

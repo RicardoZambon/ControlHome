@@ -10,6 +10,8 @@ using ControlHome.Domain.History;
 using ControlHome.Infrastructure.Devices;
 using ControlHome.Infrastructure.History;
 using ControlHome.TestSupport;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ControlHome.Api.IntegrationTests.History;
@@ -67,6 +69,46 @@ public sealed class HistoryApiTests(DevicesApiFactory factory) : DevicesTestBase
         (states.Resolution, states.Unit).ShouldBe(("raw", (string?)null));
         states.Points.ShouldNotBeEmpty();
         states.Points.Last().V.ShouldBe(1); // the Simulated plug is on
+
+        // Raw history and 5-minute statistics are purged after their retention: auto never picks a resolution whose rows
+        // may be gone for the range (it would chart an empty or cut series while hourly statistics hold it).
+        using (var put = await admin.PutAsJsonAsync("/api/settings/retention", new UpdateRetentionSettingsRequest(2, 5, 30, 365), Ct))
+        {
+            await put.ShouldHaveStatusAsync(HttpStatusCode.OK);
+        }
+
+        var end = start.AddDays(8); // the last reading is 10 minutes before
+        var recentRaw = await SeriesAsync(viewer, power, end.AddHours(-5), end);
+        (recentRaw.Resolution, recentRaw.Points.Count).ShouldBe(("raw", 30));
+        (await SeriesAsync(viewer, power, day, day.AddHours(5))).Resolution.ShouldBe("1h");
+        (await SeriesAsync(viewer, power, end.AddDays(-3), end)).Resolution.ShouldBe("5m");
+        var pastShortTerm = await SeriesAsync(viewer, power, day, day.AddDays(3));
+        (pastShortTerm.Resolution, pastShortTerm.Points.Count).ShouldBe(("1h", 3 * 24));
+        (await SeriesAsync(viewer, power, day, day.AddHours(5), "raw")).Resolution.ShouldBe("raw"); // asked for: served as is
+    }
+
+    [Fact]
+    public async Task Hourly_energy_is_capped_per_request()
+    {
+        var (_, _, viewer) = await SignInAllAsync();
+        var start = RollupMath.Floor(RuntimeNow - TimeSpan.FromDays(300), TimeSpan.FromHours(1));
+
+        // Three endpoints with 7 000 hours each: 21 000 rows, more than one request returns.
+        await QueryDbAsync(db => db.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO [ch].[EnergyHourly] (EndpointId, HourStartUtc, Wh, Source, Estimated)
+            SELECT e.Id, DATEADD(hour, h.n, @start), 1, 'counter', 0
+            FROM (VALUES (NEWID()), (NEWID()), (NEWID())) AS e(Id)
+            CROSS JOIN (SELECT TOP (7000) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1 AS n
+                        FROM sys.all_columns AS a CROSS JOIN sys.all_columns AS b) AS h;
+            """,
+            [new SqlParameter("@start", start.UtcDateTime)],
+            Ct));
+
+        await ProblemAsync(viewer, EnergyUrl(start, start.AddDays(300), null), HttpStatusCode.BadRequest, "energy.too_many_rows");
+        var narrower = (await viewer.GetFromJsonAsync<EnergyHourlyDto[]>(EnergyUrl(start, start.AddDays(100), null), Ct))!;
+        narrower.Length.ShouldBe(3 * 100 * 24);
+        HistoryQueryService.MaxEnergyRows.ShouldBeGreaterThan(366 * 24); // a year of one endpoint always fits
     }
 
     [Fact]

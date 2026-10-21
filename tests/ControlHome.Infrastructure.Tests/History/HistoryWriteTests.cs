@@ -46,6 +46,30 @@ public sealed class HistoryWriteTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task Event_payloads_sql_servers_json_type_would_reject_never_fail_the_flush()
+    {
+        await using var history = await CreateAsync(sql, Ct);
+
+        // Valid JSON that `CAST(… AS json)` rejects ("out of the range for numeric representation", trailing comma): written
+        // as they came, they failed the flush — current state included — on every retry.
+        await history.Store.WriteAsync(
+            new StateWriteBatch(
+                [new PendingAttributeState(history.PlugOn, StateValue.True, T0, T0)],
+                [
+                    new PendingHistoryRow(history.PlugOn, T0, StateValue.String("big")) { IsEvent = true, EventPayload = """{"n":1e37}""" },
+                    new PendingHistoryRow(history.PlugOn, T0.AddSeconds(1), StateValue.String("lenient")) { IsEvent = true, EventPayload = """{"a":1,}""" },
+                    new PendingHistoryRow(history.PlugOn, T0.AddSeconds(2), StateValue.String("fine")) { IsEvent = true, EventPayload = """{"n":1E5}""" },
+                ],
+                []),
+            Ct);
+
+        var events = await history.Database.WithDbAsync(db => db.DeviceEvents.AsNoTracking().OrderBy(e => e.TsUtc).ToListAsync(Ct));
+        events.Select(e => (e.EventType, e.Payload?.Replace(" ", string.Empty, StringComparison.Ordinal)))
+            .ShouldBe([("big", null), ("lenient", null), ("fine", """{"n":100000}""")]);
+        (await history.Database.WithDbAsync(db => db.AttributeStates.AsNoTracking().CountAsync(s => s.AttributeId == history.PlugOn, Ct))).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task A_large_batch_is_written_in_one_statement_per_table()
     {
         await using var history = await CreateAsync(sql, Ct);

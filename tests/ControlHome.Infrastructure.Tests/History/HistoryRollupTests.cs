@@ -90,6 +90,21 @@ public sealed class HistoryRollupTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task Absurd_power_readings_never_stall_the_energy_rollup()
+    {
+        await using var history = await CreateAsync(sql, Ct);
+
+        // Finite readings whose energy is not (a device's "max value" sentinel): the hour gets no row, the rollup moves on —
+        // a stuck energy watermark would also stop the StateLog purge for good.
+        await history.WriteAsync(history.PowerOnlyPower, (At(0), double.MaxValue), (At(0.5), double.MaxValue / 2), (At(30), 60));
+
+        var result = await history.RollUpAtAsync(At(122));
+
+        result.EnergyWatermark.ShouldBe(At(120));
+        (await history.EnergyAsync(MainEndpoint(history.PowerOnly))).Select(e => (e.HourStartUtc, e.Wh)).ShouldBe([(At(60), 60)]);
+    }
+
+    [Fact]
     public async Task A_users_energy_source_is_kept_and_used()
     {
         await using var history = await CreateAsync(sql, Ct);
@@ -155,6 +170,7 @@ public sealed class HistoryRollupTests(SqlServerFixture sql)
         await history.WriteAsync(history.PowerOnlyPower, (At(2), 80));
         await history.RollUpAtAsync(At(130));
         var before = await SnapshotAsync(history);
+        before.Split('\n').Select(line => line.Split(' ')[0]).Distinct().ShouldBe(["5m", "1h", "E"], ignoreOrder: true); // not vacuous
 
         var again = await history.RollUpAtAsync(At(130));
         again.ShortTermBatches.ShouldBe(0); // nothing new

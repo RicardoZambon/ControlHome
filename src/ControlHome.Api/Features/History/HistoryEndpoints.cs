@@ -21,7 +21,8 @@ public static class HistoryEndpoints
             .WithSummary("An attribute's history over a range, oldest point first (at most 5 000 points).")
             .WithDescription(
                 "resolution=auto (default) serves raw changes for ranges up to 6 h, 5-minute statistics up to 7 days and hourly " +
-                "statistics beyond (the finest that fits in 5 000 points); attributes without statistics (states such as on/off " +
+                "statistics beyond (the finest that fits in 5 000 points and whose rows are still kept for `from`: raw history and " +
+                "5-minute statistics are purged after their retention); attributes without statistics (states such as on/off " +
                 "or modes) always get raw changes. Raw series start with the value in effect at `from`. Statistics trail real " +
                 "time by the rollup (about a minute after a bucket ends). 400 history.invalid_resolution, history.invalid_range " +
                 "(from not before to) or history.range_too_large (over 366 days); 404 attributes.not_found.")
@@ -39,7 +40,8 @@ public static class HistoryEndpoints
             .WithDescription(
                 "Hours overlapping [from, to) (default: the last 24 h). Each endpoint has one source: its energy meter " +
                 "(counter) or, without one, its power readings integrated (integratedPower, estimated). 400 " +
-                "history.invalid_range or history.range_too_large; 404 endpoints.not_found.")
+                "history.invalid_range, history.range_too_large or energy.too_many_rows (over 20 000 rows: pick a shorter " +
+                "range or one endpoint — a year of one endpoint always fits); 404 endpoints.not_found.")
             .RequireAuthorization(AuthorizationPolicies.Viewer)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);

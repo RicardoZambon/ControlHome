@@ -182,7 +182,9 @@ public sealed class SqlStateStore(IDatabaseConnectionProvider connections, TimeP
             record.SetDateTime(1, row.TsUtc.UtcDateTime);
             var name = row.Value.S ?? string.Empty;
             record.SetString(2, name.Length <= DeviceEvent.MaxEventTypeLength ? name : name[..DeviceEvent.MaxEventTypeLength]);
-            if (row.EventPayload is { } payload)
+            // Re-checked here, where the json CAST happens: one payload SQL Server rejects would fail the whole flush,
+            // current state included, on every retry.
+            if (DeviceEvent.StoredPayload(row.EventPayload) is { } payload)
             {
                 record.SetString(3, payload);
             }
