@@ -184,7 +184,7 @@ async function finish(): Promise<void> {
         :key="device.id"
         :class="
           cn(
-            'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 rounded-xl border bg-card p-3 transition-opacity sm:grid-cols-[auto_minmax(0,1fr)_14rem]',
+            'grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 rounded-xl border bg-card p-3 transition-opacity sm:grid-cols-[auto_minmax(0,1fr)_16rem]',
             !choices.get(device.id)?.keep && 'bg-muted/40 opacity-70',
           )
         "
@@ -220,8 +220,9 @@ async function finish(): Promise<void> {
             :disabled="!choices.get(device.id)?.keep"
             @update:model-value="(value) => setRoom(device.id, value)"
           >
+            <!-- min-w-0: a long room name ("Living room · Ground floor") is cut short instead of pushing the mark out -->
             <SelectTrigger
-              class="w-full"
+              class="w-full min-w-0"
               :aria-label="t('integrations.review.room', { name: device.name })"
               data-slot="review-room"
             >
