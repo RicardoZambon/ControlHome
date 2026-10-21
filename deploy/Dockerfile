@@ -52,8 +52,9 @@ COPY src/ControlHome.Connectors.Mqtt/ControlHome.Connectors.Mqtt.csproj src/Cont
 COPY src/ControlHome.Application/ControlHome.Application.csproj src/ControlHome.Application/
 COPY src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj src/ControlHome.Infrastructure/
 COPY src/ControlHome.Api/ControlHome.Api.csproj src/ControlHome.Api/
-RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing=locked \
-    dotnet restore src/ControlHome.Api/ControlHome.Api.csproj -a "$TARGETARCH"
+# No cache mount for NuGet: the packages must live in this layer. With CI layer caching (type=gha) a cached restore layer
+# comes back without a cache mount's contents, and `publish --no-restore` then fails with NETSDK1064.
+RUN dotnet restore src/ControlHome.Api/ControlHome.Api.csproj -a "$TARGETARCH"
 
 # The committed web/packages/api-client/openapi.json is the source of the API client: no build-time OpenAPI generation here
 # (it would run the freshly built app, which cannot work when cross-compiling).
@@ -62,8 +63,7 @@ COPY src/ src/
 # version is Directory.Build.props' VersionPrefix.
 ARG VERSION=
 ARG VERSION_SUFFIX=
-RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing=locked \
-    dotnet publish src/ControlHome.Api/ControlHome.Api.csproj \
+RUN dotnet publish src/ControlHome.Api/ControlHome.Api.csproj \
         -c Release \
         -a "$TARGETARCH" \
         --no-restore \

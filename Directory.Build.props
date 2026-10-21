@@ -8,7 +8,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <!-- The next release. Release images override it: a tag build passes -p:Version=<tag>, main adds -p:VersionSuffix=edge.N
          (deploy/Dockerfile build args VERSION / VERSION_SUFFIX, set by .github/workflows/release.yml). -->
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionPrefix>0.2.0</VersionPrefix>
   </PropertyGroup>
 
   <PropertyGroup Label="Quality gates">
