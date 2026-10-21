@@ -331,10 +331,12 @@ How it is built (1.2, `Infrastructure/Devices`):
   never changes an orphaned device's availability, and drops availability left over from a failed final flush before
   the runtime restarts.
 - **Write-behind** (`StateWriteBehind`, every `DeviceRuntime:FlushInterval` = 5 s): current values (coalesced, never
-  dropped) are `MERGE`d into `ch.AttributeState`, device availability / last-seen updated, history rows (changes of
-  `recorded` attributes and events) kept in order — 1.4 appends them to `StateLog`. While SQL Server is down everything
-  stays buffered; beyond `MaxPendingHistoryRows` (50 000) the oldest history rows are dropped and
-  `SystemStatusDto.HistoryPaused` is raised until a flush succeeds.
+  dropped) are `MERGE`d into `ch.AttributeState`, device availability / last-seen updated, and history rows kept in order
+  are appended in the same transaction — changes of `recorded` attributes to `StateLog`, momentary events (name + JSON
+  payload) to `DeviceEvent` — each with one set-based `INSERT` from a table-valued parameter (`ch.StateLogRow`,
+  `ch.DeviceEventRow`) that skips attributes deleted meanwhile. While SQL Server is down everything stays buffered;
+  beyond `MaxPendingHistoryRows` (50 000) the oldest history rows are dropped and `SystemStatusDto.HistoryPaused` is
+  raised until a flush succeeds.
 - **Lease and modes** (`RuntimeLease`, `DeviceRuntimeHost`): `Starting` until the database is ready, then `Active` (lease
   held: registry and cache loaded, every device `Unknown` until its connector reports, pipeline and integrations
   started) or `Standby` (retry every `LeaseRetryInterval`; reads come from the database). The lease is re-checked every
@@ -354,26 +356,72 @@ How it is built (1.2, `Infrastructure/Devices`):
 
 ## 6. Storage: history and energy
 
-*Lands: schema rules in 0.2; StateLog in 1.2; rollups, retention and EnergyHourly in 1.4.*
+*Lands: schema rules in 0.2; write-behind in 1.2; StateLog, rollups, retention and EnergyHourly in 1.4.*
 
-- **`StateLog`**: `(AttributeId int, TsUtc datetime2(3), Num float NULL, Str nvarchar(255) NULL)`.
+The history tables (schema `ch`, migration `History`) have **no foreign keys** to the device model: appends stay cheap
+and deleting an integration never waits on years of history. Times are UTC `datetime2`. Domain types live in
+`Domain/History` (entities and the pure `RollupMath`), the jobs in `Infrastructure/History`.
+
+- **`StateLog`**: `(AttributeId int, TsUtc datetime2(3), Num float NULL, Str nvarchar(255) NULL)`, no key.
   - Clustered index on `(TsUtc, AttributeId)`; nonclustered on `(AttributeId, TsUtc) INCLUDE (Num, Str)`.
-  - PAGE compression.
-  - Only `recorded` attributes are stored. Diagnostics such as link quality and RSSI are off by default.
+  - PAGE compression (on both indexes; the statistics and energy primary keys are rebuilt with PAGE by the migration).
+  - Only `recorded` attributes are stored, and only **changes** (the pipeline drops duplicates): a value holds until the
+    attribute's next row. Numbers and booleans (1/0) in `Num`, strings (and JSON text) in `Str`, cut to 255 characters;
+    both `NULL` = unknown. Diagnostics such as link quality and RSSI are off by default.
+- **`DeviceEvent`** `(AttributeId, TsUtc datetime2(3), EventType nvarchar(64), Payload json NULL)`, no key, clustered on
+  `(TsUtc, AttributeId)`: momentary events (button presses, doorbell rings). The payload is stored as canonical JSON
+  (`DeviceEvent.StoredPayload`: a scalar wrapped as `{"value": …}`, numbers rewritten as plain decimals, comments and
+  trailing commas dropped) and left out when it is over 4 000 characters, nested deeper than 64 levels or holds a number
+  beyond `decimal`'s range: SQL Server's `json` type rejects numbers it cannot hold in 38 digits (even `1e37`), and one
+  rejected payload would fail the whole write-behind flush, current state included, on every retry.
 - **`StatShortTerm` (5-minute) and `StatHourly`**:
-  - Primary key `(AttributeId, BucketStartUtc)`.
-  - Measurements store a time-weighted mean plus min and max.
-  - Counters store `Sum` and `LastCounter`, with reset detection.
-  - Rollups resume from a `RollupProgress` watermark and are idempotent (`MERGE`).
-  - Purges only delete rows older than **both** the retention limit and the rollup watermark, using `DELETE TOP (5000)`
-    loops.
-- **`EnergyHourly(EndpointId, HourStartUtc, Wh, Source = counter|delta|vendorWindow|integratedPower, Estimated)`** is
-  the **single source for every energy view** and is in place from Phase 1.
-  - Vendor windows are spread across hours. LG daily-only data is flagged "not hourly".
-  - Power-only devices are integrated with the trapezoid rule and flagged estimated.
-  - Each endpoint has exactly one selected source, so energy is never counted twice.
-- **Retention defaults** (configurable): StateLog and 5-minute stats 10 days, DeviceEvent 30 days, AutomationRun 30 days
-  or the last 200, Notification 90 days, AuditLog 1 year, hourly stats forever.
+  - Primary key `(AttributeId, BucketStartUtc)`; buckets are aligned to UTC.
+  - Statistics exist for recorded numbers with a state class (`HistoryClassification`): `measurement` → time-weighted
+    `Mean` plus `Min`/`Max`; `total_increasing` / `total` → `Sum` (the increase in the bucket) and `LastCounter`.
+  - Time-weighted mean: each value lasts until the next row; the value in effect before a bucket is **carried into it**
+    (a bucket without any new row still gets the carried value), unknown time is left out, a bucket with no known value
+    has no row. Hourly = mean of the 5-minute means, min of mins, max of maxes, sum of sums.
+  - Counters: the first reading ever only sets the baseline; a `total_increasing` drop of more than 10 % is a **reset**
+    (the new reading counts from zero); a smaller dip is noise (the higher reading stays the baseline, kept as
+    `LastCounter` for the next bucket); `total` counts signed differences.
+  - Attributes of retired capabilities or orphaned devices are not rolled up (their last value would be carried forever).
+- **Rollups** (`HistoryRollup`, every minute of the runtime clock, only while `RuntimeMode = Active`):
+  `StateLog` → `StatShortTerm` → `StatHourly` → `EnergyHourly`, each resumed from its `RollupProgress` watermark (which
+  starts at the oldest `StateLog` row). A 5-minute bucket closes once it ended `History:SettleDelay` (1 min) ago and no
+  history row of it is still waiting in the write-behind. Each window is recomputed with one `MERGE` (rows of the
+  attributes involved that the computation no longer yields are deleted) and its watermark moved in the same
+  transaction, so re-running a window gives the same rows. After downtime each stage catches up in bounded windows
+  (`ShortTermBatch` 1 h, `HourlyBatch` 1 day, `EnergyBatch` 6 h), one transaction each. Readings that arrive for an
+  already closed bucket stay in the raw history only. An hour whose integrated energy is not finite (readings near
+  `double.MaxValue`) gets no row rather than stalling the energy stage, which would also stop the `StateLog` purge.
+- **`EnergyHourly(EndpointId, HourStartUtc, Wh, Source = counter|delta|vendorWindow|integratedPower, Estimated)`**,
+  unique `(EndpointId, HourStartUtc)`, is the **single source for every energy view** and is in place from Phase 1.
+  - Each endpoint has exactly one selected source (`EnergySourceSelection`, picked by the rollup: an energy counter in
+    Wh — the catalogue's `energy.energy` first — else vendor windows, else power readings in W; a user's choice,
+    `IsUserOverride`, is never changed), so energy is never counted twice.
+  - Counter: the hourly `Sum` of the counter (resets handled as above).
+  - Power-only devices: integrated with the **trapezoid rule between readings at most `PowerInterpolationLimit` (1 min)
+    apart**; across a longer gap the earlier reading is held (history keeps changes only, so the value did not change in
+    between — a plain trapezoid would smear an off → on step over the whole gap). Flagged `Estimated`.
+  - Vendor windows are spread across hours. LG daily-only data is flagged "not hourly" (Phase 2; until a connector
+    reports windows no endpoint selects them).
+- **Retention** (`RetentionPurge`, hourly on the active runtime, `DELETE TOP (5000)` loops): `StateLog` below
+  min(retention, 5-minute watermark, energy watermark) — keeping each existing attribute's last row before the cutoff,
+  which is the value carried into later buckets; `StatShortTerm` below min(retention, hourly watermark); `DeviceEvent`
+  and `AuditLog` by retention only; nothing before the first rollup. Hourly statistics and energy whose attribute or
+  endpoint is gone are removed (ids found by skip-scan seeks). Later tables (AutomationRun, Notification) plug in as
+  `IRetentionPurgeTarget`s. Batches of 5 000 never escalate to a table lock — a test checks SQL Server's lock-promotion
+  counter (one 12 000-row `DELETE` does escalate, and would block the write-behind's inserts while it runs).
+- **Retention defaults** (`GET/PUT /api/settings/retention`, Admin; single row `RetentionSettings`): StateLog and
+  5-minute stats 10 days, DeviceEvent 30 days, AuditLog 1 year (365), hourly stats and energy forever; AutomationRun
+  30 days or the last 200 and Notification 90 days when they land.
+- **Reading history** (Viewer): `GET /api/attributes/{id}/history?from&to&resolution=auto|raw|5m|1h` →
+  `HistorySeriesDto(AttributeId, Resolution, Unit, Points[T, V, Min, Max, S])`, oldest first, at most 5 000 points (the
+  most recent). `auto`: raw up to 6 h, 5-minute statistics up to 7 days, hourly beyond — the finest that fits and whose
+  retention still covers `from` (an older range gets the next coarser resolution, never an empty or cut series);
+  attributes without statistics always get raw changes, opened by the value in effect at `from`. Default range: the last
+  24 h of the runtime clock; at most 366 days. `GET /api/energy/hourly?from&to&endpointId?` → `EnergyHourlyDto[]`, at
+  most 20 000 rows (more: 400 `energy.too_many_rows`, never a silently cut list; a year of one endpoint always fits).
 - **Automation and scene definitions**
   - `Automation.Definition` is a single `json` column holding polymorphic System.Text.Json (`[JsonPolymorphic]`,
     discriminator `type`) with a `schemaVersion`. Golden-file tests cover the upgrade functions.
@@ -866,8 +914,11 @@ These protect a public repository and a real home; they apply to people and agen
       cache, hub `StateChanged`, write-behind). 404 unknown attribute; 409 when the runtime is not active.
     - `POST /api/_test/clock` with `{ "advanceSeconds": number }` (omit to just read) → 200 `{ nowUtc, offsetSeconds }`:
       moves the runtime clock forward (connector runtimes — the Simulated home ticks every 5 s of it —, report
-      timestamps and, later, the scheduler). It otherwise runs in real time, so E2E tests work without touching it;
-      timers that become due fire at once.
+      timestamps, the history rollups and retention, and, later, the scheduler). It otherwise runs in real time, so E2E
+      tests work without touching it; timers that become due fire at once. The history API's default range ends at
+      this clock's now.
+  - `History:MaintenanceEnabled=false` stops the background rollups and retention job; integration tests that need
+    exact timing call `HistoryRollup.RunOnceAsync` / `RetentionPurge.PurgeOnceAsync` themselves.
   - `FakeTimeProvider`; a seeded RNG for Simulated; `--seed-demo` (2 floors, 8 rooms, about 20 devices, fake
     coordinates).
 - **Per-milestone verification:** `dotnet build -warnaserror`, `dotnet test`, the web suite (`lint`, `typecheck`,

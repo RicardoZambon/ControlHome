@@ -1,3 +1,6 @@
+using System.Text.Json;
+using ControlHome.Domain.Capabilities;
+
 namespace ControlHome.Domain.Devices;
 
 /// <summary>
@@ -32,4 +35,28 @@ public sealed class EndpointCapability
     public bool Retired { get; set; }
 
     public List<DeviceAttribute> Attributes { get; set; } = [];
+
+    /// <summary>
+    /// The capability's definition: the catalogue's, or for <c>generic</c> the connector-supplied one in
+    /// <paramref name="genericDefinitionJson"/>; <c>null</c> when unknown or unreadable.
+    /// </summary>
+    public static CapabilityDefinition? ResolveDefinition(string capabilityId, string? genericDefinitionJson)
+    {
+        ArgumentNullException.ThrowIfNull(capabilityId);
+        if (!string.Equals(capabilityId, CapabilityIds.Generic, StringComparison.Ordinal))
+        {
+            return CapabilityCatalog.Find(capabilityId);
+        }
+
+        try
+        {
+            return string.IsNullOrWhiteSpace(genericDefinitionJson)
+                ? null
+                : CapabilityJson.Deserialize<CapabilityDefinition>(genericDefinitionJson);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }

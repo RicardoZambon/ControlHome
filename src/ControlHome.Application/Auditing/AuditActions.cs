@@ -23,6 +23,9 @@ public static class AuditActions
 
     public const string HomeUpdated = "home.updated";
 
+    /// <summary>An Admin changed how long history is kept.</summary>
+    public const string RetentionSettingsUpdated = "settings.retention_updated";
+
     public const string FloorCreated = "floors.created";
     public const string FloorUpdated = "floors.updated";
     public const string FloorDeleted = "floors.deleted";
