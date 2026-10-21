@@ -20,6 +20,15 @@ export interface ToneClasses {
   glow: string
 }
 
+/**
+ * The tone of a device's icon bubble: off, unknown and offline stay neutral (the words and the tile say which), and a
+ * lit light is warm (the energy amber) rather than state green.
+ */
+export function iconToneOf(tone: Tone, lit = false): Tone {
+  if (tone === 'off' || tone === 'neutral' || tone === 'offline') return 'neutral'
+  return lit && tone === 'on' ? 'energy' : tone
+}
+
 export const TONES: Record<Tone, ToneClasses> = {
   on: {
     dot: 'bg-state-on',

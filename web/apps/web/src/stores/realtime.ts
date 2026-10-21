@@ -101,6 +101,10 @@ export interface PendingCommand {
   endpointId: string
   capabilityId: string
   command: string
+  /** The command's arguments (for "Setting 22 °C…"). */
+  args?: Record<string, unknown>
+  /** A safety-critical command waiting for the person's safety PIN (nothing has been done yet). */
+  awaitingPin?: boolean
   /** Order of sending (later commands have larger numbers). */
   sequence: number
   /** Attributes shown with an optimistic value while it is pending. */
@@ -472,15 +476,31 @@ export const useRealtimeStore = defineStore('realtime', () => {
     }
   }
 
-  /** Whether a command of this browser is pending for the endpoint (optionally one capability or command). */
-  function isPending(endpointId: string, capabilityId?: string, command?: string): boolean {
+  /** Marks a pending safety-critical command as waiting for the safety PIN (or not any more). */
+  function setAwaitingPin(key: string, awaiting: boolean): void {
+    const entry = pending.get(key)
+    if (entry && entry.awaitingPin !== awaiting) pending.set(key, { ...entry, awaitingPin: awaiting })
+  }
+
+  /** The latest pending command of this browser for the endpoint (optionally one capability or command). */
+  function pendingFor(
+    endpointId: string,
+    capabilityId?: string,
+    command?: string,
+  ): PendingCommand | undefined {
+    let latest: PendingCommand | undefined
     for (const entry of pending.values()) {
       if (entry.endpointId !== endpointId) continue
       if (capabilityId !== undefined && entry.capabilityId !== capabilityId) continue
       if (command !== undefined && entry.command !== command) continue
-      return true
+      if (!latest || entry.sequence > latest.sequence) latest = entry
     }
-    return false
+    return latest
+  }
+
+  /** Whether a command of this browser is pending for the endpoint (optionally one capability or command). */
+  function isPending(endpointId: string, capabilityId?: string, command?: string): boolean {
+    return pendingFor(endpointId, capabilityId, command) !== undefined
   }
 
   /** Clears everything (sign-out). */
@@ -512,6 +532,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
     beginCommand,
     awaitCommand,
     abandonCommand,
+    setAwaitingPin,
+    pendingFor,
     isPending,
     reset,
   }

@@ -45,11 +45,15 @@ export function useControl(props: CapabilityControlProps) {
       constraintFor(props.capability.constraints, key, (other) => state.plain(other)),
     /** A command of this capability is pending (optionally a given one). */
     pending: (command?: string) => commands.isPending(props.capability.capabilityId, command),
-    send: (command: string, args?: Record<string, unknown>) =>
-      commands.send(props.capability, command, args, {
+    /** The latest pending command of this capability (optionally a given one). */
+    pendingCommand: (command?: string) => commands.pendingCommand(props.capability.capabilityId, command),
+    send: (command: string, args?: Record<string, unknown>) => {
+      const action = commandLabel(command, t, te)
+      return commands.send(props.capability, command, args, {
         deviceClass: props.device.deviceClass,
-        actionLabel: `${commandLabel(command, t, te)} · ${name.value}`,
-      }),
+        prompt: { title: t('safety.dialog.question', { action, name: name.value }), confirmLabel: action },
+      })
+    },
     measure: (value: number, unit: string | null | undefined) => formatMeasurement(value, unit, locale.value),
     valueLabel: (attributeKey: string, value: string) => valueLabel(attributeKey, value, t, te),
     commandLabel: (command: string) => commandLabel(command, t, te),

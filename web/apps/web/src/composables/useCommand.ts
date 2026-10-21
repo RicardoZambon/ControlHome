@@ -8,7 +8,7 @@ import {
 import { toast } from '@controlhome/ui'
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useSafetyPromptStore } from '../components/safety/safetyPrompt'
+import { useSafetyPromptStore, type StepUpPrompt } from '../components/safety/safetyPrompt'
 import { errorCodeOf, toErrorMessage, unwrap } from '../lib/problem'
 import { asBool, toStateValue } from '../lib/stateValue'
 import { useDevicesStore } from '../stores/devices'
@@ -26,8 +26,8 @@ export const DEADLINE_MARGIN_MS = 10_000
 export interface SendOptions {
   /** The device's class: `cover.open` on a gate or garage is safety-critical. */
   deviceClass?: string | null
-  /** What the PIN dialog shows ("Unlock · Front door lock"). */
-  actionLabel?: string
+  /** What the PIN dialog asks to confirm: its title ("Unlock Front door lock?") and its button ("Unlock"). */
+  prompt?: StepUpPrompt
 }
 
 /** Whether a command needs the safety PIN (always, or on this device class). */
@@ -109,11 +109,13 @@ export function newIdempotencyKey(): string {
 /**
  * Sends commands to one endpoint (`POST /api/endpoints/{id}/commands`) the way every control does:
  * - the predicted values show at once (optimistic) and stay until the device confirms; a failure puts the real ones back;
- * - an endpoint's requests go out one at a time, in the order they were made (the next waits for the previous answer);
+ * - an endpoint's requests go out one at a time, in the order they were made (the next waits for the previous answer),
+ *   each within the command's deadline (an unanswered POST is aborted and reported as not confirmed, never re-sent);
  * - the outcome arrives over the hub (`CommandStatus`): failed, timed-out and (someone else's) superseded commands
  *   are reported in a toast;
- * - a safety-critical command answered with `safety.step_up_required` opens the PIN dialog and, once the PIN is
- *   accepted, is sent again — once — with the same idempotency key (at-most-once: the server remembers the key).
+ * - a safety-critical command answered with `safety.step_up_required` opens the PIN dialog (the command shows as
+ *   waiting for the PIN meanwhile) and, once the PIN is accepted, is sent again — once — with the same idempotency key
+ *   (at-most-once: the server remembers the key).
  */
 export function useCommand(endpointId: MaybeRefOrGetter<string>) {
   const realtime = useRealtimeStore()
@@ -156,13 +158,18 @@ export function useCommand(endpointId: MaybeRefOrGetter<string>) {
     const critical = isSafetyCritical(definition, options.deviceClass)
     const key = newIdempotencyKey()
     realtime.beginCommand(
-      { key, endpointId: endpoint, capabilityId: capability.capabilityId, command },
+      { key, endpointId: endpoint, capabilityId: capability.capabilityId, command, args },
       critical ? new Map() : predictState(capability, definition, command, args, realtime.valueOf),
     )
+    const deadline = (definition?.timeoutMs ?? DEFAULT_TIMEOUT_MS) + DEADLINE_MARGIN_MS
 
     let accepted: CommandAcceptedDto | undefined
     let steppedUp = false
     while (!accepted) {
+      // The POST itself gets the same deadline (a server that never answers must not leave "Unlocking…" up forever).
+      // Aborting it never re-sends anything: the command is reported as not confirmed, and its state comes live.
+      const abort = new AbortController()
+      const timer = setTimeout(() => abort.abort(), deadline)
       try {
         accepted = unwrap(
           await inOrder(endpoint, () =>
@@ -174,23 +181,34 @@ export function useCommand(endpointId: MaybeRefOrGetter<string>) {
                 arguments: args ?? null,
                 idempotencyKey: key,
               },
+              signal: abort.signal,
             }),
           ),
         )
       } catch (error) {
+        if (abort.signal.aborted) {
+          realtime.abandonCommand(key)
+          toast.warning(t('errors.commands.timed_out'))
+          return 'timed_out'
+        }
         if (errorCodeOf(error) === 'safety.step_up_required' && !steppedUp) {
           steppedUp = true
-          if (await safety.requestStepUp({ action: options.actionLabel })) continue
+          // Nothing has happened yet: the control says it waits for the PIN, not "Unlocking…".
+          realtime.setAwaitingPin(key, true)
+          const granted = await safety.requestStepUp(options.prompt)
+          realtime.setAwaitingPin(key, false)
+          if (granted) continue
           realtime.abandonCommand(key)
           return 'cancelled'
         }
         realtime.abandonCommand(key)
         toast.error(toErrorMessage(error, t, (name) => te(name)))
         return 'rejected'
+      } finally {
+        clearTimeout(timer)
       }
     }
 
-    const deadline = (definition?.timeoutMs ?? DEFAULT_TIMEOUT_MS) + DEADLINE_MARGIN_MS
     const outcome = await realtime.awaitCommand(key, accepted.commandId, deadline)
     report(outcome)
     return outcome.status
@@ -201,7 +219,12 @@ export function useCommand(endpointId: MaybeRefOrGetter<string>) {
     return realtime.isPending(toValue(endpointId), capabilityId, command)
   }
 
-  return { send, isPending, canControl }
+  /** The latest pending command of this browser for the endpoint (optionally one capability or command). */
+  function pendingCommand(capabilityId?: string, command?: string) {
+    return realtime.pendingFor(toValue(endpointId), capabilityId, command)
+  }
+
+  return { send, isPending, pendingCommand, canControl }
 }
 
 export type CommandSender = ReturnType<typeof useCommand>

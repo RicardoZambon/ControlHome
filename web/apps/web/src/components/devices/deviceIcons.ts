@@ -22,6 +22,7 @@ import {
   LampFloor,
   Lightbulb,
   Lock,
+  LockOpen,
   Microwave,
   MonitorSpeaker,
   Phone,
@@ -137,8 +138,27 @@ const byCapability: [string, Component][] = [
   ['button', CircleDot],
 ]
 
-/** The icon of a device: its own, else its class's, else its capabilities'. */
+/** Icons with an open twin: an unlocked lock, an open door. */
+const OPEN_TWINS = new Map<Component, Component>([
+  [Lock, LockOpen],
+  [DoorClosed, DoorOpen],
+])
+
+/**
+ * The icon of a device: its own, else its class's, else its capabilities'. `open` (an unlocked lock, an open door, see
+ * `standsOpen`) shows a lock or a door open.
+ */
 export function deviceIcon(options: {
+  icon?: string | null
+  deviceClass?: string | null
+  capabilities?: readonly string[]
+  open?: boolean
+}): Component {
+  const icon = baseIcon(options)
+  return options.open ? (OPEN_TWINS.get(icon) ?? icon) : icon
+}
+
+function baseIcon(options: {
   icon?: string | null
   deviceClass?: string | null
   capabilities?: readonly string[]

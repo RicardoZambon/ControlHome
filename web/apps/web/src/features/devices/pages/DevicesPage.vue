@@ -3,33 +3,36 @@ import {
   Alert,
   AlertDescription,
   Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Skeleton,
   cn,
 } from '@controlhome/ui'
-import { Blocks, CircleDashed, FilterX, House, PlugZap, RefreshCw, Search, X } from '@lucide/vue'
+import { CircleDashed, FilterX, House, ListFilter, PlugZap, RefreshCw, Search, Star, X } from '@lucide/vue'
 import { computed, onMounted, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter, type LocationQueryValue } from 'vue-router'
 import PageHeader from '../../../components/PageHeader.vue'
 import DeviceTile from '../../../components/devices/DeviceTile.vue'
+import { summarizeEndpoint } from '../../../components/devices/deviceState'
 import { capabilityLabel } from '../../../components/devices/format'
 import { useProblem } from '../../../composables/useProblem'
-import { useDevicesStore } from '../../../stores/devices'
+import { useDevicesStore, type EndpointEntry } from '../../../stores/devices'
 import { useRealtimeStore } from '../../../stores/realtime'
 import { useSessionStore } from '../../../stores/session'
-import { summarizeEndpoint } from '../../../components/devices/deviceState'
 import { NO_ROOM, filterEntries, groupByRoom, type DeviceFilters } from '../filters'
 
 /**
- * Every device of the home as tiles, grouped by room, with filters by room, kind (capability), integration and a search,
- * kept in the address (so Back returns to the same view). Live: the states come from the realtime store and the list
- * reloads when devices change anywhere.
+ * Every device of the home as tiles: the favorites first, then each room under a full-width heading, all on the same
+ * column grid. Filters: a search, the rooms as a row of chips, and kind and integration in a menu — all kept in the
+ * address (so Back returns to the same view). Live: the states come from the realtime store and the list reloads when
+ * devices change anywhere.
  */
 const { t, te, locale } = useI18n()
 const route = useRoute()
@@ -53,6 +56,8 @@ const filters = computed<DeviceFilters>(() => ({
   q: single(route.query.q),
 }))
 const filtering = computed(() => Object.values(filters.value).some(Boolean))
+/** Kind or integration chosen in the menu (its button shows a dot). */
+const menuFiltering = computed(() => !!filters.value.capability || !!filters.value.integration)
 
 function setFilter(key: keyof DeviceFilters, value: string | undefined): void {
   const query = { ...route.query, [key]: value && value !== ALL ? value : undefined }
@@ -70,37 +75,32 @@ const visible = computed(() =>
 )
 const groups = computed(() => groupByRoom(visible.value, devices.rooms))
 const multipleFloors = computed(() => new Set(devices.rooms.map((room) => room.floorId)).size > 1)
+/** The favorites, first and with their rooms, while nothing narrows the list. */
+const favorites = computed(() =>
+  filtering.value ? [] : visible.value.filter((entry) => entry.endpoint.favorite),
+)
 
-/** How many tiles of a list are on (lit, running, open…). */
-function activeCount(entries: typeof visible.value): number {
-  return entries.filter((entry) => {
-    const ids = new Map<string, number>()
-    for (const capability of entry.endpoint.capabilities)
-      for (const attribute of capability.attributes)
-        ids.set(`${capability.capabilityId}.${attribute.key}`, attribute.attributeId)
-    return summarizeEndpoint(
-      entry.endpoint,
-      (capabilityId, key) => realtime.valueOf(ids.get(`${capabilityId}.${key}`)),
-      {
-        availability: devices.availabilityOf(entry.device),
-        deviceClass: entry.device.deviceClass,
-        locale: locale.value,
-        t,
-        te,
-      },
-    ).active
-  }).length
+function isActive(entry: EndpointEntry): boolean {
+  const ids = new Map<string, number>()
+  for (const capability of entry.endpoint.capabilities)
+    for (const attribute of capability.attributes)
+      ids.set(`${capability.capabilityId}.${attribute.key}`, attribute.attributeId)
+  return summarizeEndpoint(
+    entry.endpoint,
+    (capabilityId, key) => realtime.valueOf(ids.get(`${capabilityId}.${key}`)),
+    {
+      availability: devices.availabilityOf(entry.device),
+      deviceClass: entry.device.deviceClass,
+      locale: locale.value,
+      t,
+      te,
+    },
+  ).active
 }
 
-/**
- * How many columns of the page grid a room takes: as many as it has tiles (up to the full width), so rooms with one or
- * two devices sit side by side instead of each leaving a row mostly empty. Its tiles use the same column grid.
- */
-function spanOf(count: number): { section: string; list: string } {
-  if (count <= 1) return { section: 'col-span-1', list: 'grid-cols-1' }
-  if (count === 2) return { section: 'col-span-2', list: 'grid-cols-2' }
-  if (count === 3) return { section: 'col-span-2 md:col-span-3', list: 'grid-cols-2 md:grid-cols-3' }
-  return { section: 'col-span-full', list: 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' }
+/** How many tiles of a list are on (lit, running, open…). */
+function activeCount(entries: readonly EndpointEntry[]): number {
+  return entries.filter(isActive).length
 }
 
 const capabilityOptions = computed(() => {
@@ -116,6 +116,16 @@ const capabilityOptions = computed(() => {
 const showIntegrationFilter = computed(() => devices.integrations.length > 1 || !!filters.value.integration)
 const hasUnassigned = computed(() => devices.entries.some((entry) => entry.roomId === null))
 
+/** The room chips: every room, then "No room" when some device has none. */
+const roomChips = computed(() => [
+  { value: ALL, label: t('devices.filters.allRooms') },
+  ...devices.rooms.map((room) => ({
+    value: String(room.id),
+    label: multipleFloors.value ? `${room.name} · ${room.floorName}` : room.name,
+  })),
+  ...(hasUnassigned.value ? [{ value: NO_ROOM, label: t('device.noRoom') }] : []),
+])
+
 const empty = computed(() => devices.loaded && devices.entries.length === 0)
 const summary = computed(() => {
   const total = visible.value.length
@@ -128,17 +138,9 @@ const summary = computed(() => {
     <PageHeader
       :eyebrow="t('devices.eyebrow')"
       :title="t('devices.title')"
-      :description="t('devices.description')"
-    >
-      <template v-if="session.isAdmin && !empty" #actions>
-        <Button variant="outline" as-child class="max-sm:w-full">
-          <RouterLink :to="{ name: 'integrations' }">
-            <Blocks aria-hidden="true" />
-            {{ t('devices.manageIntegrations') }}
-          </RouterLink>
-        </Button>
-      </template>
-    </PageHeader>
+      :description="empty ? undefined : t('devices.description')"
+      description-class="max-sm:hidden"
+    />
 
     <Alert v-if="devices.error && !devices.loading" variant="destructive" class="mb-6">
       <AlertDescription class="flex flex-wrap items-center justify-between gap-3">
@@ -151,7 +153,12 @@ const summary = computed(() => {
     </Alert>
 
     <!-- Loading -->
-    <div v-if="!devices.loaded && devices.loading" class="grid gap-8" :aria-label="t('common.loading')">
+    <div
+      v-if="!devices.loaded && devices.loading"
+      class="grid gap-8"
+      role="status"
+      :aria-label="t('common.loading')"
+    >
       <Skeleton class="h-control w-full max-w-xl" />
       <ul class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
         <li v-for="index in 8" :key="index" class="grid min-h-40 gap-5 rounded-2xl border bg-card p-4">
@@ -201,81 +208,106 @@ const summary = computed(() => {
     </section>
 
     <template v-else-if="devices.loaded">
-      <!-- Filters -->
-      <div
-        :class="
-          cn(
-            'mb-8 grid grid-cols-2 gap-3',
-            showIntegrationFilter
-              ? 'md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]'
-              : 'md:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(0,1fr))]',
-          )
-        "
-        role="search"
-      >
-        <div class="relative col-span-2 md:col-span-1">
-          <Search
-            class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            :id="`${id}-q`"
-            :model-value="filters.q ?? ''"
-            type="search"
-            :placeholder="t('devices.filters.search')"
-            :aria-label="t('devices.filters.search')"
-            class="pl-9"
-            @update:model-value="(value) => setFilter('q', String(value).trim() ? String(value) : undefined)"
-          />
+      <!-- Filters: search and the kind menu, then the rooms as chips (one scrolling row on phones) -->
+      <div class="mb-6 grid gap-3" role="search">
+        <div class="flex gap-2">
+          <div class="relative min-w-0 flex-1 md:max-w-md">
+            <Search
+              class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              :id="`${id}-q`"
+              :model-value="filters.q ?? ''"
+              type="search"
+              :placeholder="t('devices.filters.search')"
+              :aria-label="t('devices.filters.search')"
+              class="pl-9"
+              @update:model-value="
+                (value) => setFilter('q', String(value).trim() ? String(value) : undefined)
+              "
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger as-child>
+              <Button
+                variant="outline"
+                size="icon"
+                class="relative shrink-0"
+                :aria-label="t('devices.filters.more')"
+                data-slot="device-filters"
+              >
+                <ListFilter aria-hidden="true" />
+                <span
+                  v-if="menuFiltering"
+                  aria-hidden="true"
+                  class="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-primary"
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="max-h-96 w-64 overflow-y-auto">
+              <DropdownMenuLabel>{{ t('devices.filters.capability') }}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                :model-value="filters.capability ?? ALL"
+                @update:model-value="(value) => setFilter('capability', value as string)"
+              >
+                <DropdownMenuRadioItem :value="ALL">{{
+                  t('devices.filters.allCapabilities')
+                }}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem
+                  v-for="option in capabilityOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+              <template v-if="showIntegrationFilter">
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{{ t('devices.filters.integration') }}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  :model-value="filters.integration ?? ALL"
+                  @update:model-value="(value) => setFilter('integration', value as string)"
+                >
+                  <DropdownMenuRadioItem :value="ALL">
+                    {{ t('devices.filters.allIntegrations') }}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem
+                    v-for="integration in devices.integrations"
+                    :key="integration.id"
+                    :value="integration.id"
+                  >
+                    {{ integration.name }}
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </template>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <Select
-          :model-value="filters.room ?? ALL"
-          @update:model-value="(value) => setFilter('room', value as string)"
+        <div
+          role="group"
+          :aria-label="t('devices.filters.room')"
+          class="-mx-4 flex gap-2 overflow-x-auto px-4 py-0.5 sm:-mx-6 sm:px-6 md:mx-0 md:flex-wrap md:px-0"
+          data-slot="room-chips"
         >
-          <SelectTrigger class="w-full" :aria-label="t('devices.filters.room')">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem :value="ALL">{{ t('devices.filters.allRooms') }}</SelectItem>
-            <SelectItem v-for="room in devices.rooms" :key="room.id" :value="String(room.id)">
-              {{ multipleFloors ? `${room.name} · ${room.floorName}` : room.name }}
-            </SelectItem>
-            <SelectItem v-if="hasUnassigned" :value="NO_ROOM">{{ t('device.noRoom') }}</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          :model-value="filters.capability ?? ALL"
-          @update:model-value="(value) => setFilter('capability', value as string)"
-        >
-          <SelectTrigger class="w-full" :aria-label="t('devices.filters.capability')">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem :value="ALL">{{ t('devices.filters.allCapabilities') }}</SelectItem>
-            <SelectItem v-for="option in capabilityOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          v-if="showIntegrationFilter"
-          :model-value="filters.integration ?? ALL"
-          @update:model-value="(value) => setFilter('integration', value as string)"
-        >
-          <SelectTrigger class="w-full" :aria-label="t('devices.filters.integration')">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem :value="ALL">{{ t('devices.filters.allIntegrations') }}</SelectItem>
-            <SelectItem
-              v-for="integration in devices.integrations"
-              :key="integration.id"
-              :value="integration.id"
-            >
-              {{ integration.name }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+          <Button
+            v-for="chip in roomChips"
+            :key="chip.value"
+            size="sm"
+            variant="outline"
+            :aria-pressed="(filters.room ?? ALL) === chip.value"
+            :class="
+              cn(
+                'shrink-0 rounded-full px-3.5',
+                (filters.room ?? ALL) === chip.value &&
+                  'border-primary bg-primary text-primary-foreground hover:bg-primary/95 hover:text-primary-foreground',
+              )
+            "
+            @click="setFilter('room', chip.value)"
+          >
+            {{ chip.label }}
+          </Button>
+        </div>
       </div>
 
       <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -296,17 +328,38 @@ const summary = computed(() => {
         <Button variant="outline" @click="clearFilters">{{ t('devices.filters.clear') }}</Button>
       </div>
 
-      <!-- Grouped by room: small rooms share a row, each tile on the same column grid -->
-      <div
-        v-else
-        class="grid grid-cols-2 gap-x-3 gap-y-10 sm:gap-x-4 md:grid-cols-3 xl:grid-cols-4"
-        data-slot="room-groups"
-      >
+      <div v-else class="grid gap-10" data-slot="room-groups">
+        <!-- Favorites: the same tiles, with their rooms -->
+        <section v-if="favorites.length > 0" :aria-labelledby="`${id}-favorites`" data-slot="favorites">
+          <header class="mb-3 flex min-w-0 items-center gap-3">
+            <span
+              class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-state-energy/15 text-state-energy [&_svg]:size-4.5"
+              aria-hidden="true"
+            >
+              <Star class="fill-current" />
+            </span>
+            <h2 :id="`${id}-favorites`" class="font-serif text-lg leading-snug font-medium tracking-tight">
+              {{ t('devices.favorites') }}
+            </h2>
+          </header>
+          <ul class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+            <li v-for="entry in favorites" :key="entry.endpoint.id">
+              <DeviceTile
+                :device="entry.device"
+                :endpoint="entry.endpoint"
+                :room-name="entry.roomId === null ? undefined : roomName(entry.roomId)"
+                class="h-full"
+              />
+            </li>
+          </ul>
+        </section>
+
+        <!-- Each room: a full-width heading, its tiles on the shared grid -->
         <section
           v-for="group in groups"
           :key="group.roomId ?? 'none'"
           :aria-labelledby="`${id}-room-${group.roomId ?? 'none'}`"
-          :class="['min-w-0', spanOf(group.entries.length).section]"
+          class="min-w-0"
           data-slot="room-group"
         >
           <header class="mb-3 flex min-w-0 items-center gap-3">
@@ -316,22 +369,29 @@ const summary = computed(() => {
             >
               <House v-if="group.room" /><CircleDashed v-else />
             </span>
-            <div class="grid min-w-0">
-              <h2
-                :id="`${id}-room-${group.roomId ?? 'none'}`"
-                class="truncate font-serif text-lg leading-snug font-medium tracking-tight"
+            <h2
+              :id="`${id}-room-${group.roomId ?? 'none'}`"
+              class="min-w-0 truncate font-serif text-lg leading-snug font-medium tracking-tight"
+            >
+              {{ group.room?.name ?? t('device.noRoom') }}
+              <span
+                v-if="group.room && multipleFloors"
+                class="font-sans text-sm font-normal text-muted-foreground"
               >
-                {{ group.room?.name ?? t('device.noRoom') }}
-              </h2>
-              <span class="truncate text-xs text-muted-foreground tabular-nums">
-                <template v-if="group.room && multipleFloors">{{ group.room.floorName }} · </template
-                >{{
-                  t('devices.groupCount', { count: group.entries.length, active: activeCount(group.entries) })
-                }}
-              </span>
-            </div>
+                · {{ group.room.floorName }}</span
+              >
+            </h2>
+            <span
+              v-if="group.entries.length > 1"
+              class="ml-auto shrink-0 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground tabular-nums"
+              data-slot="room-active"
+            >
+              {{
+                t('devices.groupActive', { active: activeCount(group.entries) }, activeCount(group.entries))
+              }}
+            </span>
           </header>
-          <ul :class="['grid gap-3 sm:gap-4', spanOf(group.entries.length).list]">
+          <ul class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
             <li
               v-for="(entry, index) in group.entries"
               :key="entry.endpoint.id"
@@ -342,6 +402,7 @@ const summary = computed(() => {
                 :device="entry.device"
                 :endpoint="entry.endpoint"
                 :room-name="entry.roomId === null ? undefined : roomName(entry.roomId)"
+                :show-room="false"
                 class="h-full"
               />
             </li>

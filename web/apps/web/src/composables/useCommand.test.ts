@@ -156,6 +156,32 @@ describe('useCommand', () => {
     expect(realtime.valueOf(2)).toEqual(num(80))
   })
 
+  it('gives up on a request the server never answers, after the command deadline (never sent again)', async () => {
+    vi.useFakeTimers()
+    const { sender, home, realtime } = await setup()
+    let signal: AbortSignal | undefined
+    api.sendCommand.mockImplementation((options: { signal?: AbortSignal }) => {
+      signal = options.signal
+      return new Promise((resolve) =>
+        signal?.addEventListener('abort', () =>
+          resolve({ data: undefined, error: new DOMException('Aborted', 'AbortError'), response: undefined }),
+        ),
+      )
+    })
+    const result = sender.send(capabilityOf(home, 'd-light', 'level'), 'setLevel', { level: 40 })
+    await flushPromises()
+    expect(realtime.valueOf(2)).toEqual(num(40))
+    expect(sender.pendingCommand()).toMatchObject({ command: 'setLevel', args: { level: 40 } })
+    await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS + DEADLINE_MARGIN_MS)
+    await expect(result).resolves.toBe('timed_out')
+    expect(signal?.aborted).toBe(true)
+    expect(api.sendCommand).toHaveBeenCalledTimes(1)
+    expect(toast.warning).toHaveBeenCalledWith("The device didn't confirm in time. Check its state.")
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(realtime.valueOf(2)).toEqual(num(80))
+    expect(sender.isPending()).toBe(false)
+  })
+
   it('reports a failure with its translated code', async () => {
     const { sender, home, realtime } = await setup()
     api.sendCommand.mockResolvedValue(accepted('c1'))
@@ -243,17 +269,21 @@ describe('useCommand', () => {
     api.sendCommand
       .mockResolvedValueOnce(problem(403, 'safety.step_up_required'))
       .mockResolvedValueOnce(accepted('c9'))
-    const result = sender.send(lock, 'unlock', undefined, { actionLabel: 'Unlock · Front door lock' })
+    const prompt = { title: 'Unlock Front door lock?', confirmLabel: 'Unlock' }
+    const result = sender.send(lock, 'unlock', undefined, { prompt })
     await flushPromises()
 
     const safety = useSafetyPromptStore()
-    expect(safety.prompt).toEqual({ action: 'Unlock · Front door lock' })
-    // Never predicted (at-most-once): the lock still shows locked, and the control waits.
+    expect(safety.prompt).toEqual(prompt)
+    // Never predicted (at-most-once): the lock still shows locked, and the control waits — for the PIN, not for the
+    // lock (nothing has happened yet).
     expect(realtime.valueOf(14)).toEqual({ kind: 'string', b: null, n: null, s: 'locked', j: null })
     expect(realtime.isPending('e-lock', 'lock')).toBe(true)
+    expect(sender.pendingCommand('lock')).toMatchObject({ command: 'unlock', awaitingPin: true })
 
     safety.complete(true)
     await flushPromises()
+    expect(sender.pendingCommand('lock')).toMatchObject({ command: 'unlock', awaitingPin: false })
     expect(api.sendCommand).toHaveBeenCalledTimes(2)
     const [first, second] = api.sendCommand.mock.calls.map((call) => call[0].body)
     expect(second.idempotencyKey).toBe(first.idempotencyKey)

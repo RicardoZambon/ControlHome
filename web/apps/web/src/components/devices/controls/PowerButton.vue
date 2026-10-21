@@ -5,8 +5,8 @@ import type { Component, HTMLAttributes } from 'vue'
 
 /**
  * The round power button of a device (a switch: `role="switch"`, `aria-checked`). On, it is a solid state-on disc
- * with a soft halo; off, a quiet card disc; unknown, a dashed outline. While a command is pending a ring spins around
- * it. `sm` is the tiles' quick action (44 px), `lg` the device page's main control.
+ * with a soft halo; off, a hollow ring with a thin glyph; unknown, a dashed ring. While a command is pending a ring
+ * spins around it. `sm` is the tiles' quick action (44 px), `lg` the device page's main control.
  */
 const props = withDefaults(
   defineProps<{
@@ -40,14 +40,15 @@ const emit = defineEmits<{ toggle: [] }>()
         on === true &&
           'bg-state-on text-state-on-foreground shadow-lg ring-6 shadow-state-on/30 ring-state-on/15 hover:bg-state-on/95',
         on === false &&
-          'border bg-card text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground',
-        on === undefined && 'border border-dashed bg-card text-muted-foreground',
+          'border-2 border-muted-foreground/60 bg-transparent text-muted-foreground hover:border-foreground/60 hover:text-foreground',
+        on === undefined &&
+          'border-2 border-dashed border-muted-foreground/60 bg-transparent text-muted-foreground',
         props.class,
       )
     "
     @click="emit('toggle')"
   >
-    <component :is="icon ?? Power" aria-hidden="true" :stroke-width="2.25" />
+    <component :is="icon ?? Power" aria-hidden="true" :stroke-width="on ? 2.25 : 1.75" />
     <span
       v-if="pending"
       aria-hidden="true"

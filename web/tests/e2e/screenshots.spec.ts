@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import {
   SETUP_CODE,
+  attributeIdOf,
+  attributeValue,
   completeSetup,
   createSimulatedHome,
   createUser,
@@ -11,9 +13,12 @@ import {
   mutationHeaders,
   resetApp,
   savePreferences,
+  sendCommand,
   signIn,
   test,
   testData,
+  waitForLive,
+  type SimulatedDevice,
 } from './fixtures'
 import { LOCALES, t, tr, type Locale } from './i18n'
 
@@ -92,8 +97,8 @@ const signedInRoutes: Route[] = [
   {
     path: '/',
     name: 'dashboard',
-    ready: (page, locale) =>
-      page.getByText(tr(locale, 'dashboard.welcome', { home: testData.home.name }), { exact: true }),
+    // Captured once the simulated home is in: the devices ("active now", the favorite light) have loaded too.
+    ready: (page) => page.locator('[data-slot="active-now"]'),
   },
   {
     path: '/users',
@@ -269,6 +274,84 @@ function deviceRoutes(home: SimulatedHome): Route[] {
       ready: (page) => page.getByRole('heading', { name: 'Simulated home' }),
     },
   ]
+}
+
+/** `POST /api/_test/devices/{attributeId}/state`: a value goes through the state pipeline as if the device reported it. */
+async function injectState(
+  request: APIRequestContext,
+  device: SimulatedDevice,
+  capabilityId: string,
+  key: string,
+  value: { kind: 'bool' | 'string'; b?: boolean; s?: string },
+): Promise<void> {
+  const response = await request.post(
+    `/api/_test/devices/${attributeIdOf(device, capabilityId, key)}/state`,
+    {
+      headers: mutationHeaders(),
+      data: { value: { b: null, n: null, s: null, j: null, ...value } },
+    },
+  )
+  expect(response.status(), await response.text()).toBe(204)
+}
+
+/** AttributeIds the browser-side color bulb uses (far above any real one). */
+const COLOR_ATTRIBUTES = { hue: 990_001, saturation: 990_002, colorTemperature: 990_003 } as const
+
+/**
+ * States the basic simulated home cannot reach, simulated in the browser like `simulateNoDatabase` (the device answers
+ * are rewritten on their way in): the plug unreachable for 12 minutes, and the light a color bulb glowing violet (a
+ * `color` capability the catalogue has but no basic-home device; violet, so it is never mistaken for the warm white of
+ * a plain light). Undo with `page.unrouteAll()`.
+ */
+async function simulateDeviceStates(page: Page, home: SimulatedHome): Promise<void> {
+  const now = new Date().toISOString()
+  const lastSeen = new Date(Date.now() - 12 * 60_000).toISOString()
+  const number = (n: number) => ({ kind: 'number', b: null, n, s: null, j: null })
+  const colorValues = [
+    { attributeId: COLOR_ATTRIBUTES.hue, key: 'hue', value: number(265) },
+    { attributeId: COLOR_ATTRIBUTES.saturation, key: 'saturation', value: number(85) },
+    { attributeId: COLOR_ATTRIBUTES.colorTemperature, key: 'colorTemperature', value: number(2700) },
+  ].map((attribute) => ({ ...attribute, observedAtUtc: now, lastChangedAtUtc: now, restored: false }))
+  const color = {
+    id: COLOR_ATTRIBUTES.hue,
+    capabilityId: 'color',
+    capabilityVersion: 1,
+    retired: false,
+    constraints: null,
+    genericDefinition: null,
+    attributes: colorValues,
+  }
+  type Device = SimulatedDevice & { availability: string; lastSeenAtUtc: string | null }
+  const rewrite = (device: Device): Device => {
+    if (device.id === home.plug.id) return { ...device, availability: 'Offline', lastSeenAtUtc: lastSeen }
+    if (device.id !== home.light.id) return device
+    return {
+      ...device,
+      endpoints: device.endpoints.map((endpoint, index) =>
+        index === 0 ? { ...endpoint, capabilities: [...endpoint.capabilities, color] } : endpoint,
+      ) as Device['endpoints'],
+    }
+  }
+  await page.route(/\/api\/devices(\?.*)?$/, async (route) => {
+    const response = await route.fetch()
+    await route.fulfill({ response, json: ((await response.json()) as Device[]).map(rewrite) })
+  })
+  await page.route(/\/api\/devices\/[0-9a-f-]+$/, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const response = await route.fetch()
+    await route.fulfill({ response, json: rewrite((await response.json()) as Device) })
+  })
+  await page.route(/\/api\/state$/, async (route) => {
+    const response = await route.fetch()
+    const extra = colorValues.map(({ attributeId, value, observedAtUtc, lastChangedAtUtc, restored }) => ({
+      attributeId,
+      value,
+      observedAtUtc,
+      lastChangedAtUtc,
+      restored,
+    }))
+    await route.fulfill({ response, json: [...((await response.json()) as unknown[]), ...extra] })
+  })
 }
 
 /** Where floor point (x, y) cm is on the screen: from the plan SVG's viewBox (cm) and its box (px). */
@@ -800,6 +883,73 @@ for (const width of WIDTHS) {
           for (const route of [...signedInRoutes, ...floorRoutes(floor), ...deviceRoutes(home)])
             await capture(route)
 
+          // The device info opened: every attribute as a table, or as a stacked list on phones.
+          await page.goto(`/devices/${home.contact.id}`)
+          await expect(page.getByRole('heading', { level: 1, name: home.contact.name })).toBeVisible()
+          await page.locator('[data-slot="device-info"] summary').click()
+          await expect(
+            page.locator(width < 640 ? '[data-slot="attributes-list"]' : '[data-slot="attributes-table"]'),
+          ).toBeVisible()
+          await page.evaluate(() => document.fonts.ready)
+          await gates.check(`device info (${width} px, ${theme}, ${locale})`)
+          await screenshotWholePage(page, `${outputDir}device-contact-info-${width}-${theme}-${locale}.png`)
+
+          // Device states, each one unmistakable in this theme and width: the AC off, the lock unlocked, the door open,
+          // the plug offline and the light a color bulb (both simulated in the browser), then the lock jammed, and a
+          // command on its way (its request held back, so the tile says what it is doing).
+          await sendCommand(page.request, home.ac, 'switch', 'turnOff')
+          await expect.poll(() => attributeValue(page.request, home.ac.name, 'switch', 'on')).toBe(false)
+          await injectState(page.request, home.lock, 'lock', 'lockState', { kind: 'string', s: 'unlocked' })
+          await injectState(page.request, home.contact, 'contact', 'open', { kind: 'bool', b: true })
+          await simulateDeviceStates(page, home)
+          const heading = (name: string) => (page: Page) => page.getByRole('heading', { level: 1, name })
+          const lockState = (state: string) => (page: Page, locale: Locale) =>
+            page
+              .locator('[data-slot="lock-state"]')
+              .filter({ hasText: tr(locale, `device.values.lockState.${state}`) })
+          for (const route of [
+            {
+              path: '/devices',
+              name: 'devices-states',
+              ready: (page: Page) => page.locator('[data-slot="tile-offline"]'),
+            },
+            {
+              path: `/devices/${home.light.id}`,
+              name: 'device-light-color',
+              ready: (page: Page) => page.locator('[data-capability="color"]'),
+            },
+            { path: `/devices/${home.ac.id}`, name: 'device-ac-off', ready: heading(home.ac.name) },
+            { path: `/devices/${home.plug.id}`, name: 'device-plug-offline', ready: heading(home.plug.name) },
+            { path: `/devices/${home.lock.id}`, name: 'device-lock-unlocked', ready: lockState('unlocked') },
+          ])
+            await capture(route)
+          await injectState(page.request, home.lock, 'lock', 'lockState', { kind: 'string', s: 'jammed' })
+          await capture({
+            path: `/devices/${home.lock.id}`,
+            name: 'device-lock-jammed',
+            ready: lockState('jammed'),
+          })
+
+          let release!: () => void
+          const held = new Promise<void>((resolve) => (release = resolve))
+          await page.route(/\/api\/endpoints\/[^/]+\/commands$/, async (route) => {
+            await held
+            await route.continue()
+          })
+          await page.goto('/devices')
+          await waitForLive(page)
+          const acTile = page.locator('[data-slot="device-tile"]').filter({ hasText: home.ac.name }).first()
+          await acTile.scrollIntoViewIfNeeded()
+          await acTile.getByRole('switch').click()
+          await expect(acTile.locator('[data-slot="tile-state"]')).toHaveAttribute('data-pending', 'true')
+          await captureScreen('devices-pending')
+          release()
+          await expect(acTile.locator('[data-slot="tile-state"]')).not.toHaveAttribute('data-pending', {
+            timeout: 15_000,
+          })
+          await page.unrouteAll({ behavior: 'ignoreErrors' })
+          await injectState(page.request, home.lock, 'lock', 'lockState', { kind: 'string', s: 'locked' })
+
           // The safety PIN: the profile section once a PIN is set, then the PIN pad on the lock (two digits typed, then
           // after a wrong PIN). The pad is a dialog: the screen as it is, not the whole page.
           const pin = await page.request.put('/api/auth/me/pin', {
@@ -815,13 +965,18 @@ for (const width of WIDTHS) {
           await page.goto(`/devices/${home.lock.id}`)
           await expect(page.getByRole('heading', { level: 1, name: home.lock.name })).toBeVisible()
           await expect(page.locator('[data-realtime-status="connected"]')).toBeAttached({ timeout: 15_000 })
-          await page.getByRole('button', { name: tr(locale, 'device.commands.unlock'), exact: true }).click()
-          const pad = page.getByRole('dialog', { name: tr(locale, 'safety.dialog.title') })
+          await page
+            .getByRole('button', { name: tr(locale, 'device.lock.unlockAction'), exact: true })
+            .click()
+          const unlock = tr(locale, 'device.commands.unlock')
+          const pad = page.getByRole('dialog', {
+            name: tr(locale, 'safety.dialog.question', { action: unlock, name: home.lock.name }),
+          })
           await expect(pad).toBeVisible()
           for (const digit of '12') await pad.getByRole('button', { name: digit, exact: true }).click()
           await captureScreen('pin-dialog')
           for (const digit of '34') await pad.getByRole('button', { name: digit, exact: true }).click()
-          await pad.getByRole('button', { name: tr(locale, 'safety.dialog.confirm') }).click()
+          await pad.getByRole('button', { name: unlock, exact: true }).click()
           await expect(pad.locator('[data-slot="pin-error"]')).toHaveText(
             tr(locale, 'errors.safety.pin_incorrect'),
           )

@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { Button, cn } from '@controlhome/ui'
-import { Sun, SunDim } from '@lucide/vue'
 import { computed, ref } from 'vue'
+import { useCapabilityState } from '../../../composables/useStateValue'
 import { numberBounds, snapNumber } from '../../schema/schema'
 import FillSlider from '../controls/FillSlider.vue'
+import { KELVIN_STOPS, lightColorOf, lightLayers } from '../lightColor'
 import type { CapabilityControlProps } from './types'
 import { useControl } from './useControl'
 
-/** `level`: brightness (or any 0–100 % level) as a large fill slider with quick presets. */
+/**
+ * `level`: brightness (or any 0–100% level) as a large fill slider with quick presets. The card names it, so the
+ * control shows just the value. The fill is the light itself: warm white, or the bulb's own color.
+ */
 const props = defineProps<CapabilityControlProps>()
 const control = useControl(props)
 const { t } = control
@@ -24,6 +28,21 @@ const dragged = ref<number | undefined>()
 const shown = computed(() => dragged.value ?? level.value)
 const presets = computed(() => [25, 50, 75, 100].map((value) => snapNumber(value, bounds.value)))
 
+// The fill: a color bulb's color while it shows one, else warm white.
+const color = useCapabilityState(() =>
+  props.endpoint.capabilities.find(
+    (capability) => capability.capabilityId === 'color' && !capability.retired,
+  ),
+)
+const fillClass = computed(() => {
+  const current = lightColorOf({
+    hue: color.number('hue'),
+    saturation: color.number('saturation'),
+    colorTemperature: color.number('colorTemperature'),
+  })
+  return current?.mode === 'color' ? lightLayers(current).solid : KELVIN_STOPS[0].bg
+})
+
 function commit(value: number): void {
   dragged.value = undefined
   void control.send('setLevel', { level: snapNumber(value, bounds.value) })
@@ -32,15 +51,13 @@ function commit(value: number): void {
 
 <template>
   <div class="grid gap-4" data-slot="level-control">
-    <div class="flex items-end justify-between gap-3">
-      <span class="flex items-center gap-2 text-sm text-muted-foreground">
-        <SunDim class="size-4" aria-hidden="true" />
-        {{ control.attributeLabel('level') }}
-      </span>
-      <span class="font-serif text-3xl leading-none font-medium tabular-nums" aria-hidden="true">
-        {{ shown === undefined ? t('device.noValue') : control.measure(shown, '%') }}
-      </span>
-    </div>
+    <p
+      class="font-serif text-4xl leading-none font-medium tabular-nums"
+      aria-hidden="true"
+      data-slot="level-value"
+    >
+      {{ shown === undefined ? t('device.noValue') : control.measure(shown, '%') }}
+    </p>
     <FillSlider
       :model-value="level"
       :min="bounds.min ?? 0"
@@ -49,6 +66,7 @@ function commit(value: number): void {
       :label="t('device.level.label', { name: control.name.value })"
       :value-text="shown === undefined ? undefined : control.measure(shown, '%')"
       :disabled="!control.enabled.value"
+      :fill-class="fillClass"
       @update:model-value="(value) => (dragged = value)"
       @commit="commit"
     />
@@ -60,11 +78,10 @@ function commit(value: number): void {
         :disabled="!control.enabled.value"
         :aria-pressed="level === preset"
         :class="
-          cn('px-2 tabular-nums', level === preset && 'border-primary bg-accent text-accent-foreground')
+          cn('px-2 tabular-nums', level === preset && 'border-foreground/50 bg-accent text-accent-foreground')
         "
         @click="commit(preset)"
       >
-        <Sun v-if="preset === 100" aria-hidden="true" />
         {{ control.measure(preset, '%') }}
       </Button>
     </div>

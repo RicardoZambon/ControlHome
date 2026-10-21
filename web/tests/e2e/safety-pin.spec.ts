@@ -22,10 +22,20 @@ const WRONG_PIN = '1111'
 
 const tile = (page: Page, name: string) => page.locator('[data-slot="device-tile"]').filter({ hasText: name })
 
-/** Types a PIN on the dialog's pad (its keys, as a person on a phone would) and confirms it. */
+/** The PIN dialog of an unlock: it asks the question in the action's words ("Unlock Front door lock?"). */
+const unlockDialog = (page: Page) =>
+  page.getByRole('dialog', {
+    name: t('safety.dialog.question', { action: t('device.commands.unlock'), name: SIMULATED.lock }),
+  })
+
+/** The lock page's unlock button ("Unlock…": the PIN comes next). */
+const unlockButton = (page: Page) =>
+  page.getByRole('button', { name: t('device.lock.unlockAction'), exact: true })
+
+/** Types a PIN on the dialog's pad (its keys, as a person on a phone would) and confirms it ("Unlock"). */
 async function enterPin(dialog: Locator, pin: string): Promise<void> {
   for (const digit of pin) await dialog.getByRole('button', { name: digit, exact: true }).click()
-  await dialog.getByRole('button', { name: t('safety.dialog.confirm') }).click()
+  await dialog.getByRole('button', { name: t('device.commands.unlock'), exact: true }).click()
 }
 
 async function openLockPage(page: Page): Promise<void> {
@@ -57,10 +67,15 @@ test('sets the PIN in the profile, then unlocks the lock with it', async ({ page
   await openLockPage(page)
   const lockState = page.locator('[data-slot="lock-state"]')
   await expect(lockState).toHaveText(t('device.values.lockState.locked'))
-  await page.getByRole('button', { name: t('device.commands.unlock'), exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: t('safety.dialog.title') })
+  // Locked: the one action is the quiet "Unlock…" (there is nothing to lock).
+  await expect(page.getByRole('button', { name: t('device.commands.lock'), exact: true })).toHaveCount(0)
+  await unlockButton(page).click()
+  const dialog = unlockDialog(page)
   await expect(dialog).toBeVisible()
-  await expect(dialog).toContainText(`${t('device.commands.unlock')} · ${SIMULATED.lock}`)
+  await expect(dialog).toContainText(t('safety.dialog.enterPin'))
+  // Nothing has happened yet: the lock still says locked, waiting for the PIN (not "Unlocking…").
+  await expect(lockState).toHaveText(t('device.values.lockState.locked'))
+  await expect(page.locator('[data-slot="lock-awaiting-pin"]')).toHaveText(t('device.pending.awaitingPin'))
   await gates.check('safety PIN dialog')
 
   // A wrong PIN: refused, the dialog stays and the lock stays locked.
@@ -84,8 +99,8 @@ test('sets the PIN in the profile, then unlocks the lock with it', async ({ page
 
 test('without a PIN the dialog points to the profile', async ({ page }) => {
   await openLockPage(page)
-  await page.getByRole('button', { name: t('device.commands.unlock'), exact: true }).click()
-  const dialog = page.getByRole('dialog', { name: t('safety.dialog.title') })
+  await unlockButton(page).click()
+  const dialog = unlockDialog(page)
   await enterPin(dialog, PIN)
   await expect(dialog.getByText(t('errors.safety.pin_not_set'))).toBeVisible()
   await dialog.getByRole('link', { name: t('safety.dialog.setPin') }).click()
@@ -107,7 +122,7 @@ test('a Viewer sees the lock but has no unlock control', async ({ page, gates })
 
   await openLockPage(page)
   await expect(page.locator('[data-slot="lock-state"]')).toHaveText(t('device.values.lockState.locked'))
-  await expect(page.getByRole('button', { name: t('device.commands.unlock'), exact: true })).toHaveCount(0)
+  await expect(unlockButton(page)).toHaveCount(0)
   await expect(page.getByRole('button', { name: t('device.commands.lock'), exact: true })).toHaveCount(0)
   await gates.check('lock page as a Viewer')
 })

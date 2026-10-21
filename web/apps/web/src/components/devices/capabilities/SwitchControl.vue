@@ -1,22 +1,30 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import PowerButton from '../controls/PowerButton.vue'
+import { pendingLabel } from '../pendingLabel'
 import type { CapabilityControlProps } from './types'
 import { useControl } from './useControl'
 
-/** `switch`: the power button (tile quick action, and the big one on the device page). */
+/**
+ * `switch`: the power button — the tile quick action, and on the device page of a plain switch (a plug) the big button
+ * beside its state. Devices with an adjustment (a light's brightness, an AC's climate) show power as a toggle in that
+ * card's header instead (`PowerToggle`).
+ */
 const props = defineProps<CapabilityControlProps>()
 const control = useControl(props)
-const { t } = control
+const { t, te, locale } = control
 
 const on = computed(() => control.state.bool('on'))
-const pending = computed(() => control.pending())
+const pendingCommand = computed(() => control.pendingCommand())
+const pending = computed(() => pendingCommand.value !== undefined)
 const stateText = computed(() =>
-  on.value === undefined
-    ? t('device.state.unknown')
-    : on.value
-      ? t('device.state.on')
-      : t('device.state.off'),
+  pendingCommand.value
+    ? pendingLabel(pendingCommand.value, t, te, locale.value)
+    : on.value === undefined
+      ? t('device.state.unknown')
+      : on.value
+        ? t('device.state.on')
+        : t('device.state.off'),
 )
 
 function toggle(): void {
@@ -35,7 +43,7 @@ function toggle(): void {
     :disabled="!control.enabled.value"
     @toggle="toggle"
   />
-  <div v-else class="flex flex-col items-center gap-4 py-2" data-slot="switch-control">
+  <div v-else class="flex items-center gap-6" data-slot="switch-control">
     <PowerButton
       size="lg"
       :on="on"
@@ -44,8 +52,8 @@ function toggle(): void {
       :disabled="!control.enabled.value"
       @toggle="toggle"
     />
-    <p class="font-serif text-2xl font-medium tracking-tight" aria-live="polite">
-      {{ pending ? t('device.state.pending') : stateText }}
+    <p class="font-serif text-3xl font-medium tracking-tight" aria-live="polite" data-slot="switch-state">
+      {{ stateText }}
     </p>
   </div>
 </template>

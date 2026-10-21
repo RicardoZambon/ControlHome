@@ -60,9 +60,9 @@ test('sets the light level and the AC target temperature on their pages', async 
   await waitForLive(page)
 
   // Brightness: a preset, then the keyboard on the slider.
-  await page.getByRole('button', { name: '50 %' }).click()
+  await page.getByRole('button', { name: '50%' }).click()
   await expect.poll(() => attributeValue(page.request, SIMULATED.light, 'level', 'level')).toBe(50)
-  await expect(page.getByRole('button', { name: '50 %' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: '50%' })).toHaveAttribute('aria-pressed', 'true')
   const slider = page.getByRole('slider', { name: t('device.level.label', { name: SIMULATED.light }) })
   await slider.focus()
   await page.keyboard.press('ArrowRight')
@@ -73,7 +73,7 @@ test('sets the light level and the AC target temperature on their pages', async 
   // After a reload the slider is where it was left.
   await reload(page)
   await expect(slider).toHaveAttribute('aria-valuenow', '52')
-  await expect(page.getByRole('button', { name: '50 %' })).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.getByRole('button', { name: '50%' })).toHaveAttribute('aria-pressed', 'false')
 
   // The AC: two steps up on the dial's + button (sent once, after the taps).
   await page.goto('/devices')

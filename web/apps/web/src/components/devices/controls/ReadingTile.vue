@@ -32,7 +32,7 @@ const props = withDefaults(
     :data-tone="tone"
     :class="
       cn(
-        'relative flex min-h-32 flex-col justify-between gap-4 overflow-hidden rounded-2xl border bg-card p-4 shadow-xs',
+        'relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl border bg-card p-4 shadow-xs',
         tone !== 'neutral' && tone !== 'off' && TONES[tone].border,
         props.class,
       )
@@ -42,7 +42,7 @@ const props = withDefaults(
       <span
         :class="
           cn(
-            'inline-flex size-8 items-center justify-center rounded-lg [&_svg]:size-4',
+            'inline-flex size-8 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4',
             TONES[tone].bubble,
             TONES[tone].icon,
           )
@@ -51,10 +51,10 @@ const props = withDefaults(
       >
         <component :is="icon" />
       </span>
-      <span class="truncate text-sm text-muted-foreground">{{ label }}</span>
+      <span class="line-clamp-2 text-sm leading-snug text-muted-foreground">{{ label }}</span>
     </div>
     <div class="grid gap-1">
-      <p class="flex items-baseline gap-1.5 leading-none">
+      <p :class="cn('flex items-baseline leading-none', unit === '%' ? 'gap-0.5' : 'gap-1.5')">
         <span
           :class="cn('font-serif font-medium tracking-tight tabular-nums', word ? 'text-2xl' : 'text-3xl')"
           data-slot="reading-value"

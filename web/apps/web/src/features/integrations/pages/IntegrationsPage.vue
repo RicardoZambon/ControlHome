@@ -22,12 +22,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Skeleton,
   cn,
   toast,
 } from '@controlhome/ui'
-import { Blocks, ChevronRight, Ellipsis, FlaskConical, RefreshCw, Sparkles, Trash } from '@lucide/vue'
+import { Blocks, ChevronRight, Ellipsis, FlaskConical, Plus, RefreshCw, Sparkles, Trash } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
@@ -189,10 +190,26 @@ function onDeleteOpenChange(open: boolean): void {
       :description="t('integrations.description')"
     >
       <template v-if="simulatedAvailable && integrations.length > 0" #actions>
-        <Button variant="outline" class="max-sm:w-full" :loading="adding" @click="addDemo">
-          <FlaskConical aria-hidden="true" />
-          {{ t('integrations.demo.add') }}
-        </Button>
+        <!-- One way to add any integration: a picker (setup flows add the real ones in a later version) -->
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button class="max-sm:w-full" :loading="adding" data-slot="add-integration">
+              <Plus aria-hidden="true" />
+              {{ t('integrations.add') }}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="w-72">
+            <DropdownMenuItem @select="addDemo">
+              <FlaskConical aria-hidden="true" />
+              {{ t('integrations.demo.option') }}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <p class="flex items-start gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+              <Sparkles class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              {{ t('integrations.comingSoon') }}
+            </p>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </template>
     </PageHeader>
 
@@ -268,8 +285,11 @@ function onDeleteOpenChange(open: boolean): void {
             <p
               class="grid gap-1 text-sm text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:gap-x-2"
             >
-              <span>{{ card.connectorName }}</span>
-              <span aria-hidden="true" class="max-sm:hidden">·</span>
+              <!-- The connector only when its name says something the integration's own name does not. -->
+              <template v-if="card.connectorName !== card.integration.name">
+                <span>{{ card.connectorName }}</span>
+                <span aria-hidden="true" class="max-sm:hidden">·</span>
+              </template>
               <span>{{
                 t('integrations.added', { date: formatDateTime(card.integration.createdAtUtc, locale) })
               }}</span>
@@ -308,7 +328,8 @@ function onDeleteOpenChange(open: boolean): void {
               <DropdownMenuTrigger as-child>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon"
+                  class="size-11"
                   :aria-label="t('integrations.actions', { name: card.integration.name })"
                 >
                   <Ellipsis aria-hidden="true" />
@@ -324,10 +345,6 @@ function onDeleteOpenChange(open: boolean): void {
           </div>
         </li>
       </ul>
-      <p class="mt-6 flex items-start gap-2 text-sm text-muted-foreground">
-        <Sparkles class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        {{ t('integrations.comingSoon') }}
-      </p>
     </template>
 
     <AlertDialog :open="deleteOpen" @update:open="onDeleteOpenChange">

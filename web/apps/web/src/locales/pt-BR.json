@@ -116,12 +116,13 @@
   "safety": {
     "dialog": {
       "title": "PIN de segurança",
-      "description": "Digite seu PIN de segurança para continuar.",
-      "for": "Digite seu PIN de segurança para confirmar: {action}.",
+      "question": "{action} {name}?",
+      "enterPin": "Digite seu PIN de segurança.",
       "entered": "{count} de até {max} dígitos digitados",
       "keypad": "Teclado do PIN",
       "erase": "Apagar o último dígito",
       "confirm": "Confirmar",
+      "lockoutHint": "Após 5 PINs errados, as ações de segurança ficam bloqueadas por 15 minutos.",
       "setPin": "Defina seu PIN no perfil"
     }
   },
@@ -146,8 +147,8 @@
     "hidden": "Oculto",
     "favorite": "Favorito",
     "availability": {
-      "Online": "On-line",
-      "Offline": "Off-line",
+      "Online": "Conectado",
+      "Offline": "Sem resposta",
       "Unknown": "Status desconhecido"
     },
     "state": {
@@ -155,6 +156,18 @@
       "off": "Desligado",
       "unknown": "Desconhecido",
       "pending": "Atualizando…"
+    },
+    "pending": {
+      "awaitingPin": "Aguardando seu PIN",
+      "turningOn": "Ligando…",
+      "turningOff": "Desligando…",
+      "switching": "Alternando…",
+      "setting": "Ajustando para {value}…",
+      "choosing": "Mudando para {value}…",
+      "opening": "Abrindo…",
+      "closing": "Fechando…",
+      "stopping": "Parando…",
+      "color": "Mudando a cor…"
     },
     "capabilities": {
       "switch": "Liga/desliga",
@@ -193,7 +206,7 @@
       "mode": "Modo",
       "targetTemperature": "Temperatura desejada",
       "currentTemperature": "Temperatura do ambiente",
-      "fanMode": "Ventilação",
+      "fanMode": "Velocidade do ventilador",
       "power": "Potência",
       "energy": "Energia",
       "temperature": "Temperatura",
@@ -227,6 +240,9 @@
     "attributesIn": {
       "power": {
         "power": "Consumo"
+      },
+      "contact": {
+        "open": "Contato"
       }
     },
     "commands": {
@@ -264,12 +280,12 @@
     },
     "values": {
       "mode": {
-        "off": "Desligado",
+        "off": "Desligar",
         "cool": "Resfriar",
         "heat": "Aquecer",
         "auto": "Automático",
         "dry": "Desumidificar",
-        "fan": "Ventilar",
+        "fan": "Só ventilar",
         "home": "Em casa",
         "away": "Fora",
         "night": "Noite"
@@ -390,7 +406,7 @@
     },
     "color": {
       "current": "Cor atual",
-      "hueValue": "Matiz {hue}°, saturação {saturation} %",
+      "hueValue": "Matiz {hue}°, saturação {saturation}%",
       "mode": "Modo da luz",
       "color": "Cor",
       "white": "Branco",
@@ -428,24 +444,27 @@
       "target": "Temperatura desejada, {name}",
       "now": "Agora {temperature}",
       "lower": "Diminuir a temperatura",
-      "raise": "Aumentar a temperatura"
+      "raise": "Aumentar a temperatura",
+      "room": "Ambiente {temperature}"
     },
     "cover": {
       "percentOpen": "{value} aberto",
       "position": "Posição, {name}",
-      "pinHint": "Abrir pede seu PIN de segurança."
+      "pinHint": "Para abrir, digite seu PIN de segurança."
     },
     "lock": {
       "locking": "Trancando…",
       "unlocking": "Destrancando…",
+      "unlockAction": "Destrancar…",
+      "tryAgain": "Tentar trancar de novo",
       "jammed": "A fechadura travou. Verifique-a no local.",
-      "pinHint": "Destrancar pede seu PIN de segurança."
+      "pinHint": "Para destrancar, digite seu PIN de segurança."
     },
     "doorOpener": {
       "ready": "Pronto",
       "opening": "Abrindo…",
       "opened": "Aberto",
-      "pinHint": "Abrir pede seu PIN de segurança."
+      "pinHint": "Para abrir, digite seu PIN de segurança."
     },
     "media": {
       "nowPlaying": "Tocando agora",

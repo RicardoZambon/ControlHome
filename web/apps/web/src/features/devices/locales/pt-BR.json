@@ -1,17 +1,18 @@
 {
   "title": "Dispositivos",
   "nav": "Dispositivos",
-  "eyebrow": "Casa",
-  "description": "Cada luz, tomada e sensor da sua casa, ao vivo. Toque no botão de um bloco para ligar ou desligar, ou abra o bloco para ver todos os controles.",
-  "manageIntegrations": "Integrações",
+  "eyebrow": "Sua casa",
+  "description": "Cada luz, tomada e sensor da sua casa, ao vivo.",
   "loadFailed": "Não foi possível carregar os dispositivos.",
   "summary": "Nenhum dispositivo | 1 dispositivo · ativos agora: {active} | {count} dispositivos · ativos agora: {active}",
-  "groupCount": "{active} de {count} ativos",
+  "groupActive": "Nenhum ativo | 1 ativo | {active} ativos",
+  "favorites": "Favoritos",
   "filters": {
     "search": "Buscar dispositivos",
     "room": "Cômodo",
     "capability": "Tipo",
     "integration": "Integração",
+    "more": "Tipo e integração",
     "allRooms": "Todos os cômodos",
     "allCapabilities": "Todos os tipos",
     "allIntegrations": "Todas as integrações",
@@ -28,11 +29,13 @@
     "title": "Dispositivo",
     "back": "Todos os dispositivos",
     "notFound": "Dispositivo não encontrado",
-    "offline": "Este dispositivo não está acessível agora. Os controles voltam assim que ele voltar."
+    "offline": "Este dispositivo não está acessível agora. Os controles voltam assim que ele voltar.",
+    "more": "Mais ações"
   },
   "favorite": {
-    "on": "Favorito",
-    "off": "Adicionar aos favoritos",
+    "label": "Favorito",
+    "add": "Adicionar aos favoritos",
+    "remove": "Remover dos favoritos",
     "toggle": "Favorito: {name}",
     "added": "{name} agora é um favorito.",
     "removed": "{name} não é mais um favorito."
@@ -46,15 +49,16 @@
     "iconAutomatic": "Automático, pelo tipo de dispositivo",
     "saved": "{name} salvo."
   },
-  "diagnostics": "Detalhes",
   "info": {
+    "title": "Informações do dispositivo",
+    "summary": "Modelo, conexões e todos os valores que ele informa",
     "integration": "Integração",
     "manufacturer": "Fabricante",
     "model": "Modelo",
     "firmware": "Firmware",
     "deviceClass": "Tipo",
     "externalId": "ID na integração",
-    "lastSeen": "Visto por último",
+    "lastSeen": "Visto pela última vez",
     "added": "Adicionado"
   },
   "classes": {

@@ -116,12 +116,13 @@
   "safety": {
     "dialog": {
       "title": "Safety PIN",
-      "description": "Enter your safety PIN to continue.",
-      "for": "Enter your safety PIN to confirm: {action}.",
+      "question": "{action} {name}?",
+      "enterPin": "Enter your safety PIN.",
       "entered": "{count} of up to {max} digits entered",
       "keypad": "PIN pad",
       "erase": "Delete the last digit",
       "confirm": "Confirm",
+      "lockoutHint": "After 5 wrong PINs, safety actions lock for 15 minutes.",
       "setPin": "Set your PIN in your profile"
     }
   },
@@ -155,6 +156,18 @@
       "off": "Off",
       "unknown": "Unknown",
       "pending": "Updating…"
+    },
+    "pending": {
+      "awaitingPin": "Waiting for your PIN",
+      "turningOn": "Turning on…",
+      "turningOff": "Turning off…",
+      "switching": "Switching…",
+      "setting": "Setting {value}…",
+      "choosing": "Switching to {value}…",
+      "opening": "Opening…",
+      "closing": "Closing…",
+      "stopping": "Stopping…",
+      "color": "Changing color…"
     },
     "capabilities": {
       "switch": "Power",
@@ -193,7 +206,7 @@
       "mode": "Mode",
       "targetTemperature": "Target temperature",
       "currentTemperature": "Room temperature",
-      "fanMode": "Fan",
+      "fanMode": "Fan speed",
       "power": "Power",
       "energy": "Energy",
       "temperature": "Temperature",
@@ -227,6 +240,9 @@
     "attributesIn": {
       "power": {
         "power": "Power use"
+      },
+      "contact": {
+        "open": "Contact"
       }
     },
     "commands": {
@@ -269,7 +285,7 @@
         "heat": "Heat",
         "auto": "Auto",
         "dry": "Dry",
-        "fan": "Fan",
+        "fan": "Fan only",
         "home": "Home",
         "away": "Away",
         "night": "Night"
@@ -390,7 +406,7 @@
     },
     "color": {
       "current": "Current color",
-      "hueValue": "Hue {hue}°, {saturation} % saturated",
+      "hueValue": "Hue {hue}°, {saturation}% saturated",
       "mode": "Light mode",
       "color": "Color",
       "white": "White",
@@ -428,24 +444,27 @@
       "target": "Target temperature, {name}",
       "now": "Now {temperature}",
       "lower": "Lower the temperature",
-      "raise": "Raise the temperature"
+      "raise": "Raise the temperature",
+      "room": "Room {temperature}"
     },
     "cover": {
       "percentOpen": "{value} open",
       "position": "Position, {name}",
-      "pinHint": "Opening needs your safety PIN."
+      "pinHint": "Opening asks for your safety PIN."
     },
     "lock": {
       "locking": "Locking…",
       "unlocking": "Unlocking…",
+      "unlockAction": "Unlock…",
+      "tryAgain": "Try locking again",
       "jammed": "The lock is jammed. Check it on the spot.",
-      "pinHint": "Unlocking needs your safety PIN."
+      "pinHint": "Unlocking asks for your safety PIN."
     },
     "doorOpener": {
       "ready": "Ready",
       "opening": "Opening…",
       "opened": "Opened",
-      "pinHint": "Opening needs your safety PIN."
+      "pinHint": "Opening asks for your safety PIN."
     },
     "media": {
       "nowPlaying": "Now playing",

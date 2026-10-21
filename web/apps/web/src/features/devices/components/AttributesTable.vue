@@ -10,13 +10,15 @@ import { endpointName, useDevicesStore } from '../../../stores/devices'
 import { useRealtimeStore } from '../../../stores/realtime'
 
 /**
- * Diagnostics: every attribute of the device with its live value, when it was last observed and its AttributeId
- * (the key of its state and history). "Restored" marks a value loaded from the database that the running connector has
- * not confirmed yet.
+ * Every attribute of the device with its live value and when it was last observed: a table, or a stacked list on
+ * phones. Admins also see each one's AttributeId (the key of its state and history). "Last known value" marks a value
+ * loaded from the database that the running connector has not confirmed yet.
  */
 const props = defineProps<{
   device: Pick<DeviceSummaryDto, 'name' | 'endpoints'>
   endpoints: readonly EndpointDto[]
+  /** Show the AttributeIds (a diagnostic detail for Admins). */
+  showIds?: boolean
 }>()
 
 const { t, te, locale } = useI18n()
@@ -65,46 +67,69 @@ function when(observed: string | null): string {
 
 <template>
   <p v-if="rows.length === 0" class="text-sm text-muted-foreground">{{ t('devices.attributes.empty') }}</p>
-  <Table v-else class="table-fixed" data-slot="attributes-table">
-    <TableHeader>
-      <TableRow>
-        <TableHead class="w-[42%]">{{ t('devices.attributes.attribute') }}</TableHead>
-        <TableHead class="w-[33%]">{{ t('devices.attributes.value') }}</TableHead>
-        <TableHead>{{ t('devices.attributes.observed') }}</TableHead>
-      </TableRow>
-    </TableHeader>
-    <TableBody>
-      <TableRow v-for="row in rows" :key="row.id" :data-attribute-id="row.id">
-        <TableCell class="align-top whitespace-normal">
-          <span class="block font-medium break-words">{{ row.attribute }}</span>
-          <span class="block text-xs break-words text-muted-foreground">
-            <template v-if="row.endpoint">{{ row.endpoint }} · </template>{{ row.capability }} ·
-            <code class="font-mono">#{{ row.id }}</code>
-          </span>
-          <span v-if="row.diagnostic || row.retired" class="mt-1 flex flex-wrap gap-1">
-            <Badge v-if="row.diagnostic" variant="outline" class="text-muted-foreground">
-              {{ t('devices.attributes.diagnostic') }}
-            </Badge>
-            <Badge v-if="row.retired" variant="outline" class="text-muted-foreground">
-              {{ t('devices.attributes.retired') }}
-            </Badge>
-          </span>
-        </TableCell>
-        <TableCell class="align-top whitespace-normal">
-          <span class="block font-medium break-words tabular-nums" data-slot="attribute-value">{{
-            row.value
-          }}</span>
-          <span v-if="row.restored" class="block text-xs text-muted-foreground">
-            {{ t('devices.attributes.restored') }}
-          </span>
-        </TableCell>
-        <TableCell class="align-top text-xs whitespace-normal text-muted-foreground">
-          <time v-if="row.observed" :datetime="row.observed" :title="formatDateTime(row.observed, locale)">
-            {{ when(row.observed) }}
-          </time>
-          <template v-else>{{ t('device.noValue') }}</template>
-        </TableCell>
-      </TableRow>
-    </TableBody>
-  </Table>
+  <template v-else>
+    <!-- Phones: one stacked row per attribute, the value on the right and when it was updated below -->
+    <ul class="divide-y sm:hidden" data-slot="attributes-list">
+      <li v-for="row in rows" :key="row.id" class="grid gap-0.5 py-3" :data-attribute-id="row.id">
+        <div class="flex items-baseline justify-between gap-4">
+          <span class="min-w-0 font-medium break-words">{{ row.attribute }}</span>
+          <span class="shrink-0 text-right font-medium tabular-nums">{{ row.value }}</span>
+        </div>
+        <span class="text-xs text-muted-foreground">
+          <template v-if="row.endpoint">{{ row.endpoint }} · </template>{{ row.capability }} ·
+          <time v-if="row.observed" :datetime="row.observed">{{ when(row.observed) }}</time
+          ><template v-else>{{ t('device.noValue') }}</template
+          ><template v-if="row.restored"> · {{ t('devices.attributes.restored') }}</template
+          ><template v-if="showIds">
+            · <code class="font-mono">#{{ row.id }}</code></template
+          >
+        </span>
+      </li>
+    </ul>
+
+    <Table class="table-fixed max-sm:hidden" data-slot="attributes-table">
+      <TableHeader>
+        <TableRow>
+          <TableHead class="w-[42%]">{{ t('devices.attributes.attribute') }}</TableHead>
+          <TableHead class="w-[33%]">{{ t('devices.attributes.value') }}</TableHead>
+          <TableHead>{{ t('devices.attributes.observed') }}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow v-for="row in rows" :key="row.id" :data-attribute-id="row.id">
+          <TableCell class="align-top whitespace-normal">
+            <span class="block font-medium break-words">{{ row.attribute }}</span>
+            <span class="block text-xs break-words text-muted-foreground">
+              <template v-if="row.endpoint">{{ row.endpoint }} · </template>{{ row.capability
+              }}<template v-if="showIds">
+                · <code class="font-mono">#{{ row.id }}</code></template
+              >
+            </span>
+            <span v-if="row.diagnostic || row.retired" class="mt-1 flex flex-wrap gap-1">
+              <Badge v-if="row.diagnostic" variant="outline" class="text-muted-foreground">
+                {{ t('devices.attributes.diagnostic') }}
+              </Badge>
+              <Badge v-if="row.retired" variant="outline" class="text-muted-foreground">
+                {{ t('devices.attributes.retired') }}
+              </Badge>
+            </span>
+          </TableCell>
+          <TableCell class="align-top whitespace-normal">
+            <span class="block font-medium break-words tabular-nums" data-slot="attribute-value">{{
+              row.value
+            }}</span>
+            <span v-if="row.restored" class="block text-xs text-muted-foreground">
+              {{ t('devices.attributes.restored') }}
+            </span>
+          </TableCell>
+          <TableCell class="align-top text-xs whitespace-normal text-muted-foreground">
+            <time v-if="row.observed" :datetime="row.observed" :title="formatDateTime(row.observed, locale)">
+              {{ when(row.observed) }}
+            </time>
+            <template v-else>{{ t('device.noValue') }}</template>
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  </template>
 </template>

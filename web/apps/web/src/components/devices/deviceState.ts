@@ -58,6 +58,13 @@ export function airQualityLevel(values: {
 
 export const LOW_BATTERY_PERCENT = 20
 
+/** Whether an endpoint stands open — a lock unlocked, a door or window open — so its icon can show it open. */
+export function standsOpen(capabilityIds: readonly string[], read: StateReader): boolean {
+  if (capabilityIds.includes('lock')) return asString(read('lock', 'lockState')) === 'unlocked'
+  if (capabilityIds.includes('contact')) return asBool(read('contact', 'open')) === true
+  return false
+}
+
 const GATE_CLASSES = new Set(['gate', 'garage'])
 
 export function summarizeEndpoint(
@@ -140,19 +147,33 @@ export function summarizeEndpoint(
   const powered = has('switch') ? bool('switch', 'on') : undefined
 
   if (has('thermostat')) {
+    // One number per line, each one named: "Cooling to 24 °C" (the target) or "Off · Room 27.9 °C" (the room).
     const mode = text('thermostat', 'mode')
     const target = number('thermostat', 'targetTemperature')
     const current = number('thermostat', 'currentTemperature') ?? number('temperature', 'temperature')
-    if (current !== undefined) details.push(measure(current, '°C'))
-    if (powered === false || mode === 'off' || (mode === undefined && powered !== true))
+    const room = () => {
+      if (current !== undefined)
+        details.push(t('device.thermostat.room', { temperature: measure(current, '°C') }))
+    }
+    if (powered === false || mode === 'off' || (mode === undefined && powered !== true)) {
+      room()
       return result(
         mode === undefined && powered === undefined ? 'neutral' : 'off',
         t('device.state.off'),
         'thermostat',
       )
+    }
+    if (target !== undefined && (mode === 'heat' || mode === 'cool' || mode === 'auto'))
+      return result(
+        'on',
+        t(`device.thermostat.summary.${mode}`, { temperature: measure(target, '°C') }),
+        'thermostat',
+        true,
+      )
+    room()
     const label =
-      target !== undefined && (mode === 'heat' || mode === 'cool' || mode === 'auto')
-        ? t(`device.thermostat.summary.${mode}`, { temperature: measure(target, '°C') })
+      mode && te(`device.thermostat.action.${mode}`)
+        ? t(`device.thermostat.action.${mode}`)
         : mode
           ? valueLabel('mode', mode, t, te)
           : t('device.state.on')

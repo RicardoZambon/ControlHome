@@ -136,8 +136,6 @@ test('after the connection drops, the page catches up on what it missed', async 
   await sendCommand(request, home.light, 'switch', 'toggle')
   await expect(light).toHaveAttribute('aria-checked', String(lightWasOn), { timeout: LIVE_MS })
   for (const name of [SIMULATED.light, SIMULATED.plug])
-    await expect(tileOf(page, name).locator('[data-slot="tile-state"]')).not.toContainText(
-      t('device.state.pending'),
-    )
+    await expect(tileOf(page, name).locator('[data-slot="tile-state"]')).not.toHaveAttribute('data-pending')
   await gates.check('devices after reconnecting')
 })

@@ -1,17 +1,18 @@
 {
   "title": "Devices",
   "nav": "Devices",
-  "eyebrow": "Home",
-  "description": "Every light, plug and sensor of your home, live. Tap a tile's button to switch it, or open the tile for every control.",
-  "manageIntegrations": "Integrations",
+  "eyebrow": "Your home",
+  "description": "Every light, plug and sensor of your home, live.",
   "loadFailed": "The devices couldn't be loaded.",
   "summary": "No devices | 1 device · active now: {active} | {count} devices · active now: {active}",
-  "groupCount": "{active} of {count} active",
+  "groupActive": "None active | 1 active | {active} active",
+  "favorites": "Favorites",
   "filters": {
     "search": "Search devices",
     "room": "Room",
     "capability": "Kind",
     "integration": "Integration",
+    "more": "Kind and integration",
     "allRooms": "All rooms",
     "allCapabilities": "All kinds",
     "allIntegrations": "All integrations",
@@ -28,11 +29,13 @@
     "title": "Device",
     "back": "All devices",
     "notFound": "Device not found",
-    "offline": "This device can't be reached right now. Its controls come back as soon as it does."
+    "offline": "This device can't be reached right now. Its controls come back as soon as it does.",
+    "more": "More actions"
   },
   "favorite": {
-    "on": "Favorite",
-    "off": "Add to favorites",
+    "label": "Favorite",
+    "add": "Add to favorites",
+    "remove": "Remove from favorites",
     "toggle": "Favorite: {name}",
     "added": "{name} is now a favorite.",
     "removed": "{name} is no longer a favorite."
@@ -46,8 +49,9 @@
     "iconAutomatic": "Automatic, from the kind of device",
     "saved": "{name} saved."
   },
-  "diagnostics": "Details",
   "info": {
+    "title": "Device info",
+    "summary": "Model, connections and every value it reports",
     "integration": "Integration",
     "manufacturer": "Manufacturer",
     "model": "Model",

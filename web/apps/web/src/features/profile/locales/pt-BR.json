@@ -35,7 +35,7 @@
     "current": "PIN atual",
     "new": "Novo PIN",
     "pin": "PIN",
-    "confirm": "Confirme o PIN",
+    "confirm": "Confirme o novo PIN",
     "help": "De 4 a 8 dígitos. Evite datas de aniversário e sequências como 1234.",
     "format": "Use de 4 a 8 dígitos.",
     "mismatch": "Os PINs não coincidem.",

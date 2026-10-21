@@ -5,10 +5,11 @@
   "description": "As integrações trazem seus dispositivos para o ControlHome: a nuvem de um fabricante, um hub ou um protocolo da sua rede.",
   "loadFailed": "Não foi possível carregar as integrações.",
   "listLabel": "Integrações",
+  "add": "Adicionar integração",
   "added": "Adicionada em {date}",
   "deviceCount": "Nenhum dispositivo | 1 dispositivo | {count} dispositivos",
   "actions": "Ações de {name}",
-  "comingSoon": "A configuração guiada de integrações reais chega na próxima atualização.",
+  "comingSoon": "Mais integrações, com configuração guiada, chegam na próxima atualização.",
   "status": {
     "Ok": "Conectada",
     "Connecting": "Conectando",
@@ -21,6 +22,7 @@
   },
   "demo": {
     "add": "Adicionar demonstração simulada",
+    "option": "Casa simulada (demonstração)",
     "name": "Casa simulada",
     "added": "Casa simulada adicionada. Os dispositivos aparecem em instantes."
   },

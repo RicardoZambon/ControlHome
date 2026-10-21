@@ -3,8 +3,10 @@ import { shallowRef } from 'vue'
 
 /** What the PIN dialog asks to confirm. */
 export interface StepUpPrompt {
-  /** The action, e.g. "Unlock · Front door lock". */
-  action?: string
+  /** The question, e.g. "Unlock Front door lock?" (default: "Safety PIN"). */
+  title?: string
+  /** The confirm button, e.g. "Unlock" (default: "Confirm"). */
+  confirmLabel?: string
 }
 
 /**

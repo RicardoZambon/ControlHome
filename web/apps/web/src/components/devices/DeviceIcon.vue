@@ -11,6 +11,8 @@ const props = withDefaults(
     icon?: string | null
     deviceClass?: string | null
     capabilities?: readonly string[]
+    /** Stands open (an unlocked lock, an open door): the icon shows it open. */
+    open?: boolean
     tone?: Tone
     size?: 'sm' | 'md' | 'lg'
     class?: HTMLAttributes['class']
@@ -19,7 +21,12 @@ const props = withDefaults(
 )
 
 const component = computed(() =>
-  deviceIcon({ icon: props.icon, deviceClass: props.deviceClass, capabilities: props.capabilities }),
+  deviceIcon({
+    icon: props.icon,
+    deviceClass: props.deviceClass,
+    capabilities: props.capabilities,
+    open: props.open,
+  }),
 )
 </script>
 

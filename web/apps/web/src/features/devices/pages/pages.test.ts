@@ -55,6 +55,31 @@ function signedIn(role: 'Admin' | 'Member' | 'Viewer', locale: AppLocale): void 
   api.getMe.mockResolvedValue(ok(me))
 }
 
+/** jsdom lays nothing out: gives an element the box it would have on screen. */
+function stubBox(element: Element, box: { left: number; top: number; width: number; height: number }): void {
+  const rect = { ...box, x: box.left, y: box.top, right: box.left + box.width, bottom: box.top + box.height }
+  element.getBoundingClientRect = () => ({ ...rect, toJSON: () => rect }) as DOMRect
+}
+
+/** One finger (pointer 7) touching, moving on, lifting from or being taken off `element` by a scroll. */
+function touch(
+  element: Element,
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
+  clientX: number,
+  clientY: number,
+): void {
+  element.dispatchEvent(
+    new PointerEvent(type, {
+      pointerId: 7,
+      pointerType: 'touch',
+      button: 0,
+      clientX,
+      clientY,
+      bubbles: true,
+    }),
+  )
+}
+
 async function open(path: string, locale: AppLocale = 'en') {
   const mounted = await mountWithApp(App, { path, locale })
   await flushPromises()
@@ -110,7 +135,7 @@ describe.each(['en', 'pt-BR'] as const)('devices page (%s)', (locale) => {
     expect(tiles).toHaveLength(5)
     const states = tiles.map((tile) => tile.get('[data-slot="tile-state"]').text())
     expect(states[0]).toContain(locale === 'en' ? 'On' : 'Ligado')
-    expect(states[0]).toContain('80\u00a0%')
+    expect(states[0]).toContain('80%')
     expect(states[2]).toContain(locale === 'en' ? 'Cooling to 22\u00a0°C' : 'Resfriando até 22\u00a0°C')
     expect(states[4]).toContain(locale === 'en' ? 'Locked' : 'Trancada')
     expect(tiles[0]!.attributes('data-tone')).toBe('on')
@@ -147,10 +172,12 @@ describe('devices page', () => {
     await power.trigger('click')
     expect(power.attributes('aria-checked')).toBe('false')
     await flushPromises()
-    expect(api.sendCommand).toHaveBeenCalledWith({
-      path: { id: 'e-light' },
-      body: expect.objectContaining({ capabilityId: 'switch', command: 'turnOff', arguments: null }),
-    })
+    expect(api.sendCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { id: 'e-light' },
+        body: expect.objectContaining({ capabilityId: 'switch', command: 'turnOff', arguments: null }),
+      }),
+    )
     wrapper.unmount()
   })
 
@@ -207,15 +234,25 @@ describe.each(['en', 'pt-BR'] as const)('device page (%s)', (locale) => {
     const { wrapper } = await open('/devices/d-ac', locale)
     expect(wrapper.find('h1').text()).toBe('Bedroom air conditioner')
     expect(wrapper.get('[data-availability]').attributes('data-availability')).toBe('online')
-    expect(wrapper.find('[data-capability="switch"] [role="switch"]').exists()).toBe(true)
+    // One power model: the switch is the climate card's header toggle (no card of its own, no "Off" mode).
+    expect(wrapper.find('[data-capability="switch"]').exists()).toBe(false)
+    expect(
+      wrapper.find('[data-capability="thermostat"] [data-slot="power-toggle"] [role="switch"]').exists(),
+    ).toBe(true)
     const dial = wrapper.get('[data-capability="thermostat"] [role="slider"]')
     expect(dial.attributes('aria-valuenow')).toBe('22')
     expect(dial.attributes('aria-valuemin')).toBe('16')
     expect(dial.attributes('aria-valuemax')).toBe('30')
-    // The constrained modes only (no "dry").
-    expect(wrapper.findAll('[data-capability="thermostat"] [data-slot="toggle-group-item"]')).toHaveLength(5)
-    expect(wrapper.findAll('[data-slot="reading"]')).toHaveLength(1)
+    // The constrained modes only (no "dry"), without "off"; the fan speeds as a second segmented row.
+    expect(wrapper.findAll('[data-slot="thermostat-modes"] [data-slot="toggle-group-item"]')).toHaveLength(4)
+    expect(wrapper.find('[data-slot="thermostat-fan"]').exists()).toBe(true)
+    // The room temperature is on the dial, so no separate temperature card.
+    expect(wrapper.findAll('[data-slot="reading"]')).toHaveLength(0)
+    // The device info starts closed; its table holds every attribute.
+    expect(wrapper.get('[data-slot="device-info"]').attributes('open')).toBeUndefined()
     expect(wrapper.findAll('[data-slot="attributes-table"] tbody tr')).toHaveLength(6)
+    // Attribute ids are for Admins.
+    expect(wrapper.get('[data-slot="attributes-table"]').text()).toContain('#7')
     // Breadcrumb: home › Devices › device.
     expect(wrapper.get('[data-slot="breadcrumb"]').find('a[href="/devices"]').exists()).toBe(true)
     wrapper.unmount()
@@ -223,28 +260,32 @@ describe.each(['en', 'pt-BR'] as const)('device page (%s)', (locale) => {
 })
 
 describe('device page', () => {
-  it('Admins edit the device; Members mark favorites', async () => {
+  it('Admins edit the device from its menu; Members mark favorites with the star', async () => {
     signedIn('Admin', 'en')
     const admin = await open('/devices/d-light')
-    const buttons = admin.wrapper.findAll('header button').map((button) => button.text())
-    expect(buttons).toEqual(expect.arrayContaining(['Add to favorites', 'Edit']))
+    expect(admin.wrapper.find('button[aria-label="More actions"]').exists()).toBe(true)
+    expect(admin.wrapper.get('[data-slot="favorite-toggle"]').attributes('aria-pressed')).toBe('false')
+    // Ids only for Admins.
+    expect(admin.wrapper.get('[data-slot="attributes-table"]').text()).toContain('#1')
     admin.wrapper.unmount()
 
     signedIn('Member', 'en')
     const light = basicHome()[0]!
     api.setEndpointFavorite.mockResolvedValue(ok({ ...light.endpoints[0]!, favorite: true }))
     const member = await open('/devices/d-light')
-    const favorite = member.wrapper
-      .findAll('header button')
-      .find((button) => button.text() === 'Add to favorites')!
-    expect(member.wrapper.findAll('header button').some((button) => button.text() === 'Edit')).toBe(false)
+    expect(member.wrapper.find('button[aria-label="More actions"]').exists()).toBe(false)
+    expect(member.wrapper.get('[data-slot="attributes-table"]').text()).not.toContain('#1')
+    const favorite = member.wrapper.get('[data-slot="favorite-toggle"]')
+    expect(favorite.attributes('aria-label')).toBe('Favorite')
     await favorite.trigger('click')
     await flushPromises()
     expect(api.setEndpointFavorite).toHaveBeenCalledWith({
       path: { id: 'e-light' },
       body: { favorite: true },
     })
-    expect(member.wrapper.findAll('header button').some((button) => button.text() === 'Favorite')).toBe(true)
+    expect(member.wrapper.get('[data-slot="favorite-toggle"]').attributes('aria-pressed')).toBe('true')
+    // Power sits in the brightness card's header.
+    expect(member.wrapper.find('[data-capability="level"] [data-slot="power-toggle"]').exists()).toBe(true)
     member.wrapper.unmount()
   })
 
@@ -252,8 +293,9 @@ describe('device page', () => {
     signedIn('Member', 'en')
     const member = await open('/devices/d-lock')
     expect(member.wrapper.get('[data-slot="lock-state"]').text()).toBe('Locked')
+    // Locked: one quiet action, the one that needs the PIN.
     const actions = member.wrapper.findAll('[data-capability="lock"] button').map((button) => button.text())
-    expect(actions).toEqual(['Lock', 'Unlock'])
+    expect(actions).toEqual(['Unlock…'])
     member.wrapper.unmount()
 
     signedIn('Viewer', 'en')
@@ -262,6 +304,69 @@ describe('device page', () => {
     expect(viewer.wrapper.findAll('[data-capability="lock"] button')).toHaveLength(0)
     expect(viewer.wrapper.text()).not.toContain('Unlock')
     viewer.wrapper.unmount()
+  })
+
+  it('on a touch screen, a finger on the dial or the brightness slider still scrolls the page', async () => {
+    signedIn('Member', 'en')
+    api.sendCommand.mockResolvedValue(ok({ commandId: 'c1' }, 202))
+    const sent = () => api.sendCommand.mock.calls.map((call) => call[0].body)
+
+    // The AC's dial (viewBox 240 × 240 drawn at 240 px; the ring has a radius of 96).
+    const ac = await open('/devices/d-ac')
+    const dial = document.querySelector<SVGSVGElement>('[data-slot="thermostat-dial"]')!
+    stubBox(dial, { left: 0, top: 0, width: 240, height: 240 })
+    const slider = ac.wrapper.get('[data-capability="thermostat"] [role="slider"]')
+    // The reading in the middle is not a control.
+    touch(dial, 'pointerdown', 120, 120)
+    touch(dial, 'pointerup', 120, 120)
+    // A swipe that starts on the ring and becomes a scroll changes nothing.
+    touch(dial, 'pointerdown', 120, 24)
+    touch(dial, 'pointermove', 121, 60)
+    touch(dial, 'pointercancel', 121, 60)
+    await flushPromises()
+    expect(slider.attributes('aria-valuenow')).toBe('22')
+    expect(api.sendCommand).not.toHaveBeenCalled()
+    // A tap on the ring sets the target there (the top of the 16–30 °C dial).
+    touch(dial, 'pointerdown', 120, 24)
+    touch(dial, 'pointerup', 120, 24)
+    await flushPromises()
+    expect(sent()).toEqual([
+      expect.objectContaining({ command: 'setTargetTemperature', arguments: { targetTemperature: 23 } }),
+    ])
+    ac.wrapper.unmount()
+    api.sendCommand.mockClear()
+
+    // The light's brightness (200 px wide, at 80%).
+    const light = await open('/devices/d-light')
+    const root = document.querySelector<HTMLElement>('[data-capability="level"] [data-slot="fill-slider"]')!
+    stubBox(root, { left: 0, top: 0, width: 200, height: 44 })
+    const track = root.firstElementChild!
+    const thumb = light.wrapper.get('[data-capability="level"] [role="slider"]')
+    // Up and down: the page scrolls (cancelled), or nothing happens (lifted elsewhere).
+    touch(track, 'pointerdown', 100, 10)
+    touch(track, 'pointermove', 103, 40)
+    touch(track, 'pointercancel', 103, 40)
+    touch(track, 'pointerdown', 100, 10)
+    touch(track, 'pointermove', 102, 40)
+    touch(track, 'pointerup', 102, 40)
+    await flushPromises()
+    expect(thumb.attributes('aria-valuenow')).toBe('80')
+    expect(api.sendCommand).not.toHaveBeenCalled()
+    // Sideways, it follows the finger and sends the value once, on release.
+    touch(track, 'pointerdown', 100, 10)
+    touch(track, 'pointermove', 110, 12)
+    touch(track, 'pointermove', 120, 12)
+    touch(track, 'pointerup', 120, 12)
+    await flushPromises()
+    // A tap sets the value where it landed (a quarter of the way along this light's 1–100% range).
+    touch(track, 'pointerdown', 50, 10)
+    touch(track, 'pointerup', 51, 10)
+    await flushPromises()
+    expect(sent()).toEqual([
+      expect.objectContaining({ command: 'setLevel', arguments: { level: 60 } }),
+      expect.objectContaining({ command: 'setLevel', arguments: { level: 26 } }),
+    ])
+    light.wrapper.unmount()
   })
 
   it('says when a device is gone', async () => {

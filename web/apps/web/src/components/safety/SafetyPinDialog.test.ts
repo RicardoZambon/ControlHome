@@ -28,10 +28,8 @@ function mountDialog() {
 }
 
 const dialog = () => document.querySelector<HTMLElement>('[data-slot="safety-pin-dialog"]')
-const filledDots = () =>
-  [...document.querySelectorAll('[data-slot="pin-dots"] span')].filter((dot) =>
-    dot.className.includes('bg-primary'),
-  ).length
+const dots = () => [...document.querySelectorAll('[data-slot="pin-dots"] span')]
+const filledDots = () => dots().filter((dot) => dot.hasAttribute('data-filled')).length
 
 /** Presses one key on the dialog (Enter, Backspace, a digit). */
 function press(key: string): void {
@@ -58,19 +56,25 @@ afterEach(() => {
 })
 
 describe('SafetyPinDialog', () => {
-  it('opens for a step-up, takes the PIN from the keyboard and grants on success', async () => {
+  it('asks in the action’s words, takes the PIN from the keyboard and grants on success', async () => {
     const wrapper = mountDialog()
     const store = useSafetyPromptStore()
-    const granted = store.requestStepUp({ action: 'Unlock · Front door lock' })
+    const granted = store.requestStepUp({ title: 'Unlock Front door lock?', confirmLabel: 'Unlock' })
     await flushPromises()
+    expect(dialog()?.querySelector('h2')?.textContent?.trim()).toBe('Unlock Front door lock?')
     expect(dialog()?.textContent).toContain('Safety PIN')
-    expect(dialog()?.textContent).toContain('Enter your safety PIN to confirm: Unlock · Front door lock.')
+    expect(dialog()?.textContent).toContain('Enter your safety PIN')
 
+    // Four places to fill; one more appears for each digit beyond four (up to eight).
+    expect(dots()).toHaveLength(4)
     type('12')
     await flushPromises()
     expect(filledDots()).toBe(2)
-    expect(button('Confirm').disabled).toBe(true)
+    expect(button('Unlock').disabled).toBe(true)
     type('345')
+    await flushPromises()
+    expect(filledDots()).toBe(5)
+    expect(dots()).toHaveLength(6)
     press('Backspace')
     await flushPromises()
     expect(filledDots()).toBe(4)
@@ -96,6 +100,7 @@ describe('SafetyPinDialog', () => {
     expect(dialog()!.querySelector('[data-slot="pin-error"]')?.textContent?.trim()).toBe(
       "That PIN isn't right.",
     )
+    expect(dialog()!.querySelector('[data-slot="pin-lockout-hint"]')).not.toBeNull()
     expect(filledDots()).toBe(0)
 
     api.stepUp.mockResolvedValueOnce(noContent)

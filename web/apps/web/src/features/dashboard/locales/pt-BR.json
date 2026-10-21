@@ -10,7 +10,13 @@
   "welcome": "{home} está configurada e pronta para o que vem a seguir.",
   "localTime": "Hora local na casa",
   "planTeaser": "A planta da sua casa vai ficar aqui",
-  "planTeaserDetail": "Desenhe seus andares e cômodos; os dispositivos chegam em breve.",
+  "planTeaserDetail": "Desenhe seus andares e cômodos para ver sua casa de relance.",
+  "devices": {
+    "heading": "Seus dispositivos",
+    "all": "Todos os dispositivos",
+    "active": "Nada ativo agora | 1 dispositivo ativo | {count} dispositivos ativos",
+    "noFavorites": "Marque dispositivos como favoritos pela estrela na página deles para controlá-los daqui."
+  },
   "start": {
     "heading": "Deixe do seu jeito",
     "floorsTitle": "Andares e cômodos",
@@ -33,10 +39,7 @@
   },
   "next": {
     "heading": "Em breve",
-    "badge": "Próximo",
     "planned": "Planejado",
-    "devicesTitle": "Dispositivos e integrações",
-    "devicesDescription": "Conecte luzes, tomadas e sensores e controle tudo ao vivo de qualquer tela.",
     "energyTitle": "Energia e histórico",
     "energyDescription": "Veja quanto cada dispositivo consome e quanto custa pelo preço da sua energia."
   },

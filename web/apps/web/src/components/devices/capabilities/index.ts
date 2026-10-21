@@ -14,3 +14,4 @@ export {
 } from './registry'
 export type { CapabilityControlProps, ControlVariant } from './types'
 export { default as CapabilityControl } from './CapabilityControl.vue'
+export { default as PowerToggle } from './PowerToggle.vue'
