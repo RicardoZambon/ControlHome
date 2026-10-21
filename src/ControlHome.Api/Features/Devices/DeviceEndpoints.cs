@@ -5,6 +5,7 @@ using ControlHome.Api.Http;
 using ControlHome.Application.Devices;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 
 namespace ControlHome.Api.Features.Devices;
 
@@ -73,6 +74,17 @@ public static class DeviceEndpoints
             .RequireAuthorization(AuthorizationPolicies.Member)
             .WithValidation<SetFavoriteRequest>()
             .ProducesProblem(StatusCodes.Status404NotFound);
+
+        endpoints.MapGet("/{id:guid}/camera/snapshot", GetSnapshotAsync)
+            .WithName("getCameraSnapshot")
+            .WithSummary("The camera's latest still image (an endpoint with the camera capability).")
+            .WithDescription(
+                "Not cached (Cache-Control: no-store). 404 endpoints.not_found, or cameras.no_snapshot (not a camera, or no " +
+                "picture right now); 503 commands.unavailable (its integration is not running).")
+            .RequireAuthorization(AuthorizationPolicies.Viewer)
+            .Produces<Stream>(StatusCodes.Status200OK, "image/jpeg", "image/png", "image/webp")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         endpoints.MapPost("/{id:guid}/commands", SendCommandAsync)
             .WithName("sendCommand")
@@ -145,6 +157,23 @@ public static class DeviceEndpoints
         DeviceAdminService devices,
         CancellationToken cancellationToken) =>
         (await devices.SetFavoriteAsync(id, request, cancellationToken)).ToHttpResult();
+
+    private static async Task<Results<FileContentHttpResult, ProblemHttpResult>> GetSnapshotAsync(
+        Guid id,
+        CameraService cameras,
+        HttpResponse response,
+        CancellationToken cancellationToken)
+    {
+        var result = await cameras.GetSnapshotAsync(id, cancellationToken);
+        if (result.IsFailure)
+        {
+            return Problems.From(result.Error);
+        }
+
+        response.Headers.CacheControl = "no-store";
+        response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+        return TypedResults.File(result.Value.Data, result.Value.ContentType);
+    }
 
     private static async Task<Results<Accepted<CommandAcceptedDto>, ProblemHttpResult>> SendCommandAsync(
         Guid id,

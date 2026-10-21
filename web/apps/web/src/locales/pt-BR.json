@@ -644,6 +644,9 @@
       "unsupported_version": "Este backup vem de uma versão mais nova do ControlHome. Atualize o ControlHome primeiro.",
       "passphrase_required": "Este backup contém segredos criptografados. Informe a frase secreta usada na exportação.",
       "passphrase_incorrect": "Essa frase secreta não abre os segredos deste backup."
+    },
+    "demo": {
+      "not_empty": "A casa de demonstração só pode ser carregada numa casa vazia."
     }
   }
 }

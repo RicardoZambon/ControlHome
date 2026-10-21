@@ -1,6 +1,7 @@
 using ControlHome.Api.Http;
 using ControlHome.Application.Auth;
 using ControlHome.Application.Common;
+using ControlHome.Application.Demo;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Runtime;
 using ControlHome.Application.Security;
@@ -26,6 +27,8 @@ namespace ControlHome.Api.Features.Testing;
 /// <item><c>POST /api/_test/clock</c> with <c>{ "advanceSeconds": number }</c> → 200 <c>{ nowUtc, offsetSeconds }</c>: moves
 /// the runtime clock forward (the clock of connector runtimes — Simulated ticks every 5 s of it — of report timestamps and,
 /// later, of the scheduler). It runs in real time otherwise; timers that become due fire at once.</item>
+/// <item><c>POST /api/_test/seed-demo?locale=en|pt-BR</c> → 204: loads the demo home into an empty home (409
+/// <c>demo.not_empty</c> otherwise), like <c>--seed-demo</c>.</item>
 /// </list>
 /// </summary>
 public static class TestingEndpoints
@@ -53,8 +56,22 @@ public static class TestingEndpoints
         group.MapGet("/throw", Throw);
         group.MapPost("/devices/{attributeId:int}/state", InjectStateAsync);
         group.MapPost("/clock", AdvanceClock);
+        group.MapPost("/seed-demo", SeedDemoAsync);
 
         return app;
+    }
+
+    /// <summary>
+    /// Loads the demo home (<c>?locale=pt-BR</c> for Portuguese names) into an empty home → 204; 409 <c>demo.not_empty</c>
+    /// otherwise.
+    /// </summary>
+    private static async Task<Results<NoContent, ProblemHttpResult>> SeedDemoAsync(
+        string? locale,
+        DemoHomeService demo,
+        CancellationToken cancellationToken)
+    {
+        var result = await demo.LoadAsync(locale, cancellationToken);
+        return result.IsSuccess ? TypedResults.NoContent() : Problems.From(result.Error);
     }
 
     /// <summary>Always fails: proves unhandled exceptions become a bare 500 <c>internal.error</c> outside Development.</summary>

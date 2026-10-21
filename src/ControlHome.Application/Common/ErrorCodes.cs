@@ -80,6 +80,9 @@ public static class ErrorCodes
     /// <summary>Field error of a device replace: a device cannot replace itself.</summary>
     public const string DevicesReplaceSame = "devices.replace_same";
     public const string EndpointsNotFound = "endpoints.not_found";
+
+    /// <summary>Not a camera, or the camera has no picture right now.</summary>
+    public const string CamerasNoSnapshot = "cameras.no_snapshot";
     public const string IntegrationsNotFound = "integrations.not_found";
 
     // Commands: 400 commands.invalid_arguments carries field errors errors["arguments.<key>"] with the commands.argument_* codes
@@ -123,6 +126,9 @@ public static class ErrorCodes
     // still deciding whether it runs them
     public const string RuntimeStandby = "runtime.standby";
     public const string RuntimeStarting = "runtime.starting";
+
+    // Demo home: loaded only into an empty home (no floors, integrations or devices)
+    public const string DemoNotEmpty = "demo.not_empty";
 
     // History and energy
     public const string AttributesNotFound = "attributes.not_found";

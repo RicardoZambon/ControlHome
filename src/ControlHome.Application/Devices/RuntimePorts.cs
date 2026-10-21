@@ -90,10 +90,23 @@ public sealed class NoDeviceInventoryAdmin : IDeviceInventoryAdmin
         Task.FromResult(Result.Failure(AppError.Unavailable(ErrorCodes.CommandsUnavailable, "No device runtime in this process.")));
 }
 
+/// <summary>Asks running connector runtimes for camera stills (implemented by the integration supervisor).</summary>
+public interface ICameraSnapshotProvider
+{
+    /// <summary>
+    /// The camera's still image from the integration's runtime (when it implements <see cref="ICameraSnapshotSource"/>),
+    /// or <c>null</c> when it is not running, has no cameras, or has no image right now.
+    /// </summary>
+    Task<CameraSnapshot?> GetSnapshotAsync(Guid integrationId, string externalDeviceId, string endpointKey, CancellationToken cancellationToken);
+}
+
 /// <summary>Dispatcher, runtime control and status for hosts without a device runtime: nothing runs.</summary>
-public sealed class NoDeviceRuntime : ICommandDispatcher, IIntegrationRuntimeControl, IRuntimeStatus
+public sealed class NoDeviceRuntime : ICommandDispatcher, IIntegrationRuntimeControl, IRuntimeStatus, ICameraSnapshotProvider
 {
     public static NoDeviceRuntime Instance { get; } = new();
+
+    public Task<CameraSnapshot?> GetSnapshotAsync(Guid integrationId, string externalDeviceId, string endpointKey, CancellationToken cancellationToken) =>
+        Task.FromResult<CameraSnapshot?>(null);
 
     public RuntimeMode Mode => RuntimeMode.Starting;
 

@@ -1,6 +1,8 @@
 using ControlHome.Api.Features.Audit;
 using ControlHome.Api.Features.Auth;
 using ControlHome.Api.Features.Capabilities;
+using ControlHome.Api.Features.Dashboard;
+using ControlHome.Api.Features.Demo;
 using ControlHome.Api.Features.Devices;
 using ControlHome.Api.Features.Files;
 using ControlHome.Api.Features.Floors;
@@ -20,6 +22,8 @@ using ControlHome.Api.Security;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Auth;
+using ControlHome.Application.Dashboard;
+using ControlHome.Application.Demo;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Files;
 using ControlHome.Application.Floors;
@@ -47,6 +51,11 @@ if (HealthcheckCommand.IsRequested(args))
 if (ResetAdminCommand.Matches(args))
 {
     return await ResetAdminCommand.RunAsync(args, Console.Out, Console.Error);
+}
+
+if (SeedDemoCommand.Matches(args))
+{
+    return await SeedDemoCommand.RunAsync(args, Console.Out, Console.Error);
 }
 
 // Nothing before builder.Build() may open a database or network connection or touch the data folder: `dotnet build` runs
@@ -101,6 +110,8 @@ try
     builder.Services.AddIntegrations();
     builder.Services.AddSafety();
     builder.Services.AddHistory();
+    builder.Services.AddDashboard();
+    builder.Services.AddDemoHome();
 
     var app = builder.Build();
 
@@ -141,6 +152,7 @@ try
     app.MapSystemEndpoints();
     app.MapHistoryEndpoints();
     app.MapSettingsEndpoints();
+    app.MapDashboardEndpoints();
     app.MapHomeHub();
     if (app.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
     {

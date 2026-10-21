@@ -3,11 +3,13 @@ using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Auth;
 using ControlHome.Application.Common;
+using ControlHome.Application.Demo;
 using ControlHome.Application.Identity;
 using ControlHome.Domain.Homes;
 using ControlHome.Domain.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ControlHome.Application.Setup;
 
@@ -16,7 +18,7 @@ namespace ControlHome.Application.Setup;
 /// the one-way <see cref="Home.SetupCompletedAtUtc"/> flag: exactly one first Admin is ever created, however many
 /// completions race; the others get 409 <c>setup.already_completed</c>.
 /// </summary>
-public sealed class SetupService(
+public sealed partial class SetupService(
     IControlHomeDb db,
     IDatabaseStatus databaseStatus,
     ISetupCodeProvider setupCode,
@@ -25,7 +27,9 @@ public sealed class SetupService(
     RoleManager<IdentityRole<Guid>> roleManager,
     ISessionSignIn session,
     IAuditLog auditLog,
-    TimeProvider timeProvider)
+    DemoHomeService demoHome,
+    TimeProvider timeProvider,
+    ILogger<SetupService> logger)
 {
     public const string LockName = "ControlHome.Setup";
 
@@ -82,9 +86,37 @@ public sealed class SetupService(
         }
 
         setupCode.OnSetupCompleted();
+        if (request.LoadDemoHome == true)
+        {
+            await LoadDemoHomeAsync(request.Home.Locale, cancellationToken);
+        }
+
         await session.SignInAsync(created.Value, persistent: false);
         return await userManager.ToMeDtoAsync(created.Value);
     }
+
+    /// <summary>The setup option "Load demo home": a failure is logged, never fails the completed setup.</summary>
+    private async Task LoadDemoHomeAsync(string locale, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var loaded = await demoHome.LoadAsync(locale, cancellationToken);
+            if (loaded.IsFailure)
+            {
+                LogDemoSkipped(loaded.Error.Code);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogDemoFailed(ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Setup: the demo home was not loaded ({Code})")]
+    private partial void LogDemoSkipped(string code);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Setup: loading the demo home failed")]
+    private partial void LogDemoFailed(Exception exception);
 
     private static AppError AlreadyCompleted() =>
         AppError.Conflict(ErrorCodes.SetupAlreadyCompleted, "Setup has already been completed.");

@@ -23,6 +23,9 @@ public static class AuditActions
 
     public const string HomeUpdated = "home.updated";
 
+    /// <summary>The demo home was loaded (setup option, <c>--seed-demo</c>, test hook).</summary>
+    public const string DemoLoaded = "demo.loaded";
+
     /// <summary>An Admin changed how long history is kept.</summary>
     public const string RetentionSettingsUpdated = "settings.retention_updated";
 

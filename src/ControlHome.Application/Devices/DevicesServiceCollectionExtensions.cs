@@ -26,6 +26,8 @@ public static class DevicesServiceCollectionExtensions
         services.TryAddScoped<IAttributeStateReader, DbAttributeStateReader>();
         services.TryAddSingleton<IDeviceStatusReader>(NoLiveDeviceStatus.Instance);
         services.TryAddSingleton<IDeviceInventoryAdmin>(NoDeviceInventoryAdmin.Instance);
+        services.TryAddSingleton<ICameraSnapshotProvider>(NoDeviceRuntime.Instance);
+        services.AddScoped<CameraService>();
 
         services.AddScoped<DeviceQueryService>();
         services.AddScoped<DeviceAdminService>();
