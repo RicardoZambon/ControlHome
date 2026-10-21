@@ -810,6 +810,18 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
     re-encoded server-side with SkiaSharp 3 (`SkiaSharp.NativeAssets.Linux.NoDependencies` in the chiseled image) to
     WebP quality 85, ≤ 4096 px, EXIF orientation applied and all metadata dropped. **No SVG.**
   - View mode shows live state and a tap-to-control popover.
+  - Devices on the plan (1.3, `PlacedDevice` / `PlacementLayer`): an icon in a disc whose ring has the live state color
+    (dashed when unreachable, a soft halo while on), sized in screen pixels; previews draw small dots. View mode: a tap
+    opens `DeviceQuickPanel` (the registry's controls; a sheet on phones). The editor's Devices tab lists what is on no
+    plan yet (a multi-control device as a whole or control by control), places by dragging a row's handle or by
+    "Place" + a tap (touch, keyboard), moves by dragging a marker and takes one off; placements are saved at once
+    (`PUT /api/placements`), outside the layout draft and its undo history.
+- **History charts** (1.4, `components/charts/*`): `HistoryChart` (numbers as a line — raw changes as steps held to now,
+  statistics as the mean over the min–max band; booleans and enums as steps) and `EnergyBars` (`EnergyHourly` per hour
+  or per local day, estimated hours lighter), on vue-echarts with ECharts tree-shaken to line and bar charts and the
+  SVG renderer, loaded only with a device's History tab. Statistics end with their last closed bucket, so the device
+  page also fetches the raw changes after it and appends them (`withRawTail`): a chart always runs up to now, and a
+  device that just started reporting shows its raw changes.
 
 ---
 
