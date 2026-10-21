@@ -8,6 +8,7 @@ import { useSessionStore } from '../../../stores/session'
 import RoleBadge from '../../users/components/RoleBadge.vue'
 import ChangePasswordForm from '../components/ChangePasswordForm.vue'
 import PreferencesForm from '../components/PreferencesForm.vue'
+import SafetyPinForm from '../components/SafetyPinForm.vue'
 
 const { t } = useI18n()
 const session = useSessionStore()
@@ -41,6 +42,16 @@ const me = computed(() => session.me)
           </CardHeader>
           <CardContent>
             <ChangePasswordForm :user-name="me.userName" />
+          </CardContent>
+        </Card>
+
+        <Card id="safety-pin" class="scroll-mt-20" aria-labelledby="safety-pin-title">
+          <CardHeader>
+            <CardTitle id="safety-pin-title">{{ t('profile.pin.title') }}</CardTitle>
+            <CardDescription>{{ t('profile.pin.description') }}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SafetyPinForm />
           </CardContent>
         </Card>
       </div>

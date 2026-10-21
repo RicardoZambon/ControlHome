@@ -105,6 +105,398 @@
     "currency": "Choose a currency.",
     "timeZone": "Choose a time zone."
   },
+  "live": {
+    "reconnecting": "Reconnecting…",
+    "stale": "Device states may be out of date until then.",
+    "back": "Live updates are back."
+  },
+  "commands": {
+    "superseded": "Someone else changed this device just now."
+  },
+  "safety": {
+    "dialog": {
+      "title": "Safety PIN",
+      "question": "{action} {name}?",
+      "enterPin": "Enter your safety PIN.",
+      "entered": "{count} of up to {max} digits entered",
+      "keypad": "PIN pad",
+      "erase": "Delete the last digit",
+      "confirm": "Confirm",
+      "lockoutHint": "After 5 wrong PINs, safety actions lock for 15 minutes.",
+      "setPin": "Set your PIN in your profile"
+    }
+  },
+  "schema": {
+    "true": "Yes",
+    "false": "No",
+    "noValue": "—",
+    "noFlags": "None",
+    "choose": "Choose…",
+    "errors": {
+      "between": "Use a value from {min} to {max}.",
+      "atLeast": "Use {min} or more.",
+      "atMost": "Use {max} or less.",
+      "step": "Use steps of {step}.",
+      "notAllowed": "Choose one of the options."
+    }
+  },
+  "device": {
+    "noValue": "—",
+    "noRoom": "No room",
+    "orphaned": "No longer reported",
+    "hidden": "Hidden",
+    "favorite": "Favorite",
+    "availability": {
+      "Online": "Online",
+      "Offline": "Offline",
+      "Unknown": "Status unknown"
+    },
+    "state": {
+      "on": "On",
+      "off": "Off",
+      "unknown": "Unknown",
+      "pending": "Updating…"
+    },
+    "pending": {
+      "awaitingPin": "Waiting for your PIN",
+      "turningOn": "Turning on…",
+      "turningOff": "Turning off…",
+      "switching": "Switching…",
+      "setting": "Setting {value}…",
+      "choosing": "Switching to {value}…",
+      "opening": "Opening…",
+      "closing": "Closing…",
+      "stopping": "Stopping…",
+      "color": "Changing color…"
+    },
+    "capabilities": {
+      "switch": "Power",
+      "level": "Brightness",
+      "color": "Color",
+      "thermostat": "Climate",
+      "power": "Power use",
+      "energy": "Energy",
+      "temperature": "Temperature",
+      "humidity": "Humidity",
+      "contact": "Door or window",
+      "motion": "Motion",
+      "occupancy": "Occupancy",
+      "lock": "Lock",
+      "doorOpener": "Door opener",
+      "cover": "Cover",
+      "alarmPanel": "Alarm",
+      "mediaPlayer": "Media",
+      "button": "Button",
+      "battery": "Battery",
+      "presence": "Presence",
+      "smoke": "Smoke",
+      "waterLeak": "Water leak",
+      "airQuality": "Air quality",
+      "camera": "Camera",
+      "applianceCycle": "Appliance",
+      "generic": "Other settings"
+    },
+    "attributes": {
+      "on": "Power",
+      "level": "Brightness",
+      "transitionMs": "Transition",
+      "hue": "Hue",
+      "saturation": "Saturation",
+      "colorTemperature": "White temperature",
+      "mode": "Mode",
+      "targetTemperature": "Target temperature",
+      "currentTemperature": "Room temperature",
+      "fanMode": "Fan speed",
+      "power": "Power",
+      "energy": "Energy",
+      "temperature": "Temperature",
+      "humidity": "Humidity",
+      "open": "Open",
+      "motion": "Motion",
+      "occupied": "Occupied",
+      "lockState": "Lock state",
+      "position": "Position",
+      "coverState": "State",
+      "armState": "Alarm state",
+      "volume": "Volume",
+      "muted": "Muted",
+      "source": "Source",
+      "app": "App",
+      "playbackState": "Playback",
+      "press": "Last press",
+      "battery": "Battery",
+      "present": "Present",
+      "smoke": "Smoke",
+      "leak": "Leak",
+      "pm25": "PM2.5",
+      "co2": "CO₂",
+      "voc": "VOC",
+      "streamAvailable": "Stream available",
+      "machineState": "State",
+      "phase": "Phase",
+      "remainingMinutes": "Time left",
+      "remoteControlEnabled": "Remote control"
+    },
+    "attributesIn": {
+      "power": {
+        "power": "Power use"
+      },
+      "contact": {
+        "open": "Contact"
+      }
+    },
+    "commands": {
+      "turnOn": "Turn on",
+      "turnOff": "Turn off",
+      "toggle": "Switch",
+      "setLevel": "Set brightness",
+      "setColor": "Set color",
+      "setColorTemperature": "Set white temperature",
+      "setMode": "Set mode",
+      "setTargetTemperature": "Set temperature",
+      "setFanMode": "Set fan",
+      "lock": "Lock",
+      "unlock": "Unlock",
+      "open": "Open",
+      "close": "Close",
+      "stop": "Stop",
+      "setPosition": "Set position",
+      "arm": "Arm",
+      "disarm": "Disarm",
+      "powerOn": "Turn on",
+      "powerOff": "Turn off",
+      "setVolume": "Set volume",
+      "volumeUp": "Volume up",
+      "volumeDown": "Volume down",
+      "setMuted": "Mute",
+      "selectSource": "Change source",
+      "launchApp": "Open app",
+      "play": "Play",
+      "pause": "Pause",
+      "next": "Next",
+      "previous": "Previous",
+      "snapshot": "Take snapshot",
+      "start": "Start"
+    },
+    "values": {
+      "mode": {
+        "off": "Off",
+        "cool": "Cool",
+        "heat": "Heat",
+        "auto": "Auto",
+        "dry": "Dry",
+        "fan": "Fan only",
+        "home": "Home",
+        "away": "Away",
+        "night": "Night"
+      },
+      "fanMode": {
+        "auto": "Auto",
+        "quiet": "Quiet",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "turbo": "Turbo"
+      },
+      "lockState": {
+        "locked": "Locked",
+        "unlocked": "Unlocked",
+        "jammed": "Jammed",
+        "unknown": "Unknown"
+      },
+      "coverState": {
+        "open": "Open",
+        "closed": "Closed",
+        "opening": "Opening…",
+        "closing": "Closing…",
+        "stopped": "Stopped",
+        "unknown": "Unknown"
+      },
+      "armState": {
+        "disarmed": "Disarmed",
+        "armed_home": "Armed (home)",
+        "armed_away": "Armed (away)",
+        "armed_night": "Armed (night)",
+        "triggered": "Alarm triggered",
+        "arming": "Arming…",
+        "unknown": "Unknown"
+      },
+      "playbackState": {
+        "idle": "Idle",
+        "playing": "Playing",
+        "paused": "Paused",
+        "stopped": "Stopped",
+        "buffering": "Loading…",
+        "unknown": "Unknown"
+      },
+      "machineState": {
+        "idle": "Idle",
+        "running": "Running",
+        "paused": "Paused",
+        "finished": "Finished",
+        "error": "Error"
+      },
+      "press": {
+        "single": "Single press",
+        "double": "Double press",
+        "long": "Long press"
+      },
+      "on": {
+        "true": "On",
+        "false": "Off"
+      },
+      "power": {
+        "true": "On",
+        "false": "Off"
+      },
+      "open": {
+        "true": "Open",
+        "false": "Closed"
+      },
+      "motion": {
+        "true": "Detected",
+        "false": "None"
+      },
+      "occupied": {
+        "true": "Occupied",
+        "false": "Clear"
+      },
+      "present": {
+        "true": "Home",
+        "false": "Away"
+      },
+      "smoke": {
+        "true": "Detected",
+        "false": "None"
+      },
+      "leak": {
+        "true": "Detected",
+        "false": "Dry"
+      },
+      "muted": {
+        "true": "Muted",
+        "false": "Sound on"
+      },
+      "remoteControlEnabled": {
+        "true": "Enabled",
+        "false": "Disabled"
+      }
+    },
+    "reading": {
+      "batteryLow": "Battery {value}",
+      "replaceBattery": "Low: replace the battery soon",
+      "smoke": "Smoke detected",
+      "noSmoke": "No smoke",
+      "leak": "Leak detected",
+      "dry": "Dry",
+      "open": "Open",
+      "closed": "Closed",
+      "motion": "Motion",
+      "noMotion": "No motion",
+      "occupied": "Occupied",
+      "clear": "Clear",
+      "home": "Home",
+      "away": "Away"
+    },
+    "switch": {
+      "label": "Power, {name}"
+    },
+    "level": {
+      "label": "Brightness, {name}"
+    },
+    "color": {
+      "current": "Current color",
+      "hueValue": "Hue {hue}°, {saturation}% saturated",
+      "mode": "Light mode",
+      "color": "Color",
+      "white": "White",
+      "presets": "Presets",
+      "warm": "Warm",
+      "cool": "Cool",
+      "preset": {
+        "red": "Red",
+        "orange": "Orange",
+        "yellow": "Yellow",
+        "green": "Green",
+        "cyan": "Cyan",
+        "blue": "Blue",
+        "purple": "Purple",
+        "pink": "Pink",
+        "warm": "Warm white",
+        "neutral": "Neutral white",
+        "daylight": "Daylight"
+      }
+    },
+    "thermostat": {
+      "summary": {
+        "heat": "Heating to {temperature}",
+        "cool": "Cooling to {temperature}",
+        "auto": "Keeping {temperature}"
+      },
+      "action": {
+        "off": "Off",
+        "cool": "Cooling",
+        "heat": "Heating",
+        "auto": "Auto",
+        "dry": "Drying",
+        "fan": "Fan only"
+      },
+      "target": "Target temperature, {name}",
+      "now": "Now {temperature}",
+      "lower": "Lower the temperature",
+      "raise": "Raise the temperature",
+      "room": "Room {temperature}"
+    },
+    "cover": {
+      "percentOpen": "{value} open",
+      "position": "Position, {name}",
+      "pinHint": "Opening asks for your safety PIN."
+    },
+    "lock": {
+      "locking": "Locking…",
+      "unlocking": "Unlocking…",
+      "unlockAction": "Unlock…",
+      "tryAgain": "Try locking again",
+      "jammed": "The lock is jammed. Check it on the spot.",
+      "pinHint": "Unlocking asks for your safety PIN."
+    },
+    "doorOpener": {
+      "ready": "Ready",
+      "opening": "Opening…",
+      "opened": "Opened",
+      "pinHint": "Opening asks for your safety PIN."
+    },
+    "media": {
+      "nowPlaying": "Now playing",
+      "transport": "Playback",
+      "muted": "Muted",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "volume": "Volume, {name}"
+    },
+    "appliance": {
+      "remaining": "{minutes} min left",
+      "minutesLeft": "min left",
+      "remoteOff": "Remote control is off on the appliance. Turn it on there to start or stop it from here."
+    },
+    "airQuality": {
+      "good": "Good air",
+      "moderate": "Moderate air",
+      "poor": "Poor air"
+    },
+    "button": {
+      "never": "Not pressed yet"
+    },
+    "camera": {
+      "streamAvailable": "Stream available",
+      "noStream": "No stream",
+      "placeholder": "Snapshots and live view arrive in a later version.",
+      "snapshotTaken": "Snapshot requested."
+    },
+    "generic": {
+      "empty": "Nothing to show here yet."
+    }
+  },
   "errors": {
     "unknown": "Something went wrong. Please try again.",
     "network": "Can't reach ControlHome. Check that the server is running and you're on your home network.",

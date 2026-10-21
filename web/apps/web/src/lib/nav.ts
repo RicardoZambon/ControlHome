@@ -16,6 +16,8 @@ export interface NavItem {
   order: number
   /** Sidebar section (default `home`). */
   group?: NavGroup
+  /** Also in the phones' bottom tab bar (default `true`; occasional settings pages stay in the menu only). */
+  tabBar?: boolean
 }
 
 /**

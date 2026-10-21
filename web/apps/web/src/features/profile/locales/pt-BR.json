@@ -2,7 +2,7 @@
   "title": "Perfil",
   "nav": "Perfil",
   "eyebrow": "Configurações",
-  "description": "Como você aparece, como o ControlHome fica para você e a sua senha.",
+  "description": "Como você aparece, como o ControlHome fica para você, a sua senha e o seu PIN de segurança.",
   "account": {
     "userName": "Nome de usuário",
     "roles": "Papel"
@@ -25,5 +25,23 @@
     "submit": "Alterar senha",
     "submitting": "Alterando…",
     "changed": "Senha alterada."
+  },
+  "pin": {
+    "title": "PIN de segurança",
+    "description": "De 4 a 8 dígitos que confirmam ações de segurança, como destrancar uma porta ou abrir o portão. Só você sabe.",
+    "isSet": "PIN definido",
+    "notSet": "Sem PIN ainda",
+    "locked": "Bloqueado por {minutes} min após PINs errados",
+    "current": "PIN atual",
+    "new": "Novo PIN",
+    "pin": "PIN",
+    "confirm": "Confirme o novo PIN",
+    "help": "De 4 a 8 dígitos. Evite datas de aniversário e sequências como 1234.",
+    "format": "Use de 4 a 8 dígitos.",
+    "mismatch": "Os PINs não coincidem.",
+    "set": "Definir PIN",
+    "change": "Alterar PIN",
+    "saved": "PIN de segurança definido.",
+    "changed": "PIN de segurança alterado."
   }
 }

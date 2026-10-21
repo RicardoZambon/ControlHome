@@ -9,6 +9,11 @@
     "displayName": "Grace Hopper",
     "password": "a ship in port is safe"
   },
+  "viewer": {
+    "userName": "linus",
+    "displayName": "Linus Torvalds",
+    "password": "just for fun, really"
+  },
   "home": {
     "name": "Casa Azul",
     "timeZoneId": "America/Sao_Paulo",

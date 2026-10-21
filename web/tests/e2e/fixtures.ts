@@ -23,6 +23,7 @@ export interface TestUser {
 interface TestData {
   admin: TestUser
   member: TestUser
+  viewer: TestUser
   home: { name: string; timeZoneId: string; locale: string; currency: string }
 }
 
@@ -100,6 +101,124 @@ export async function savePreferences(
   expect(response.status(), `PUT /api/auth/me/profile: ${await response.text()}`).toBe(200)
 }
 
+// --- Devices ---------------------------------------------------------------------------------------------------------
+
+/** The parts of `GET /api/devices` the specs use. */
+export interface SimulatedDevice {
+  id: string
+  name: string
+  deviceClass: string | null
+  endpoints: {
+    id: string
+    capabilities: {
+      capabilityId: string
+      attributes: {
+        attributeId: number
+        key: string
+        value: { kind: string; b?: boolean; n?: number; s?: string }
+      }[]
+    }[]
+  }[]
+}
+
+/** The Simulated connector's basic home (Task 1.2-B), by its device names. */
+export const SIMULATED = {
+  light: 'Living room light',
+  plug: 'Coffee maker plug',
+  ac: 'Bedroom air conditioner',
+  contact: 'Front door sensor',
+  lock: 'Front door lock',
+} as const
+
+export async function listDevices(request: APIRequestContext): Promise<SimulatedDevice[]> {
+  const response = await request.get('/api/devices')
+  expect(response.status(), `GET /api/devices: ${await response.text()}`).toBe(200)
+  return (await response.json()) as SimulatedDevice[]
+}
+
+/**
+ * Adds the Simulated connector's basic home (`POST /api/integrations`, the request context must be an Admin's) and waits
+ * until its five devices are in. Returns them by name.
+ */
+export async function createSimulatedHome(
+  request: APIRequestContext,
+): Promise<Record<keyof typeof SIMULATED, SimulatedDevice>> {
+  const response = await request.post('/api/integrations', {
+    headers: mutationHeaders(),
+    data: { connectorKey: 'simulated', name: 'Simulated home', config: { preset: 'basic' } },
+  })
+  expect(response.status(), `POST /api/integrations: ${await response.text()}`).toBe(201)
+  let devices: SimulatedDevice[] = []
+  await expect
+    .poll(
+      async () => {
+        devices = await listDevices(request)
+        return devices.length
+      },
+      { message: 'the simulated devices to appear', timeout: 30_000 },
+    )
+    .toBe(5)
+  const byName = (name: string) => devices.find((device) => device.name === name)!
+  return {
+    light: byName(SIMULATED.light),
+    plug: byName(SIMULATED.plug),
+    ac: byName(SIMULATED.ac),
+    contact: byName(SIMULATED.contact),
+    lock: byName(SIMULATED.lock),
+  }
+}
+
+/** The current value of `capability.attribute` of a device (`GET /api/devices`). */
+export async function attributeValue(
+  request: APIRequestContext,
+  deviceName: string,
+  capabilityId: string,
+  key: string,
+): Promise<boolean | number | string | undefined> {
+  const device = (await listDevices(request)).find((entry) => entry.name === deviceName)
+  const attribute = device?.endpoints
+    .flatMap((endpoint) => endpoint.capabilities)
+    .find((capability) => capability.capabilityId === capabilityId)
+    ?.attributes.find((entry) => entry.key === key)
+  const value = attribute?.value
+  return value?.b ?? value?.n ?? value?.s
+}
+
+/**
+ * Sends a command to a device's first endpoint (`POST /api/endpoints/{id}/commands`, as an automation or another app
+ * would) and expects it to be accepted (202). Returns the device's endpoint id.
+ */
+export async function sendCommand(
+  request: APIRequestContext,
+  device: SimulatedDevice,
+  capabilityId: string,
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<string> {
+  const endpointId = device.endpoints[0]!.id
+  const response = await request.post(`/api/endpoints/${endpointId}/commands`, {
+    headers: mutationHeaders(),
+    data: { capabilityId, command, arguments: args, idempotencyKey: null },
+  })
+  expect(response.status(), `POST ${capabilityId}.${command}: ${await response.text()}`).toBe(202)
+  return endpointId
+}
+
+/** The AttributeId of `capability.attribute` of a device. */
+export function attributeIdOf(device: SimulatedDevice, capabilityId: string, key: string): number {
+  const attribute = device.endpoints
+    .flatMap((endpoint) => endpoint.capabilities)
+    .find((capability) => capability.capabilityId === capabilityId)
+    ?.attributes.find((entry) => entry.key === key)
+  expect(attribute, `${device.name} has ${capabilityId}.${key}`).toBeDefined()
+  return attribute!.attributeId
+}
+
+/** Waits until the page's live connection to the hub is up (devices update without a reload from then on). */
+export async function waitForLive(page: Page): Promise<void> {
+  await expect(page.locator('[data-realtime-status="connected"]')).toBeAttached({ timeout: 15_000 })
+}
+
 // --- UI helpers ------------------------------------------------------------------------------------------------------
 
 /** Phones get the sidebar as a sheet (below Tailwind's md breakpoint). */
@@ -164,6 +283,11 @@ export interface Gates {
    * checked when it ends; the final page is checked automatically too.
    */
   check(label?: string): Promise<void>
+  /**
+   * From now on, console errors matching `pattern` are expected (the test takes the network down on purpose, so the
+   * browser reports the requests and sockets that fail meanwhile). Every other console error still fails the test.
+   */
+  expectConsoleErrors(pattern: RegExp): void
 }
 
 /** Width at or below which the page must not scroll sideways. */
@@ -247,15 +371,23 @@ export const test = base.extend<{ gates: Gates }>({
   gates: [
     async ({ page }, use, testInfo) => {
       const problems: string[] = []
+      const expectedErrors: RegExp[] = []
       page.on('console', (message) => {
         const text = message.text()
-        if (message.type() === 'error' && !isExpectedApiAnswer(message))
+        if (
+          message.type() === 'error' &&
+          !isExpectedApiAnswer(message) &&
+          !expectedErrors.some((pattern) => pattern.test(text))
+        )
           problems.push(`console error: ${text} (${message.location().url})`)
         else if (MISSING_KEY.test(text)) problems.push(`missing i18n key: ${text}`)
       })
       page.on('pageerror', (error) => problems.push(`uncaught exception: ${error.message}`))
 
-      await use({ check: (label) => checkPage(page, label) })
+      await use({
+        check: (label) => checkPage(page, label),
+        expectConsoleErrors: (pattern) => void expectedErrors.push(pattern),
+      })
 
       // The last page the test saw, unless the test already failed (its own error is the interesting one) or skipped
       // itself before opening any page.

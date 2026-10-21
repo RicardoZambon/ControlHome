@@ -75,6 +75,23 @@
   --color-room-8: var(--room-8);
   --color-room-8-foreground: var(--room-8-foreground);
 
+  /* Light colors (color bulbs): `bg-spectrum-120`, `bg-kelvin-warm`, ... */
+  --color-spectrum-0: var(--spectrum-0);
+  --color-spectrum-30: var(--spectrum-30);
+  --color-spectrum-60: var(--spectrum-60);
+  --color-spectrum-90: var(--spectrum-90);
+  --color-spectrum-120: var(--spectrum-120);
+  --color-spectrum-150: var(--spectrum-150);
+  --color-spectrum-180: var(--spectrum-180);
+  --color-spectrum-210: var(--spectrum-210);
+  --color-spectrum-240: var(--spectrum-240);
+  --color-spectrum-270: var(--spectrum-270);
+  --color-spectrum-300: var(--spectrum-300);
+  --color-spectrum-330: var(--spectrum-330);
+  --color-kelvin-warm: var(--kelvin-warm);
+  --color-kelvin-neutral: var(--kelvin-neutral);
+  --color-kelvin-cool: var(--kelvin-cool);
+
   /* Modal scrim behind dialogs and sheets (`bg-overlay`). */
   --color-overlay: var(--overlay);
 

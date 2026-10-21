@@ -2,7 +2,7 @@
   "title": "Profile",
   "nav": "Profile",
   "eyebrow": "Settings",
-  "description": "How you appear, how ControlHome looks for you, and your password.",
+  "description": "How you appear, how ControlHome looks for you, your password and your safety PIN.",
   "account": {
     "userName": "User name",
     "roles": "Role"
@@ -25,5 +25,23 @@
     "submit": "Change password",
     "submitting": "Changing…",
     "changed": "Password changed."
+  },
+  "pin": {
+    "title": "Safety PIN",
+    "description": "4 to 8 digits that confirm safety actions, such as unlocking a door or opening the gate. Only you know it.",
+    "isSet": "PIN set",
+    "notSet": "No PIN yet",
+    "locked": "Locked for {minutes} min after wrong PINs",
+    "current": "Current PIN",
+    "new": "New PIN",
+    "pin": "PIN",
+    "confirm": "Confirm new PIN",
+    "help": "4 to 8 digits. Avoid birthdays and sequences such as 1234.",
+    "format": "Use 4 to 8 digits.",
+    "mismatch": "The PINs don't match.",
+    "set": "Set PIN",
+    "change": "Change PIN",
+    "saved": "Safety PIN set.",
+    "changed": "Safety PIN changed."
   }
 }
