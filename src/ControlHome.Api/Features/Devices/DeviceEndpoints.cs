@@ -41,6 +41,19 @@ public static class DeviceEndpoints
             .WithValidation<UpdateDeviceRequest>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        devices.MapPost("/{id:guid}/replace", ReplaceDeviceAsync)
+            .WithName("replaceDevice")
+            .WithSummary("Replaces this device by another: the new one takes over its settings, placements and history.")
+            .WithDescription(
+                "Moves name, room, icon, endpoint names/rooms/icons/hidden/favorites (endpoints matched by key, or the only " +
+                "one of each), placements and history (state log, events, statistics, energy) to newDeviceId, then deletes " +
+                "this device. Typically for an orphaned device after re-pairing, or a likely duplicate " +
+                "(possibleDuplicateIds). Returns the new device. 404 devices.not_found; 400 validation.failed with " +
+                "errors.newDeviceId = devices.not_found or devices.replace_same.")
+            .RequireAuthorization(AuthorizationPolicies.Admin)
+            .WithValidation<ReplaceDeviceRequest>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         var endpoints = app.MapGroup("/api/endpoints")
             .WithTags("Devices")
             .ProducesProblem(StatusCodes.Status401Unauthorized)
@@ -111,6 +124,13 @@ public static class DeviceEndpoints
         DeviceAdminService devices,
         CancellationToken cancellationToken) =>
         (await devices.UpdateDeviceAsync(id, request, cancellationToken)).ToHttpResult();
+
+    private static async Task<Results<Ok<DeviceDetailDto>, ProblemHttpResult>> ReplaceDeviceAsync(
+        Guid id,
+        ReplaceDeviceRequest request,
+        DeviceAdminService devices,
+        CancellationToken cancellationToken) =>
+        (await devices.ReplaceAsync(id, request, cancellationToken)).ToHttpResult();
 
     private static async Task<Results<Ok<EndpointDto>, ProblemHttpResult>> UpdateEndpointAsync(
         Guid id,

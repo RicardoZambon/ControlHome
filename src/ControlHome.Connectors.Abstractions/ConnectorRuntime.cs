@@ -68,6 +68,15 @@ public interface IConnectorContext
     /// <summary>The connector no longer has the device: it becomes orphaned (kept with its name, room and history, never deleted).</summary>
     Task RemoveDeviceAsync(string externalDeviceId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// A full inventory: every device the connector has right now. Each is added or updated as with
+    /// <see cref="UpsertDeviceAsync"/>, and every other device of the integration becomes orphaned as with
+    /// <see cref="RemoveDeviceAsync"/> (kept, never deleted). Use it when the vendor returns the complete device list (a
+    /// cloud account's devices, a bridge's device list); report partial or incremental discoveries with
+    /// <see cref="UpsertDeviceAsync"/>.
+    /// </summary>
+    Task SyncInventoryAsync(IReadOnlyList<DiscoveredDevice> devices, CancellationToken cancellationToken);
+
     /// <summary>Sets the integration's status (shown to the user, pushed to clients).</summary>
     /// <param name="message">A short, non-secret explanation (e.g. the last error), or <c>null</c>.</param>
     void SetStatus(IntegrationStatus status, string? message);

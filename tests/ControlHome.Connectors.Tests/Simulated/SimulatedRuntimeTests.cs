@@ -28,6 +28,7 @@ public sealed class SimulatedRuntimeTests
         Capabilities(context, Contact).ShouldBe(["contact", "battery"]);
         Capabilities(context, DoorLock).ShouldBe(["lock"]);
 
+        context.Syncs.ShouldHaveSingleItem().ShouldBe([Light, Plug, Ac, Contact, DoorLock], "one full inventory");
         context.Availability.ShouldBe(context.Devices.Select(d => (d.ExternalId, Availability.Online)).ToList());
         context.Statuses.Select(s => s.Status).ShouldBe([IntegrationStatus.Connecting, IntegrationStatus.Ok]);
 
@@ -330,10 +331,10 @@ public sealed class SimulatedRuntimeTests
 
         descriptor.Key.ShouldBe("simulated");
         descriptor.Category.ShouldBe(ConnectorCategory.Virtual);
-        descriptor.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "seed"]);
+        descriptor.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "seed", "simulateReauth"]);
         descriptor.ConfigFields.ShouldAllBe(f => !f.Secret);
-        descriptor.Features.PushInventory.ShouldBeTrue();
-        new SimulatedConnectorFactory().CreateSetupFlow().ShouldBeNull();
+        (descriptor.Features.PushInventory, descriptor.Features.SetupFlow, descriptor.Features.Reauth).ShouldBe((true, true, true));
+        new SimulatedConnectorFactory().CreateSetupFlow().ShouldBeOfType<SimulatedSetupFlow>();
     }
 
     private static List<string> Capabilities(RecordingContext context, string device) =>

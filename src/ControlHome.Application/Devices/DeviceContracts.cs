@@ -16,6 +16,10 @@ public sealed record DeviceListQuery(int? RoomId = null, Guid? IntegrationId = n
 /// <param name="Availability"><c>Unknown</c>, <c>Online</c> or <c>Offline</c>.</param>
 /// <param name="IsOrphaned">No longer reported by its integration (kept, shown with a badge).</param>
 /// <param name="Endpoints">In display order.</param>
+/// <param name="PossibleDuplicateIds">
+/// Devices of other integrations with the same MAC address or serial number: most likely the same hardware reached twice
+/// (remove one, or move this one's settings and history with <c>POST /api/devices/{id}/replace</c>). Empty when none.
+/// </param>
 public sealed record DeviceSummaryDto(
     Guid Id,
     Guid IntegrationId,
@@ -27,13 +31,15 @@ public sealed record DeviceSummaryDto(
     string Availability,
     bool IsOrphaned,
     DateTimeOffset? LastSeenAtUtc,
-    IReadOnlyList<EndpointDto> Endpoints);
+    IReadOnlyList<EndpointDto> Endpoints,
+    IReadOnlyList<Guid> PossibleDuplicateIds);
 
 /// <summary>A device with its vendor details (<c>GET /api/devices/{id}</c>).</summary>
 /// <param name="ConnectorKey">The integration's connector, e.g. <c>simulated</c>.</param>
 /// <param name="ExternalId">The connector's id for the device.</param>
 /// <param name="Connections">Hardware identifiers (<c>mac</c>, <c>serial</c>, …).</param>
 /// <param name="Children">Devices reached through this one (e.g. an NVR's cameras), by name.</param>
+/// <param name="PossibleDuplicateIds">Devices of other integrations with the same MAC address or serial number.</param>
 public sealed record DeviceDetailDto(
     Guid Id,
     Guid IntegrationId,
@@ -54,7 +60,8 @@ public sealed record DeviceDetailDto(
     string? Icon,
     DateTimeOffset CreatedAtUtc,
     IReadOnlyList<EndpointDto> Endpoints,
-    IReadOnlyList<DeviceChildDto> Children);
+    IReadOnlyList<DeviceChildDto> Children,
+    IReadOnlyList<Guid> PossibleDuplicateIds);
 
 /// <summary>A child device of a <see cref="DeviceDetailDto"/>.</summary>
 public sealed record DeviceChildDto(Guid Id, string Name);

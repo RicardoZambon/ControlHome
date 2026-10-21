@@ -1,8 +1,13 @@
+using System.Data;
 using System.Text.Json;
 using ControlHome.Application.Abstractions;
+using ControlHome.Application.Common;
+using ControlHome.Application.Devices;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Devices;
+using ControlHome.Infrastructure.Persistence;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -23,6 +28,14 @@ public interface IDeviceInventory
     Task RemoveAsync(Guid integrationId, string externalDeviceId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// A full inventory of the integration: every listed device is added or merged (parents before their children), every
+    /// other device of the integration becomes orphaned (never deleted). Returns the external ids of the devices it
+    /// orphaned; as with <see cref="RemoveAsync"/>, the caller reports their Unknown availability through the pipeline.
+    /// </summary>
+    /// <exception cref="ArgumentException">A listed device is malformed, or two share an external id (a connector bug).</exception>
+    Task<IReadOnlyList<string>> SyncAsync(Guid integrationId, IReadOnlyList<DiscoveredDevice> devices, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The attribute at <paramref name="address"/>, created when its device, endpoint and capability exist and the
     /// capability's definition has the key; <c>null</c> otherwise. Called on the state pipeline's loop: answers from memory
     /// whenever it can and throws (<see cref="TimeoutException"/>, database errors) rather than wait long.
@@ -31,19 +44,22 @@ public interface IDeviceInventory
 }
 
 /// <summary>
-/// Merges connector inventories into the device model (milestone 1.2 rules; 1.3 adds duplicate detection and replace):
-/// devices match on (integration, external id); vendor fields (class, manufacturer, model, firmware, connections, parent)
-/// update; user fields (name, room, icon; endpoint name) are only set when the device is first imported (room from the
-/// suggested room name); new endpoints, capabilities and attributes are added; capabilities no longer reported are retired
-/// (history kept). Every change updates the <see cref="DeviceRegistry"/> and pushes hub <c>DevicesChanged</c>. Operations
-/// run one at a time.
+/// Merges connector inventories into the device model: devices match on (integration, external id); vendor fields (class,
+/// manufacturer, model, firmware, connections, parent) update; user fields (name, room, icon; endpoint name) are only set
+/// when the device is first imported (room from the suggested room name); new endpoints, capabilities and attributes are
+/// added; capabilities no longer reported are retired (history kept); a device missing from a full inventory
+/// (<see cref="SyncAsync"/>) or removed by its connector becomes orphaned (never deleted). <see cref="ReplaceAsync"/> moves a
+/// device's user settings, placements and history to another one. Every change updates the <see cref="DeviceRegistry"/>
+/// and pushes hub <c>DevicesChanged</c>. Operations run one at a time. (Likely duplicates across integrations — the same
+/// MAC or serial — are flagged when devices are read, see <c>DeviceIdentity</c>.)
 /// </summary>
 public sealed partial class DeviceInventoryService(
     IServiceScopeFactory scopes,
     DeviceRegistry registry,
     RealtimeBatcher realtime,
     RuntimeClock clock,
-    ILogger<DeviceInventoryService> logger) : IDeviceInventory
+    ILogger<DeviceInventoryService> logger,
+    StateCache? cache = null) : IDeviceInventory, IDeviceInventoryAdmin
 {
     /// <summary>How long <see cref="EnsureAttributeAsync"/> waits for an upsert or removal in progress before giving up.</summary>
     internal static readonly TimeSpan GateWait = TimeSpan.FromMilliseconds(50);
@@ -133,6 +149,109 @@ public sealed partial class DeviceInventoryService(
             LogOrphaned(integrationId, externalDeviceId);
             realtime.DevicesChanged();
         }
+    }
+
+    public async Task<IReadOnlyList<string>> SyncAsync(
+        Guid integrationId,
+        IReadOnlyList<DiscoveredDevice> devices,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(devices);
+        var listed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var device in devices)
+        {
+            ArgumentNullException.ThrowIfNull(device, nameof(devices));
+            Validate(device);
+            if (!listed.Add(device.ExternalId))
+            {
+                throw new ArgumentException($"The inventory lists device '{device.ExternalId}' twice.", nameof(devices));
+            }
+        }
+
+        foreach (var device in ParentsFirst(devices))
+        {
+            await UpsertAsync(integrationId, device, cancellationToken).ConfigureAwait(false);
+        }
+
+        List<string> orphaned;
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<IControlHomeDb>();
+            var missing = await db.Devices
+                .Where(d => d.IntegrationId == integrationId && !d.IsOrphaned)
+                .Select(d => new { d.Id, d.ExternalId })
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            missing.RemoveAll(d => listed.Contains(d.ExternalId));
+            orphaned = [.. missing.Select(d => d.ExternalId)];
+            if (missing.Count > 0)
+            {
+                var ids = missing.Select(d => d.Id).ToList();
+                await db.Devices
+                    .Where(d => ids.Contains(d.Id))
+                    .ExecuteUpdateAsync(
+                        s => s.SetProperty(d => d.IsOrphaned, true).SetProperty(d => d.Availability, Availability.Unknown),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (orphaned.Count > 0)
+        {
+            foreach (var externalId in orphaned)
+            {
+                LogOrphaned(integrationId, externalId);
+            }
+
+            realtime.DevicesChanged();
+        }
+
+        return orphaned;
+    }
+
+    public async Task<Result> ReplaceAsync(Guid oldDeviceId, Guid newDeviceId, CancellationToken cancellationToken)
+    {
+        Result result;
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<ControlHomeDbContext>();
+            var strategy = db.Database.CreateExecutionStrategy();
+            result = await strategy.ExecuteAsync(
+                    async () =>
+                    {
+                        db.ChangeTracker.Clear();
+                        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+                        var replaced = await ReplaceInTransactionAsync(db, oldDeviceId, newDeviceId, cancellationToken).ConfigureAwait(false);
+                        if (replaced.IsSuccess)
+                        {
+                            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                        }
+
+                        return replaced;
+                    })
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        if (result.IsSuccess)
+        {
+            cache?.Remove(registry.RemoveDevice(oldDeviceId));
+            LogReplaced(oldDeviceId, newDeviceId);
+            realtime.DevicesChanged();
+        }
+
+        return result;
     }
 
     public async Task<AttributeInfo?> EnsureAttributeAsync(AttributeAddress address, CancellationToken cancellationToken)
@@ -229,6 +348,193 @@ public sealed partial class DeviceInventoryService(
         }
 
         return result;
+    }
+
+    /// <summary>One replace, inside the caller's transaction (committed by the caller when this succeeds).</summary>
+    private static async Task<Result> ReplaceInTransactionAsync(
+        ControlHomeDbContext db,
+        Guid oldDeviceId,
+        Guid newDeviceId,
+        CancellationToken cancellationToken)
+    {
+        var oldDevice = await LoadGraphAsync(db, oldDeviceId, cancellationToken).ConfigureAwait(false);
+        if (oldDevice is null)
+        {
+            return AppError.NotFound(ErrorCodes.DevicesNotFound, "No such device.");
+        }
+
+        if (newDeviceId == oldDeviceId)
+        {
+            return NewDeviceError(ErrorCodes.DevicesReplaceSame);
+        }
+
+        var newDevice = await LoadGraphAsync(db, newDeviceId, cancellationToken).ConfigureAwait(false);
+        if (newDevice is null)
+        {
+            return NewDeviceError(ErrorCodes.DevicesNotFound);
+        }
+
+        // Endpoints match by key, or the only endpoint of each; attributes by capability and key.
+        var endpoints = new List<(Endpoint Old, Endpoint New)>();
+        foreach (var oldEndpoint in oldDevice.Endpoints)
+        {
+            var match = newDevice.Endpoints.SingleOrDefault(e => e.Key == oldEndpoint.Key)
+                ?? (oldDevice.Endpoints.Count == 1 && newDevice.Endpoints.Count == 1 ? newDevice.Endpoints[0] : null);
+            if (match is not null)
+            {
+                endpoints.Add((oldEndpoint, match));
+            }
+        }
+
+        var attributes = new List<(int From, int To)>();
+        foreach (var (oldEndpoint, newEndpoint) in endpoints)
+        {
+            foreach (var oldCapability in oldEndpoint.Capabilities)
+            {
+                var newCapability = newEndpoint.Capabilities.SingleOrDefault(c => c.CapabilityId == oldCapability.CapabilityId);
+                foreach (var oldAttribute in oldCapability.Attributes)
+                {
+                    if (newCapability?.Attributes.SingleOrDefault(a => a.Key == oldAttribute.Key) is { } newAttribute)
+                    {
+                        attributes.Add((oldAttribute.Id, newAttribute.Id));
+                    }
+                }
+            }
+        }
+
+        // User fields.
+        newDevice.Name = oldDevice.Name;
+        newDevice.RoomId = oldDevice.RoomId;
+        newDevice.Icon = oldDevice.Icon;
+        foreach (var (oldEndpoint, newEndpoint) in endpoints)
+        {
+            newEndpoint.Name = oldEndpoint.Name;
+            newEndpoint.RoomId = oldEndpoint.RoomId;
+            newEndpoint.Icon = oldEndpoint.Icon;
+            newEndpoint.Hidden = oldEndpoint.Hidden;
+            newEndpoint.Favorite = oldEndpoint.Favorite;
+        }
+
+        // Placements: the old device's take the place of the new one's.
+        if (await db.Placements.SingleOrDefaultAsync(p => p.DeviceId == oldDeviceId, cancellationToken).ConfigureAwait(false) is { } devicePlacement)
+        {
+            await db.Placements.Where(p => p.DeviceId == newDeviceId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+            devicePlacement.DeviceId = newDeviceId;
+        }
+
+        foreach (var (oldEndpoint, newEndpoint) in endpoints)
+        {
+            if (await db.Placements.SingleOrDefaultAsync(p => p.EndpointId == oldEndpoint.Id, cancellationToken).ConfigureAwait(false) is { } placement)
+            {
+                await db.Placements.Where(p => p.EndpointId == newEndpoint.Id).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+                placement.EndpointId = newEndpoint.Id;
+            }
+        }
+
+        // History follows its attributes and endpoints (where the new device already has a bucket, its own row wins).
+        await db.Database.ExecuteSqlRawAsync(
+                MoveHistorySql,
+                [
+                    new SqlParameter("@attributeMap", SqlDbType.NVarChar, -1)
+                    {
+                        Value = JsonSerializer.Serialize(attributes.Select(a => new { f = a.From, t = a.To })),
+                    },
+                    new SqlParameter("@endpointMap", SqlDbType.NVarChar, -1)
+                    {
+                        Value = JsonSerializer.Serialize(endpoints.Select(e => new { f = e.Old.Id, t = e.New.Id })),
+                    },
+                ],
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        // Parent links do not cascade: the old device's children (of its own integration) lose their parent.
+        await db.Devices
+            .Where(d => d.ParentDeviceId == oldDeviceId)
+            .ExecuteUpdateAsync(s => s.SetProperty(d => d.ParentDeviceId, (Guid?)null), cancellationToken)
+            .ConfigureAwait(false);
+        db.Devices.Remove(oldDevice);
+        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return Result.Success();
+
+        static AppError NewDeviceError(string code) =>
+            AppError.FieldErrors(new Dictionary<string, string[]>(StringComparer.Ordinal) { ["newDeviceId"] = [code] });
+    }
+
+    private static Task<Device?> LoadGraphAsync(ControlHomeDbContext db, Guid deviceId, CancellationToken cancellationToken) =>
+        db.Devices
+            .Include(d => d.Endpoints)
+            .ThenInclude(e => e.Capabilities)
+            .ThenInclude(c => c.Attributes)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(d => d.Id == deviceId, cancellationToken);
+
+    /// <summary>
+    /// Re-keys history from the old attributes and endpoints to the new ones (maps as JSON <c>[{f, t}]</c>). Statistics and
+    /// energy rows the new device already has for the same bucket are kept and the old ones dropped; the energy source
+    /// selection moves unless the new endpoint has one.
+    /// </summary>
+    private const string MoveHistorySql = """
+        DECLARE @attributes TABLE (FromId int PRIMARY KEY, ToId int NOT NULL);
+        INSERT INTO @attributes (FromId, ToId) SELECT f, t FROM OPENJSON(@attributeMap) WITH (f int '$.f', t int '$.t');
+        DECLARE @endpoints TABLE (FromId uniqueidentifier PRIMARY KEY, ToId uniqueidentifier NOT NULL);
+        INSERT INTO @endpoints (FromId, ToId) SELECT f, t FROM OPENJSON(@endpointMap) WITH (f uniqueidentifier '$.f', t uniqueidentifier '$.t');
+
+        UPDATE s SET AttributeId = m.ToId FROM [ch].[StateLog] AS s JOIN @attributes AS m ON s.AttributeId = m.FromId;
+        UPDATE e SET AttributeId = m.ToId FROM [ch].[DeviceEvent] AS e JOIN @attributes AS m ON e.AttributeId = m.FromId;
+
+        UPDATE s SET AttributeId = m.ToId FROM [ch].[StatShortTerm] AS s JOIN @attributes AS m ON s.AttributeId = m.FromId
+        WHERE NOT EXISTS (SELECT 1 FROM [ch].[StatShortTerm] AS x WHERE x.AttributeId = m.ToId AND x.BucketStartUtc = s.BucketStartUtc);
+        DELETE s FROM [ch].[StatShortTerm] AS s JOIN @attributes AS m ON s.AttributeId = m.FromId;
+
+        UPDATE s SET AttributeId = m.ToId FROM [ch].[StatHourly] AS s JOIN @attributes AS m ON s.AttributeId = m.FromId
+        WHERE NOT EXISTS (SELECT 1 FROM [ch].[StatHourly] AS x WHERE x.AttributeId = m.ToId AND x.BucketStartUtc = s.BucketStartUtc);
+        DELETE s FROM [ch].[StatHourly] AS s JOIN @attributes AS m ON s.AttributeId = m.FromId;
+
+        UPDATE h SET EndpointId = m.ToId FROM [ch].[EnergyHourly] AS h JOIN @endpoints AS m ON h.EndpointId = m.FromId
+        WHERE NOT EXISTS (SELECT 1 FROM [ch].[EnergyHourly] AS x WHERE x.EndpointId = m.ToId AND x.HourStartUtc = h.HourStartUtc);
+        DELETE h FROM [ch].[EnergyHourly] AS h JOIN @endpoints AS m ON h.EndpointId = m.FromId;
+
+        UPDATE s SET EndpointId = m.ToId, AttributeId = a.ToId
+        FROM [ch].[EnergySourceSelection] AS s
+        JOIN @endpoints AS m ON s.EndpointId = m.FromId
+        LEFT JOIN @attributes AS a ON s.AttributeId = a.FromId
+        WHERE NOT EXISTS (SELECT 1 FROM [ch].[EnergySourceSelection] AS x WHERE x.EndpointId = m.ToId);
+        DELETE s FROM [ch].[EnergySourceSelection] AS s JOIN @endpoints AS m ON s.EndpointId = m.FromId;
+        """;
+
+    /// <summary>
+    /// The devices with every parent listed before its children (a child's parent link is resolved when it is merged), in
+    /// the given order otherwise. Parents that are not listed, and cycles, do not hold anything back.
+    /// </summary>
+    private static List<DiscoveredDevice> ParentsFirst(IReadOnlyList<DiscoveredDevice> devices)
+    {
+        var byId = devices.ToDictionary(d => d.ExternalId, StringComparer.Ordinal);
+        var ordered = new List<DiscoveredDevice>(devices.Count);
+        var placed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var device in devices)
+        {
+            Add(device, []);
+        }
+
+        return ordered;
+
+        void Add(DiscoveredDevice device, HashSet<string> path)
+        {
+            if (placed.Contains(device.ExternalId) || !path.Add(device.ExternalId))
+            {
+                return;
+            }
+
+            if (device.ParentExternalId is { } parentId && byId.TryGetValue(parentId, out var parent))
+            {
+                Add(parent, path);
+            }
+
+            if (placed.Add(device.ExternalId))
+            {
+                ordered.Add(device);
+            }
+        }
     }
 
     private static CapabilityDefinition? DefinitionOf(CapabilityBinding binding) =>
@@ -346,4 +652,7 @@ public sealed partial class DeviceInventoryService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Integration {IntegrationId} no longer reports device {ExternalId}: orphaned")]
     private partial void LogOrphaned(Guid integrationId, string externalId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Device {OldDeviceId} was replaced by {NewDeviceId} (settings, placements and history moved)")]
+    private partial void LogReplaced(Guid oldDeviceId, Guid newDeviceId);
 }

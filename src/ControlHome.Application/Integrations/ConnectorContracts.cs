@@ -29,7 +29,11 @@ public sealed record LocalizedTextDto(string En, string PtBr);
 public sealed record FieldSchemaDto(string Key, LocalizedTextDto Label, ValueSchema Schema, bool Required, bool Secret, LocalizedTextDto? Help);
 
 /// <summary>What a connector supports.</summary>
-/// <param name="SetupFlow">Setup runs through a flow (milestone 1.3); otherwise integrations are created from the config fields.</param>
+/// <param name="SetupFlow">
+/// The connector has a setup flow of its own (several steps); others get a single config form. Either way, set up through
+/// <c>POST /api/integrations/flows</c>.
+/// </param>
+/// <param name="Reauth">The flow can re-authorize an existing integration (<c>POST /api/integrations/{id}/flows/reauth</c>), keeping its devices.</param>
 public sealed record ConnectorFeaturesDto(bool SetupFlow, bool Reauth, bool PushInventory, bool PermitJoin, bool Cloud, bool Polling);
 
 /// <summary>Creates an integration from a connector's config fields (<c>POST /api/integrations</c>; no setup flow in 1.2).</summary>
@@ -94,8 +98,15 @@ public sealed class ConnectorCatalog
                 descriptor.Features.Polling));
     }
 
-    private static LocalizedTextDto ToDto(LocalizedText text) => new(text.En, text.PtBr);
+    public static LocalizedTextDto ToDto(LocalizedText text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return new LocalizedTextDto(text.En, text.PtBr);
+    }
 
-    private static FieldSchemaDto ToDto(FieldSchema field) =>
-        new(field.Key, ToDto(field.Label), field.Schema, field.Required, field.Secret, field.Help is null ? null : ToDto(field.Help));
+    public static FieldSchemaDto ToDto(FieldSchema field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        return new FieldSchemaDto(field.Key, ToDto(field.Label), field.Schema, field.Required, field.Secret, field.Help is null ? null : ToDto(field.Help));
+    }
 }

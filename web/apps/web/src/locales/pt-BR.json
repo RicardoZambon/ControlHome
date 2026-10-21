@@ -555,7 +555,8 @@
     },
     "floors": {
       "not_found": "Esse andar não existe mais.",
-      "concurrency": "Outra pessoa alterou este andar enquanto você editava. Recarregue para ver as alterações."
+      "concurrency": "Outra pessoa alterou este andar enquanto você editava. Recarregue para ver as alterações.",
+      "not_empty": "Há dispositivos posicionados neste andar. Retire-os da planta antes de excluí-lo."
     },
     "rooms": {
       "not_found": "Esse cômodo não está mais neste andar. Recarregue o andar e tente de novo."
@@ -574,7 +575,8 @@
       "invalid_image": "Não foi possível ler a imagem. Ela pode estar danificada; tente exportá-la de novo."
     },
     "devices": {
-      "not_found": "Esse dispositivo não existe mais. Recarregue a página."
+      "not_found": "Esse dispositivo não existe mais. Recarregue a página.",
+      "replace_same": "Escolha outro dispositivo: um dispositivo não pode substituir a si mesmo."
     },
     "endpoints": {
       "not_found": "Esse controle do dispositivo não existe mais. Recarregue a página."
@@ -626,6 +628,22 @@
     },
     "energy": {
       "too_many_rows": "São dados de energia demais para uma consulta. Escolha um período menor ou um único dispositivo."
+    },
+    "placements": {
+      "not_found": "Esse dispositivo não está mais na planta. Recarregue o andar."
+    },
+    "flows": {
+      "not_found": "Esta etapa de configuração expirou ou já foi concluída. Comece de novo."
+    },
+    "cameras": {
+      "no_snapshot": "Esta câmera não tem imagem no momento. Tente de novo em instantes."
+    },
+    "backup": {
+      "not_empty": "Um backup só pode ser importado numa casa vazia. Remova os andares e as integrações primeiro.",
+      "invalid": "Esse arquivo não é um backup do ControlHome ou está danificado.",
+      "unsupported_version": "Este backup vem de uma versão mais nova do ControlHome. Atualize o ControlHome primeiro.",
+      "passphrase_required": "Este backup contém segredos criptografados. Informe a frase secreta usada na exportação.",
+      "passphrase_incorrect": "Essa frase secreta não abre os segredos deste backup."
     }
   }
 }

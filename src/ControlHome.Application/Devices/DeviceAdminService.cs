@@ -14,11 +14,34 @@ namespace ControlHome.Application.Devices;
 public sealed class DeviceAdminService(
     IControlHomeDb db,
     DeviceQueryService queries,
+    IDeviceInventoryAdmin inventory,
     IRealtimePublisher publisher,
     IAuditLog auditLog)
 {
     public const string DeviceTarget = "device";
     public const string EndpointTarget = "endpoint";
+
+    /// <summary>
+    /// The new device takes over the old one (see <see cref="IDeviceInventoryAdmin.ReplaceAsync"/>); returns it. Errors:
+    /// 404 <c>devices.not_found</c>; 400 <c>validation.failed</c> with <c>errors.newDeviceId</c> = <c>devices.not_found</c>
+    /// or <c>devices.replace_same</c>.
+    /// </summary>
+    public async Task<Result<DeviceDetailDto>> ReplaceAsync(Guid id, ReplaceDeviceRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var replaced = await inventory.ReplaceAsync(id, request.NewDeviceId, cancellationToken);
+        if (replaced.IsFailure)
+        {
+            return replaced.Error;
+        }
+
+        await auditLog.WriteAsync(
+            new AuditEvent(AuditActions.DeviceReplaced, DeviceTarget, IdOf(id), new { NewDeviceId = request.NewDeviceId }),
+            cancellationToken);
+        await publisher.DevicesChangedAsync(cancellationToken);
+        return await queries.GetAsync(request.NewDeviceId, cancellationToken);
+    }
 
     /// <summary>Errors: 404 <c>devices.not_found</c>; 400 <c>validation.failed</c> with <c>errors.roomId = [rooms.not_found]</c>.</summary>
     public async Task<Result<DeviceDetailDto>> UpdateDeviceAsync(Guid id, UpdateDeviceRequest request, CancellationToken cancellationToken)

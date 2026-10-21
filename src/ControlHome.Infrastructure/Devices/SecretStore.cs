@@ -60,6 +60,47 @@ public sealed class IntegrationSecretProtector(IDataProtectionProvider provider,
         return _protector.Protect(JsonSerializer.Serialize(bag, _json));
     }
 
+    public string? Protect(IntegrationSecrets secrets)
+    {
+        ArgumentNullException.ThrowIfNull(secrets);
+        if (secrets.IsEmpty)
+        {
+            return null;
+        }
+
+        var bag = new SecretBag();
+        foreach (var (key, value) in secrets.Values)
+        {
+            bag.Values[key] = value;
+        }
+
+        foreach (var (device, values) in secrets.Devices)
+        {
+            bag.Devices[device] = new Dictionary<string, string>(values, StringComparer.Ordinal);
+        }
+
+        return Protect(bag);
+    }
+
+    public IntegrationSecrets Read(string? protectedSecrets)
+    {
+        var bag = Unprotect(protectedSecrets);
+        return new IntegrationSecrets(
+            new Dictionary<string, string>(bag.Values, StringComparer.Ordinal),
+            bag.Devices.ToDictionary(
+                d => d.Key,
+                d => (IReadOnlyDictionary<string, string>)new Dictionary<string, string>(d.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal));
+    }
+
+    public string? ReplaceValues(string? protectedSecrets, IReadOnlyDictionary<string, string> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        var bag = Unprotect(protectedSecrets);
+        bag.Values = new Dictionary<string, string>(values, StringComparer.Ordinal);
+        return bag.Values.Count == 0 && bag.Devices.Count == 0 ? null : Protect(bag);
+    }
+
     /// <summary>The bag in <paramref name="protectedSecrets"/> (empty for <c>null</c>).</summary>
     /// <exception cref="CryptographicException">The value cannot be decrypted (wrong or lost key ring).</exception>
     public SecretBag Unprotect(string? protectedSecrets)
@@ -81,6 +122,12 @@ public sealed class IntegrationSecretProtector(IDataProtectionProvider provider,
             knownSecrets.Register(value);
         }
     }
+}
+
+/// <summary>Opens <see cref="SecretStore"/>s of saved integrations (flows that re-authorize or reconfigure them).</summary>
+public sealed class IntegrationSecretStores(IServiceScopeFactory scopes, IntegrationSecretProtector protector) : IIntegrationSecretStores
+{
+    public ISecretStore Open(Guid integrationId) => new SecretStore(integrationId, scopes, protector);
 }
 
 /// <summary>

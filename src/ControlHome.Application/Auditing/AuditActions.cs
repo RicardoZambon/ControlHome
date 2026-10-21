@@ -33,10 +33,19 @@ public static class AuditActions
 
     public const string FileUploaded = "files.uploaded";
 
+    public const string PlacementSaved = "placements.saved";
+    public const string PlacementDeleted = "placements.deleted";
+
     public const string IntegrationCreated = "integrations.created";
+
+    /// <summary>Renamed, enabled/disabled, or re-configured / re-authorized by a flow (secret field names only).</summary>
+    public const string IntegrationUpdated = "integrations.updated";
     public const string IntegrationDeleted = "integrations.deleted";
 
     public const string DeviceUpdated = "devices.updated";
+
+    /// <summary>A device's settings, placements and history moved to another device; the old one was deleted.</summary>
+    public const string DeviceReplaced = "devices.replaced";
     public const string EndpointUpdated = "endpoints.updated";
     public const string EndpointFavoriteChanged = "endpoints.favorite_changed";
 

@@ -53,7 +53,13 @@ public static class ErrorCodes
     // Floors and rooms
     public const string FloorsNotFound = "floors.not_found";
     public const string FloorsConcurrency = "floors.concurrency";
+
+    /// <summary>A floor with devices placed on it cannot be deleted (take them off the plan first).</summary>
+    public const string FloorsNotEmpty = "floors.not_empty";
     public const string RoomsNotFound = "rooms.not_found";
+
+    // Devices on the floor plans
+    public const string PlacementsNotFound = "placements.not_found";
 
     // Floor-plan geometry: field errors (e.g. errors["rooms[2].polygon"]) of a validation.failed problem
     public const string GeometryTooFewPoints = "geometry.too_few_points";
@@ -70,6 +76,9 @@ public static class ErrorCodes
 
     // Devices and integrations
     public const string DevicesNotFound = "devices.not_found";
+
+    /// <summary>Field error of a device replace: a device cannot replace itself.</summary>
+    public const string DevicesReplaceSame = "devices.replace_same";
     public const string EndpointsNotFound = "endpoints.not_found";
     public const string IntegrationsNotFound = "integrations.not_found";
 
@@ -106,6 +115,9 @@ public static class ErrorCodes
     // Connectors and integrations
     public const string ConnectorsNotFound = "connectors.not_found";
     public const string IntegrationsInvalidConfig = "integrations.invalid_config";
+
+    /// <summary>A setup/reauth flow that does not exist (any more): finished, cancelled, or expired after 15 min.</summary>
+    public const string FlowsNotFound = "flows.not_found";
 
     // Device runtime: this process is a read-only standby (another instance on the same database runs the devices), or is
     // still deciding whether it runs them

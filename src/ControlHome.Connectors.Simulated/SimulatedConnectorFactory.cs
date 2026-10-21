@@ -15,9 +15,12 @@ public sealed class SimulatedConnectorOptions
 
 /// <summary>
 /// The Simulated connector (key <c>simulated</c>): an in-process home whose devices behave deterministically for a given
-/// seed and clock. Config: <c>{ "preset": "basic" | "demo", "seed": 42 }</c> (both optional).
+/// seed and clock. Config: <c>{ "preset": "basic" | "demo", "seed": 42, "simulateReauth": false }</c> (all optional).
+/// Setup runs through <see cref="SimulatedSetupFlow"/> (a form, then a "press the button" progress step); the same flow
+/// re-authorizes an existing integration. Its devices follow from the config alone (<see cref="IStaticInventorySource"/>),
+/// so the demo home can be seeded with them already placed.
 /// </summary>
-public sealed class SimulatedConnectorFactory(SimulatedConnectorOptions? options = null) : IConnectorFactory
+public sealed class SimulatedConnectorFactory(SimulatedConnectorOptions? options = null) : IConnectorFactory, IStaticInventorySource
 {
     public const string Key = "simulated";
 
@@ -25,8 +28,7 @@ public sealed class SimulatedConnectorFactory(SimulatedConnectorOptions? options
 
     public IConnectorDescriptor Descriptor => SimulatedConnectorDescriptor.Instance;
 
-    /// <summary>No setup flow yet (a form + "press the button" flow arrives with the integrations UI); create from config.</summary>
-    public IConnectorFlow? CreateSetupFlow() => null;
+    public IConnectorFlow? CreateSetupFlow() => new SimulatedSetupFlow(_defaultSeed);
 
     /// <exception cref="ArgumentException">The config does not match <see cref="IConnectorDescriptor.ConfigFields"/>.</exception>
     public IConnectorRuntime CreateRuntime(IntegrationInstance instance)
@@ -34,6 +36,10 @@ public sealed class SimulatedConnectorFactory(SimulatedConnectorOptions? options
         ArgumentNullException.ThrowIfNull(instance);
         return new SimulatedRuntime(SimulatedSettings.Parse(instance.Config, _defaultSeed));
     }
+
+    /// <exception cref="ArgumentException">The config does not match <see cref="IConnectorDescriptor.ConfigFields"/>.</exception>
+    public IReadOnlyList<DiscoveredDevice> DescribeDevices(JsonElement config) =>
+        [.. new SimulatedHome(SimulatedSettings.Parse(config, _defaultSeed)).Devices.Select(d => d.Describe())];
 }
 
 /// <summary>The Simulated connector's descriptor.</summary>
@@ -58,8 +64,8 @@ public sealed class SimulatedConnectorDescriptor : IConnectorDescriptor
             Required: false,
             Secret: false,
             new LocalizedText(
-                "basic: a light, a plug, an AC, a door sensor and a lock. demo: the demo home.",
-                "basic: uma luz, uma tomada, um ar-condicionado, um sensor de porta e uma fechadura. demo: a casa de demonstração.")),
+                "basic: a light, a plug, an AC, a door sensor and a lock. demo: the 20 devices of the demo home.",
+                "basic: uma luz, uma tomada, um ar-condicionado, um sensor de porta e uma fechadura. demo: os 20 dispositivos da casa de demonstração.")),
         new FieldSchema(
             SimulatedSettings.SeedField,
             new LocalizedText("Random seed", "Semente aleatória"),
@@ -67,21 +73,31 @@ public sealed class SimulatedConnectorDescriptor : IConnectorDescriptor
             Required: false,
             Secret: false,
             new LocalizedText("The same seed always produces the same values.", "A mesma semente sempre produz os mesmos valores.")),
+        new FieldSchema(
+            SimulatedSettings.SimulateReauthField,
+            new LocalizedText("Simulate expired credentials", "Simular credenciais expiradas"),
+            BoolSchema.Instance,
+            Required: false,
+            Secret: false,
+            new LocalizedText(
+                "The hub rejects its token: the integration needs reauthorization and reports no devices until then.",
+                "O hub recusa o token: a integração precisa de nova autorização e não informa dispositivos até lá.")),
     ];
 
     public IReadOnlyList<FieldSchema> DeviceConfigFields { get; } = [];
 
-    public ConnectorFeatures Features { get; } = new() { PushInventory = true };
+    public ConnectorFeatures Features { get; } = new() { SetupFlow = true, Reauth = true, PushInventory = true };
 }
 
 /// <summary>A Simulated integration's parsed configuration.</summary>
-public sealed record SimulatedSettings(string Preset, int Seed)
+public sealed record SimulatedSettings(string Preset, int Seed, bool SimulateReauth = false)
 {
     public const string PresetField = "preset";
     public const string SeedField = "seed";
+    public const string SimulateReauthField = "simulateReauth";
     public const string BasicPreset = "basic";
 
-    /// <summary>The demo home (currently the basic devices; the full ~20-device demo arrives with the demo seed).</summary>
+    /// <summary>The demo home: the basic five devices plus fifteen more (see <c>SimulatedDemoDevices</c>).</summary>
     public const string DemoPreset = "demo";
 
     public const int DefaultSeed = 42;
@@ -96,16 +112,14 @@ public sealed record SimulatedSettings(string Preset, int Seed)
             throw new ArgumentException($"Invalid Simulated configuration ({problems}).", nameof(config));
         }
 
-        var preset = config.ValueKind == JsonValueKind.Object
-            && config.TryGetProperty(PresetField, out var presetValue)
-            && presetValue.ValueKind == JsonValueKind.String
-                ? presetValue.GetString()!
-                : BasicPreset;
-        var seed = config.ValueKind == JsonValueKind.Object
-            && config.TryGetProperty(SeedField, out var seedValue)
-            && seedValue.ValueKind == JsonValueKind.Number
-                ? (int)seedValue.GetDouble()
-                : defaultSeed;
-        return new SimulatedSettings(preset, seed);
+        var isObject = config.ValueKind == JsonValueKind.Object;
+        var preset = isObject && config.TryGetProperty(PresetField, out var presetValue) && presetValue.ValueKind == JsonValueKind.String
+            ? presetValue.GetString()!
+            : BasicPreset;
+        var seed = isObject && config.TryGetProperty(SeedField, out var seedValue) && seedValue.ValueKind == JsonValueKind.Number
+            ? (int)seedValue.GetDouble()
+            : defaultSeed;
+        var reauth = isObject && config.TryGetProperty(SimulateReauthField, out var reauthValue) && reauthValue.ValueKind == JsonValueKind.True;
+        return new SimulatedSettings(preset, seed, reauth);
     }
 }

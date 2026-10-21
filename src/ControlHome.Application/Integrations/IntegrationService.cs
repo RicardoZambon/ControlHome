@@ -15,13 +15,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ControlHome.Application.Integrations;
 
-/// <summary>Encrypts an integration's secret configuration values (implemented with Data Protection by Infrastructure).</summary>
-public interface IIntegrationSecretProtector
-{
-    /// <summary>The secrets encrypted for <c>Integration.SecretsProtected</c>, or <c>null</c> when there are none.</summary>
-    string? Protect(IReadOnlyDictionary<string, string> secrets);
-}
-
 public sealed class CreateIntegrationRequestValidator : AbstractValidator<CreateIntegrationRequest>
 {
     public CreateIntegrationRequestValidator()
@@ -138,6 +131,75 @@ public sealed class IntegrationService(
     }
 
     /// <summary>
+    /// Renames an integration and enables or disables it: disabling stops its runtime (status <c>Stopped</c>, its devices
+    /// stay, availability Unknown), enabling starts it again. Errors: 404 <c>integrations.not_found</c>, 409
+    /// <c>runtime.standby</c>, 503 <c>runtime.starting</c>.
+    /// </summary>
+    public async Task<Result<IntegrationDto>> UpdateAsync(Guid id, UpdateIntegrationRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var integration = await db.Integrations.SingleOrDefaultAsync(i => i.Id == id, cancellationToken);
+        if (integration is null)
+        {
+            return AppError.NotFound(ErrorCodes.IntegrationsNotFound, "No such integration.");
+        }
+
+        if (NotActiveError() is { } notActive)
+        {
+            return notActive;
+        }
+
+        var fields = new List<string>();
+        var name = request.Name.Trim();
+        if (!string.Equals(integration.Name, name, StringComparison.Ordinal))
+        {
+            integration.Name = name;
+            fields.Add("name");
+        }
+
+        var enabledChanged = integration.Enabled != request.Enabled;
+        if (enabledChanged)
+        {
+            integration.Enabled = request.Enabled;
+            integration.Status = request.Enabled ? IntegrationStatus.Connecting : IntegrationStatus.Stopped;
+            integration.StatusMessage = null;
+            fields.Add("enabled");
+        }
+
+        if (enabledChanged && !request.Enabled)
+        {
+            // Stopped before the Stopped status is saved, so the last status the running connector set cannot follow it.
+            await runtime.StopAsync(id, cancellationToken);
+        }
+
+        if (fields.Count > 0)
+        {
+            integration.UpdatedAtUtc = timeProvider.GetUtcNow();
+            await db.SaveChangesAsync(cancellationToken);
+            await auditLog.WriteAsync(
+                new AuditEvent(AuditActions.IntegrationUpdated, IntegrationTarget, IdOf(id), new { integration.ConnectorKey, Fields = fields }),
+                cancellationToken);
+        }
+
+        if (enabledChanged)
+        {
+            if (request.Enabled)
+            {
+                await runtime.StartAsync(id, cancellationToken);
+            }
+            else
+            {
+                await publisher.IntegrationStatusChangedAsync(
+                    new IntegrationStatusChangedDto(id, IntegrationStatus.Stopped.ToString(), null),
+                    cancellationToken);
+            }
+        }
+
+        return (await queries.ListIntegrationsAsync(cancellationToken)).Single(i => i.Id == id);
+    }
+
+    /// <summary>
     /// Stops the runtime and deletes the integration with all its devices (and their state); 404 <c>integrations.not_found</c>,
     /// 409 <c>runtime.standby</c>, 503 <c>runtime.starting</c>.
     /// </summary>
@@ -156,7 +218,11 @@ public sealed class IntegrationService(
 
         await runtime.StopAsync(id, cancellationToken);
 
-        // Parent links do not cascade in the database: clear them within the integration first.
+        // Parent links and placements of whole devices do not cascade in the database: remove them first (placements of
+        // endpoints go with the endpoints).
+        await db.Placements
+            .Where(p => p.DeviceId != null && db.Devices.Any(d => d.Id == p.DeviceId && d.IntegrationId == id))
+            .ExecuteDeleteAsync(cancellationToken);
         await db.Devices
             .Where(d => d.IntegrationId == id && d.ParentDeviceId != null)
             .ExecuteUpdateAsync(s => s.SetProperty(d => d.ParentDeviceId, (Guid?)null), cancellationToken);
@@ -171,23 +237,8 @@ public sealed class IntegrationService(
         return Result.Success();
     }
 
-    /// <summary>
-    /// Integration changes are made only where they are applied. The active instance reads integrations only when it becomes
-    /// active, so a change made on a standby would never reach it (a deleted integration would keep running with its
-    /// credentials): 409 <c>runtime.standby</c>. While this process is still deciding (Starting, with a device runtime) it
-    /// may yet become a standby: 503 <c>runtime.starting</c>. Without a device runtime nothing runs anywhere from here, so
-    /// nothing is refused.
-    /// </summary>
-    private AppError? NotActiveError() => runtimeStatus.Mode switch
-    {
-        RuntimeMode.Standby => AppError.Conflict(
-            ErrorCodes.RuntimeStandby,
-            "This instance is a read-only standby; make the change on the instance that runs the devices."),
-        RuntimeMode.Starting when runtimeStatus.Enabled => AppError.Unavailable(
-            ErrorCodes.RuntimeStarting,
-            "The device runtime is starting; try again in a moment."),
-        _ => null,
-    };
+    /// <summary>See <see cref="RuntimeStatusExtensions.IntegrationChangeRefusal"/>.</summary>
+    private AppError? NotActiveError() => runtimeStatus.IntegrationChangeRefusal();
 
     private static AppError InvalidConfig(Domain.Capabilities.ArgumentValidationResult validation)
     {
@@ -204,9 +255,9 @@ public sealed class IntegrationService(
     }
 
     /// <summary>The config without secret fields, and the secret fields' string values.</summary>
-    private static (JsonObject Plain, Dictionary<string, string> Secrets) Split(IReadOnlyList<FieldSchema> fields, JsonElement config)
+    internal static (JsonObject Plain, Dictionary<string, string> Secrets) Split(IReadOnlyList<FieldSchema> fields, JsonElement config)
     {
-        var plain = JsonNode.Parse(config.GetRawText()) as JsonObject ?? [];
+        var plain = (config.ValueKind == JsonValueKind.Object ? JsonNode.Parse(config.GetRawText()) as JsonObject : null) ?? [];
         var secrets = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var field in fields.Where(f => f.Secret))
         {

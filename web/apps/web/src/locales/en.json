@@ -555,7 +555,8 @@
     },
     "floors": {
       "not_found": "That floor no longer exists.",
-      "concurrency": "Someone else changed this floor while you were editing. Reload it to see their changes."
+      "concurrency": "Someone else changed this floor while you were editing. Reload it to see their changes.",
+      "not_empty": "Devices are placed on this floor. Take them off the plan before deleting it."
     },
     "rooms": {
       "not_found": "That room is no longer on this floor. Reload the floor and try again."
@@ -574,7 +575,8 @@
       "invalid_image": "The image couldn't be read. It may be damaged; try exporting it again."
     },
     "devices": {
-      "not_found": "That device no longer exists. Reload the page."
+      "not_found": "That device no longer exists. Reload the page.",
+      "replace_same": "Pick another device: a device can't replace itself."
     },
     "endpoints": {
       "not_found": "That device control no longer exists. Reload the page."
@@ -626,6 +628,22 @@
     },
     "energy": {
       "too_many_rows": "That's too much energy data for one request. Pick a shorter period or a single device."
+    },
+    "placements": {
+      "not_found": "That device is no longer on the plan. Reload the floor."
+    },
+    "flows": {
+      "not_found": "This setup step expired or was already finished. Start again."
+    },
+    "cameras": {
+      "no_snapshot": "This camera has no picture right now. Try again in a moment."
+    },
+    "backup": {
+      "not_empty": "A backup can only be imported into an empty home. Remove the floors and integrations first.",
+      "invalid": "That file isn't a ControlHome backup, or it is damaged.",
+      "unsupported_version": "This backup comes from a newer ControlHome version. Update ControlHome first.",
+      "passphrase_required": "This backup contains encrypted secrets. Enter the passphrase used to export it.",
+      "passphrase_incorrect": "That passphrase doesn't open this backup's secrets."
     }
   }
 }

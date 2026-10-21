@@ -38,8 +38,8 @@ public static class FloorEndpoints
             .WithSummary("Changes name, level, size, grid and background.")
             .WithDescription(
                 "409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed, " +
-                "also when the new size would cut a room (errors.widthCm / errors.heightCm = geometry.out_of_bounds) or the " +
-                "background file does not exist (errors['background.fileId'] = files.not_found).")
+                "also when the new size would cut a room or a placed device (errors.widthCm / errors.heightCm = " +
+                "geometry.out_of_bounds) or the background file does not exist (errors['background.fileId'] = files.not_found).")
             .RequireAuthorization(AuthorizationPolicies.Admin)
             .WithValidation<UpdateFloorRequest>()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -48,13 +48,16 @@ public static class FloorEndpoints
         floors.MapDelete("/{id:int}", DeleteAsync)
             .WithName("deleteFloor")
             .WithSummary("Deletes the floor and its rooms.")
+            .WithDescription("404 floors.not_found; 409 floors.not_empty while devices are placed on it (take them off the plan first).")
             .RequireAuthorization(AuthorizationPolicies.Admin)
-            .ProducesProblem(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
 
         floors.MapPut("/{id:int}/layout", SaveLayoutAsync)
             .WithName("saveFloorLayout")
             .WithSummary("Replaces the floor's rooms atomically (rooms not listed are deleted).")
             .WithDescription(
+                "Placed devices whose point ends up in another room (or in none) move to that room. " +
                 "409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed " +
                 "with field errors; geometry problems are codes under rooms[i].polygon: geometry.too_few_points, " +
                 "geometry.too_many_points, geometry.out_of_bounds, geometry.zero_area, geometry.self_intersecting; " +
