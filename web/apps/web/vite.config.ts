@@ -27,5 +27,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // The largest chunk is the charts' (ECharts, tree-shaken to line and bar charts, ~200 kB gzipped), loaded only
+    // with a device page's History tab.
+    chunkSizeWarningLimit: 650,
   },
 })

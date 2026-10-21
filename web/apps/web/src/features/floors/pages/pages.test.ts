@@ -39,6 +39,7 @@ const floor: FloorDto = {
   gridCm: 50,
   background: null,
   rowVersion: 'AAAAAAAAB9E=',
+  placements: [],
   rooms: [
     {
       id: 1,

@@ -25,7 +25,7 @@ import {
   toast,
 } from '@controlhome/ui'
 import { RefreshCw, UserRoundPlus } from '@lucide/vue'
-import { useNow } from '@vueuse/core'
+
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
@@ -33,6 +33,7 @@ import PageHeader from '../../../components/PageHeader.vue'
 import UserAvatar from '../../../components/UserAvatar.vue'
 import { useProblem } from '../../../composables/useProblem'
 import { capitalize, formatDateTime, formatRelative } from '../../../lib/format'
+import { useServerNow } from '../../../lib/serverClock'
 import { unwrap } from '../../../lib/problem'
 import { useSessionStore } from '../../../stores/session'
 import ResetUserPasswordForm from '../components/ResetUserPasswordForm.vue'
@@ -45,7 +46,7 @@ import { sortUsers, upsertUser } from '../users'
 const { t, locale } = useI18n()
 const session = useSessionStore()
 const problem = useProblem()
-const now = useNow({ interval: 60_000 })
+const now = useServerNow(60_000)
 
 const users = ref<UserDto[]>([])
 const loading = ref(true)

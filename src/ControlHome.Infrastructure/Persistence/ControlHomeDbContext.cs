@@ -33,6 +33,8 @@ public sealed class ControlHomeDbContext(DbContextOptions<ControlHomeDbContext> 
 
     public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
 
+    public DbSet<Placement> Placements => Set<Placement>();
+
     public DbSet<Integration> Integrations => Set<Integration>();
 
     public DbSet<Device> Devices => Set<Device>();

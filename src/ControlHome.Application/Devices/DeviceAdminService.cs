@@ -3,6 +3,7 @@ using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Common;
 using ControlHome.Application.Realtime;
+using ControlHome.Application.Runtime;
 using Microsoft.EntityFrameworkCore;
 
 namespace ControlHome.Application.Devices;
@@ -14,11 +15,40 @@ namespace ControlHome.Application.Devices;
 public sealed class DeviceAdminService(
     IControlHomeDb db,
     DeviceQueryService queries,
+    IDeviceInventoryAdmin inventory,
+    IRuntimeStatus runtimeStatus,
     IRealtimePublisher publisher,
     IAuditLog auditLog)
 {
     public const string DeviceTarget = "device";
     public const string EndpointTarget = "endpoint";
+
+    /// <summary>
+    /// The new device takes over the old one (see <see cref="IDeviceInventoryAdmin.ReplaceAsync"/>); returns it. Errors:
+    /// 404 <c>devices.not_found</c>; 400 <c>validation.failed</c> with <c>errors.newDeviceId</c> = <c>devices.not_found</c>
+    /// or <c>devices.replace_same</c>; 409 <c>runtime.standby</c> and 503 <c>runtime.starting</c> like integration changes
+    /// (the process that runs the devices keeps them in memory: only it may delete one and move its attributes).
+    /// </summary>
+    public async Task<Result<DeviceDetailDto>> ReplaceAsync(Guid id, ReplaceDeviceRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (runtimeStatus.IntegrationChangeRefusal() is { } refused)
+        {
+            return refused;
+        }
+
+        var replaced = await inventory.ReplaceAsync(id, request.NewDeviceId, cancellationToken);
+        if (replaced.IsFailure)
+        {
+            return replaced.Error;
+        }
+
+        await auditLog.WriteAsync(
+            new AuditEvent(AuditActions.DeviceReplaced, DeviceTarget, IdOf(id), new { NewDeviceId = request.NewDeviceId }),
+            cancellationToken);
+        await publisher.DevicesChangedAsync(cancellationToken);
+        return await queries.GetAsync(request.NewDeviceId, cancellationToken);
+    }
 
     /// <summary>Errors: 404 <c>devices.not_found</c>; 400 <c>validation.failed</c> with <c>errors.roomId = [rooms.not_found]</c>.</summary>
     public async Task<Result<DeviceDetailDto>> UpdateDeviceAsync(Guid id, UpdateDeviceRequest request, CancellationToken cancellationToken)

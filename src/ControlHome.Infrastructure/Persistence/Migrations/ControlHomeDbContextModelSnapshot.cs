@@ -833,6 +833,47 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ControlHome.Domain.Homes.Placement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("EndpointId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("FloorId")
+                        .HasColumnType("int");
+
+                    b.Property<double>("XCm")
+                        .HasColumnType("float");
+
+                    b.Property<double>("YCm")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId")
+                        .IsUnique()
+                        .HasFilter("[DeviceId] IS NOT NULL");
+
+                    b.HasIndex("EndpointId")
+                        .IsUnique()
+                        .HasFilter("[EndpointId] IS NOT NULL");
+
+                    b.HasIndex("FloorId");
+
+                    b.ToTable("Placements", "ch", t =>
+                        {
+                            t.HasCheckConstraint("CK_Placements_Target", "([EndpointId] IS NOT NULL AND [DeviceId] IS NULL) OR ([EndpointId] IS NULL AND [DeviceId] IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("ControlHome.Domain.Homes.Room", b =>
                 {
                     b.Property<int>("Id")
@@ -1088,6 +1129,25 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                         .WithMany("Capabilities")
                         .HasForeignKey("EndpointId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Homes.Placement", b =>
+                {
+                    b.HasOne("ControlHome.Domain.Devices.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.ClientCascade);
+
+                    b.HasOne("ControlHome.Domain.Devices.Endpoint", null)
+                        .WithMany()
+                        .HasForeignKey("EndpointId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("ControlHome.Domain.Homes.Floor", null)
+                        .WithMany()
+                        .HasForeignKey("FloorId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

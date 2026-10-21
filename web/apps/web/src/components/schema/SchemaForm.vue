@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Button, cn } from '@controlhome/ui'
-import { computed, ref, type HTMLAttributes } from 'vue'
+import { ChevronDown } from '@lucide/vue'
+import { computed, ref, watch, type HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SchemaField from './SchemaField.vue'
 import { numberBounds, validateFields, type SchemaErrorKind, type SchemaFieldDefinition } from './schema'
@@ -70,6 +71,17 @@ const shownErrors = computed(() => {
   return result
 })
 
+const mainFields = computed(() => props.fields.filter((field) => !field.advanced))
+const advancedFields = computed(() => props.fields.filter((field) => field.advanced))
+const advancedOpen = ref(false)
+// A rejected advanced field must be seen: the section opens.
+watch(
+  () => advancedFields.value.some((field) => shownErrors.value[field.key]),
+  (hasError) => {
+    if (hasError) advancedOpen.value = true
+  },
+)
+
 function update(key: string, value: unknown): void {
   const next = { ...props.modelValue, [key]: value }
   emit('update:modelValue', next)
@@ -92,7 +104,7 @@ function onSubmit(): void {
 <template>
   <form novalidate :class="cn('grid gap-5', props.class)" data-slot="schema-form" @submit.prevent="onSubmit">
     <SchemaField
-      v-for="field in fields"
+      v-for="field in mainFields"
       :key="field.key"
       :schema="field.schema"
       :model-value="modelValue[field.key]"
@@ -107,6 +119,42 @@ function onSubmit(): void {
       :option-label="optionLabel ? (value: string) => optionLabel!(field, value) : undefined"
       @update:model-value="(value) => update(field.key, value)"
     />
+    <!-- Rarely changed settings, folded away (opened when one of them needs fixing) -->
+    <details
+      v-if="advancedFields.length > 0"
+      :open="advancedOpen || undefined"
+      class="group rounded-xl border bg-muted/30 [&[open]]:bg-transparent"
+      data-slot="schema-advanced"
+      @toggle="advancedOpen = ($event.target as HTMLDetailsElement).open"
+    >
+      <summary
+        class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+      >
+        {{ t('schema.advanced') }}
+        <ChevronDown
+          class="size-4 text-muted-foreground transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div class="grid gap-5 border-t px-4 pt-4 pb-5">
+        <SchemaField
+          v-for="field in advancedFields"
+          :key="field.key"
+          :schema="field.schema"
+          :model-value="modelValue[field.key]"
+          :label="field.label"
+          :help="field.help"
+          :required="field.required"
+          :secret="field.secret"
+          :readonly="field.readonly"
+          :constraint="field.constraint"
+          :disabled="disabled || busy"
+          :error="shownErrors[field.key]"
+          :option-label="optionLabel ? (value: string) => optionLabel!(field, value) : undefined"
+          @update:model-value="(value) => update(field.key, value)"
+        />
+      </div>
+    </details>
     <slot name="actions" :busy="busy">
       <div class="flex justify-end">
         <Button type="submit" :disabled="disabled" :loading="busy">

@@ -14,6 +14,7 @@ internal sealed class RecordingContext(TimeProvider time, ILogger? logger = null
     private readonly List<(string Device, Availability Availability)> _availability = [];
     private readonly List<DiscoveredDevice> _devices = [];
     private readonly List<string> _removed = [];
+    private readonly List<IReadOnlyList<string>> _syncs = [];
     private readonly List<(IntegrationStatus Status, string? Message)> _statuses = [];
 
     public Guid IntegrationId { get; } = Guid.CreateVersion7();
@@ -31,6 +32,9 @@ internal sealed class RecordingContext(TimeProvider time, ILogger? logger = null
     public IReadOnlyList<DiscoveredDevice> Devices => Snapshot(_devices);
 
     public IReadOnlyList<string> Removed => Snapshot(_removed);
+
+    /// <summary>The external ids of each full inventory sync, in order.</summary>
+    public IReadOnlyList<IReadOnlyList<string>> Syncs => Snapshot(_syncs);
 
     public IReadOnlyList<(IntegrationStatus Status, string? Message)> Statuses => Snapshot(_statuses);
 
@@ -50,6 +54,18 @@ internal sealed class RecordingContext(TimeProvider time, ILogger? logger = null
     public Task RemoveDeviceAsync(string externalDeviceId, CancellationToken cancellationToken)
     {
         Add(_removed, externalDeviceId);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Records the listed devices as upserted (in order) and the inventory as one full sync.</summary>
+    public Task SyncInventoryAsync(IReadOnlyList<DiscoveredDevice> devices, CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            _devices.AddRange(devices);
+            _syncs.Add([.. devices.Select(d => d.ExternalId)]);
+        }
+
         return Task.CompletedTask;
     }
 

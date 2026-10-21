@@ -43,7 +43,7 @@ public sealed partial class IntegrationSupervisor(
     TimeProvider timeProvider,
     KnownSecrets knownSecrets,
     IOptions<DeviceRuntimeOptions> options,
-    ILoggerFactory loggerFactory) : ICommandDispatcher, IIntegrationRuntimeControl, IAsyncDisposable
+    ILoggerFactory loggerFactory) : ICommandDispatcher, IIntegrationRuntimeControl, ICameraSnapshotProvider, IAsyncDisposable
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger<IntegrationSupervisor>();
     private readonly ConcurrentDictionary<Guid, RunningIntegration> _running = new();
@@ -76,6 +76,29 @@ public sealed partial class IntegrationSupervisor(
         return outcome is CommandOutcome.Rejected rejected
             ? CommandOutcome.Reject(rejected.Code, knownSecrets.Redact(rejected.Message))
             : outcome;
+    }
+
+    public async Task<CameraSnapshot?> GetSnapshotAsync(
+        Guid integrationId,
+        string externalDeviceId,
+        string endpointKey,
+        CancellationToken cancellationToken)
+    {
+        if (!_running.TryGetValue(integrationId, out var running) || running.Runtime is not ICameraSnapshotSource source)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await source.GetSnapshotAsync(externalDeviceId, endpointKey, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Never the exception object: a connector's message may quote a secret (e.g. a camera URL with credentials).
+            LogSnapshotFailed(integrationId, ex.GetType().Name, knownSecrets.Redact(ex.Message));
+            return null;
+        }
     }
 
     /// <summary>Starts every enabled integration (registering their secrets for log redaction first).</summary>
@@ -485,6 +508,9 @@ public sealed partial class IntegrationSupervisor(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: the connector failed ({ExceptionType}): {Reason}")]
     private partial void LogRuntimeFailed(Guid integrationId, string exceptionType, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Integration {IntegrationId}: getting a camera snapshot failed ({ExceptionType}): {Reason}")]
+    private partial void LogSnapshotFailed(Guid integrationId, string exceptionType, string reason);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Integration {IntegrationId} status: {Status}")]
     private partial void LogStatus(Guid integrationId, IntegrationStatus status);

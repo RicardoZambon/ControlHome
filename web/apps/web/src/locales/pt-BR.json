@@ -37,7 +37,12 @@
     "roomLabel": "{name}, {area}",
     "zoomIn": "Aproximar",
     "zoomOut": "Afastar",
-    "fit": "Ajustar à tela"
+    "fit": "Ajustar à tela",
+    "devices": {
+      "openDevice": "Abrir dispositivo",
+      "panelDescription": "Os controles e o estado do dispositivo.",
+      "group": "{count} dispositivos aqui: {names}. Aproxime para separá-los."
+    }
   },
   "theme": {
     "label": "Tema",
@@ -72,7 +77,8 @@
     "chooseLanguage": "Mudar idioma",
     "chooseTheme": "Mudar tema",
     "preferencesNotSaved": "Aplicado aqui, mas não foi salvo no seu perfil.",
-    "systemReady": "Tudo funcionando",
+    "systemReady": "Servidor funcionando",
+    "devicesOffline": "{n} dispositivo offline | {n} dispositivos offline",
     "systemDatabase": "Banco de dados: {state}",
     "nav": {
       "groups": {
@@ -133,6 +139,7 @@
     "noValue": "—",
     "noFlags": "Nenhum",
     "choose": "Escolha…",
+    "advanced": "Configurações avançadas",
     "errors": {
       "between": "Use um valor de {min} a {max}.",
       "atLeast": "Use {min} ou mais.",
@@ -239,6 +246,9 @@
       "remoteControlEnabled": "Controle remoto"
     },
     "attributesIn": {
+      "switch": {
+        "on": "Liga/desliga"
+      },
       "power": {
         "power": "Consumo"
       },
@@ -555,7 +565,8 @@
     },
     "floors": {
       "not_found": "Esse andar não existe mais.",
-      "concurrency": "Outra pessoa alterou este andar enquanto você editava. Recarregue para ver as alterações."
+      "concurrency": "Outra pessoa alterou este andar enquanto você editava. Recarregue para ver as alterações.",
+      "not_empty": "Há dispositivos posicionados neste andar. Retire-os da planta antes de excluí-lo."
     },
     "rooms": {
       "not_found": "Esse cômodo não está mais neste andar. Recarregue o andar e tente de novo."
@@ -574,7 +585,8 @@
       "invalid_image": "Não foi possível ler a imagem. Ela pode estar danificada; tente exportá-la de novo."
     },
     "devices": {
-      "not_found": "Esse dispositivo não existe mais. Recarregue a página."
+      "not_found": "Esse dispositivo não existe mais. Recarregue a página.",
+      "replace_same": "Escolha outro dispositivo: um dispositivo não pode substituir a si mesmo."
     },
     "endpoints": {
       "not_found": "Esse controle do dispositivo não existe mais. Recarregue a página."
@@ -626,6 +638,72 @@
     },
     "energy": {
       "too_many_rows": "São dados de energia demais para uma consulta. Escolha um período menor ou um único dispositivo."
+    },
+    "placements": {
+      "not_found": "Esse dispositivo não está mais na planta. Recarregue o andar."
+    },
+    "flows": {
+      "not_found": "Esta etapa de configuração expirou ou já foi concluída. Comece de novo."
+    },
+    "cameras": {
+      "no_snapshot": "Esta câmera não tem imagem no momento. Tente de novo em instantes."
+    },
+    "backup": {
+      "not_empty": "Um backup só pode ser importado numa casa vazia. Remova os andares e as integrações primeiro.",
+      "invalid": "Esse arquivo não é um backup do ControlHome ou está danificado.",
+      "unsupported_version": "Este backup vem de uma versão mais nova do ControlHome. Atualize o ControlHome primeiro.",
+      "passphrase_required": "Este backup contém segredos criptografados. Informe a frase secreta usada na exportação.",
+      "passphrase_incorrect": "Essa frase secreta não abre os segredos deste backup.",
+      "not_found": "Esse backup automático não está mais guardado. Atualize a lista.",
+      "write_failed": "Não foi possível gravar o backup na pasta de dados do servidor. Verifique se há espaço livre."
+    },
+    "demo": {
+      "not_empty": "A casa de demonstração só pode ser carregada numa casa vazia."
     }
+  },
+  "integrationStatus": {
+    "Ok": "Conectada",
+    "Connecting": "Conectando",
+    "Degraded": "Funcionando em parte",
+    "NeedsReauth": "Precisa entrar de novo",
+    "PlanRequired": "Plano necessário",
+    "QuotaExceeded": "Cota atingida",
+    "Error": "Erro",
+    "Stopped": "Parada"
+  },
+  "history": {
+    "description": "O que este dispositivo registrou. Períodos recentes mostram cada mudança; os mais longos, médias com mínimas e máximas.",
+    "range": "Período",
+    "ranges": {
+      "24h": "últimas 24 horas",
+      "7d": "últimos 7 dias",
+      "30d": "últimos 30 dias"
+    },
+    "rangesShort": {
+      "24h": "24 h",
+      "7d": "7 dias",
+      "30d": "30 dias"
+    },
+    "resolution": {
+      "raw": "Cada mudança",
+      "5m": "Médias de 5 minutos",
+      "1h": "Médias por hora"
+    },
+    "chartLabel": "{name}, {range}",
+    "empty": "Nada registrado neste período ainda.",
+    "nothingRecorded": "Este dispositivo não guarda histórico: nenhuma das leituras dele é registrada.",
+    "energy": "Energia usada",
+    "energyLabel": "Energia usada, {range}",
+    "perHour": "Por hora",
+    "perDay": "Por dia",
+    "noEnergy": "Nenhum consumo neste período ainda.",
+    "estimated": "estimado",
+    "partlyEstimated": "Em parte estimado pelas leituras de potência",
+    "now": "Agora",
+    "recordingSince": "Gravando desde {time}",
+    "notRecorded": "Ainda sem registro",
+    "since": "{state} desde {time}",
+    "throughout": "{state} o tempo todo",
+    "energyTotal": "{amount} em {range}"
   }
 }

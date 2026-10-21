@@ -2,6 +2,8 @@ using System.Globalization;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Common;
+using ControlHome.Application.Placements;
+using ControlHome.Application.Realtime;
 using ControlHome.Domain.Files;
 using ControlHome.Domain.Geometry;
 using ControlHome.Domain.Homes;
@@ -14,7 +16,7 @@ namespace ControlHome.Application.Floors;
 /// the client edited: an older one gets 409 <c>floors.concurrency</c> — checked up front and again by the database
 /// (rowversion concurrency token), so of two admins saving the same floor at once exactly one wins.
 /// </summary>
-public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProvider timeProvider)
+public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, IRealtimePublisher publisher, TimeProvider timeProvider)
 {
     public const string FloorTarget = "floor";
 
@@ -31,7 +33,7 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
     public async Task<Result<FloorDto>> GetAsync(int id, CancellationToken cancellationToken)
     {
         var floor = await db.Floors.AsNoTracking().Include(f => f.Rooms).SingleOrDefaultAsync(f => f.Id == id, cancellationToken);
-        return floor is null ? NotFound() : ToDto(floor);
+        return floor is null ? NotFound() : ToDto(floor, await PlacementsOfAsync(id, cancellationToken));
     }
 
     /// <summary>All rooms of all floors, by floor level and then room order.</summary>
@@ -63,7 +65,7 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
         await auditLog.WriteAsync(
             new AuditEvent(AuditActions.FloorCreated, FloorTarget, IdOf(floor), new { floor.Name, floor.Level }),
             cancellationToken);
-        return ToDto(floor);
+        return ToDto(floor, []);
     }
 
     /// <summary>Changes name, level, size, grid and background; audits <c>floors.updated</c> with the changed fields.</summary>
@@ -83,7 +85,8 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
         }
 
         var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        var points = floor.Rooms.SelectMany(r => r.Polygon).ToList();
+        var placements = await PlacementsOfAsync(id, cancellationToken);
+        var points = floor.Rooms.SelectMany(r => r.Polygon).Concat(placements.Select(p => new PointCm(p.XCm, p.YCm))).ToList();
         if (points.Any(p => p.X > request.WidthCm))
         {
             errors["widthCm"] = [ErrorCodes.GeometryOutOfBounds];
@@ -118,12 +121,13 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
 
         if (changed.Count == 0)
         {
-            return ToDto(floor);
+            return ToDto(floor, placements);
         }
 
         return await SaveAsync(
             floor,
             rowVersion,
+            placements,
             new AuditEvent(AuditActions.FloorUpdated, FloorTarget, IdOf(floor), new { Fields = changed }),
             cancellationToken);
 
@@ -182,6 +186,10 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
             return AppError.FieldErrors(errors);
         }
 
+        // The room each placed device is in before the rooms change (they are changed in place below).
+        var placements = await PlacementsOfAsync(id, cancellationToken);
+        var roomsBefore = placements.ToDictionary(p => p.Id, p => RoomLocator.Find(floor.Rooms, p.XCm, p.YCm)?.Id);
+
         var kept = new HashSet<int>();
         var added = 0;
         for (var i = 0; i < request.Rooms.Count; i++)
@@ -215,20 +223,30 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
             db.Rooms.Remove(room);
         }
 
-        return await SaveAsync(
+        var saved = await SaveAsync(
             floor,
             rowVersion,
+            placements,
             new AuditEvent(
                 AuditActions.FloorLayoutSaved,
                 FloorTarget,
                 IdOf(floor),
                 new { Rooms = request.Rooms.Count, Added = added, Removed = removed.Count }),
             cancellationToken);
+        if (saved.IsSuccess)
+        {
+            await ReassignRoomsAsync(floor, placements, roomsBefore, cancellationToken);
+        }
+
+        return saved;
 
         static string Path(int index, string field) => string.Create(CultureInfo.InvariantCulture, $"rooms[{index}].{field}");
     }
 
-    /// <summary>Deletes the floor and its rooms; devices and endpoints in those rooms lose their room.</summary>
+    /// <summary>
+    /// Deletes the floor and its rooms; devices and endpoints in those rooms lose their room. 409 <c>floors.not_empty</c>
+    /// while devices are placed on it.
+    /// </summary>
     public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
     {
         // Rooms are loaded so they are deleted after the device/endpoint room references are cleared.
@@ -236,6 +254,11 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
         if (floor is null)
         {
             return NotFound();
+        }
+
+        if (await db.Placements.AnyAsync(p => p.FloorId == id, cancellationToken))
+        {
+            return AppError.Conflict(ErrorCodes.FloorsNotEmpty, "Devices are placed on this floor. Take them off the plan first.");
         }
 
         await ClearRoomAsync(floor.Rooms.Select(r => r.Id).ToList(), cancellationToken);
@@ -250,7 +273,12 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
     /// Saves the pending changes and the audit entry together, bumping the floor's rowversion (UpdatedAtUtc is always
     /// written) with the client's rowversion as the expected original value.
     /// </summary>
-    private async Task<Result<FloorDto>> SaveAsync(Floor floor, byte[] rowVersion, AuditEvent auditEvent, CancellationToken cancellationToken)
+    private async Task<Result<FloorDto>> SaveAsync(
+        Floor floor,
+        byte[] rowVersion,
+        IReadOnlyList<Placement> placements,
+        AuditEvent auditEvent,
+        CancellationToken cancellationToken)
     {
         floor.UpdatedAtUtc = timeProvider.GetUtcNow();
         var entry = db.Floors.Entry(floor);
@@ -266,7 +294,50 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
             return Concurrency();
         }
 
-        return ToDto(floor);
+        return ToDto(floor, placements);
+    }
+
+    private async Task<List<Placement>> PlacementsOfAsync(int floorId, CancellationToken cancellationToken) =>
+        await db.Placements.AsNoTracking().Where(p => p.FloorId == floorId).OrderBy(p => p.Id).ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// After a layout save: every placed endpoint or device whose point is now in another room (or in none) moves to that
+    /// room, as if it had just been placed there. Placements whose room did not change keep their target's room as it is.
+    /// </summary>
+    private async Task ReassignRoomsAsync(
+        Floor floor,
+        IReadOnlyList<Placement> placements,
+        IReadOnlyDictionary<int, int?> roomsBefore,
+        CancellationToken cancellationToken)
+    {
+        var changed = false;
+        foreach (var placement in placements)
+        {
+            var roomId = RoomLocator.Find(floor.Rooms, placement.XCm, placement.YCm)?.Id;
+            if (roomId == roomsBefore.GetValueOrDefault(placement.Id))
+            {
+                continue;
+            }
+
+            if (placement.EndpointId is { } endpointId
+                && await db.Endpoints.SingleOrDefaultAsync(e => e.Id == endpointId, cancellationToken) is { } endpoint)
+            {
+                endpoint.RoomId = roomId;
+                changed = true;
+            }
+            else if (placement.DeviceId is { } deviceId
+                && await db.Devices.SingleOrDefaultAsync(d => d.Id == deviceId, cancellationToken) is { } device)
+            {
+                device.RoomId = roomId;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            await publisher.DevicesChangedAsync(cancellationToken);
+        }
     }
 
     /// <summary>
@@ -304,7 +375,7 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
     private static AppError Concurrency() =>
         AppError.Conflict(ErrorCodes.FloorsConcurrency, "The floor was changed by someone else. Reload it and try again.");
 
-    private static FloorDto ToDto(Floor floor) => new(
+    private static FloorDto ToDto(Floor floor, IReadOnlyList<Placement> placements) => new(
         floor.Id,
         floor.Name,
         floor.Level,
@@ -313,7 +384,8 @@ public sealed class FloorService(IControlHomeDb db, IAuditLog auditLog, TimeProv
         floor.GridCm,
         ToDto(floor.Background),
         floor.Rooms.OrderBy(r => r.SortOrder).ThenBy(r => r.Id).Select(ToDto).ToList(),
-        FloorRules.FormatRowVersion(floor.RowVersion));
+        FloorRules.FormatRowVersion(floor.RowVersion),
+        placements.Select(p => PlacementService.ToDto(p, floor.Rooms)).ToList());
 
     private static RoomDto ToDto(Room room) => new(
         room.Id,

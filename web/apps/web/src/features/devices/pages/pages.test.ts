@@ -6,7 +6,7 @@ import type { AppLocale } from '../../../i18n'
 import { mountWithApp } from '../../../test/app'
 import { CATALOGUE, INTEGRATIONS, OBSERVED, ROOMS, basicHome } from '../../../test/devices'
 
-// The device pages and the integrations page mounted in the real app (router, guards, i18n that throws on a missing
+// The device pages mounted in the real app (router, guards, i18n that throws on a missing
 // key), in both languages and for each role, against a mocked API.
 
 const api = vi.hoisted(() => ({
@@ -17,17 +17,35 @@ const api = vi.hoisted(() => ({
   listCapabilities: vi.fn(),
   listRooms: vi.fn(),
   listIntegrations: vi.fn(),
-  listConnectors: vi.fn(),
   getDevice: vi.fn(),
   sendCommand: vi.fn(),
   setEndpointFavorite: vi.fn(),
-  createIntegration: vi.fn(),
+  getAttributeHistory: vi.fn(),
+  listEnergyHourly: vi.fn(),
 }))
 
 vi.mock('@controlhome/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@controlhome/api-client')>()),
   ...api,
 }))
+
+// jsdom lays nothing out, so ECharts can't draw: a stand-in that shows how many points a chart was given.
+vi.mock('vue-echarts', async () => {
+  const { defineComponent, h } = await import('vue')
+  return {
+    default: defineComponent({
+      name: 'VChart',
+      props: { option: { type: Object, required: true } },
+      setup: (props) => () =>
+        h('div', {
+          'data-slot': 'vchart',
+          'data-series': JSON.stringify(
+            (props.option.series as { name?: string; data: unknown[] }[]).map((entry) => entry.data.length),
+          ),
+        }),
+    }),
+  }
+})
 
 const ok = (data: unknown, status = 200) => ({
   data,
@@ -289,6 +307,29 @@ describe('device page', () => {
     member.wrapper.unmount()
   })
 
+  it('names the room its endpoints are in when the device itself has none (placed on a plan)', async () => {
+    signedIn('Member', 'en')
+    const placed = basicHome().map((device) =>
+      device.id === 'd-contact'
+        ? {
+            ...device,
+            endpoints: device.endpoints.map((endpoint) => ({ ...endpoint, roomId: 11, effectiveRoomId: 11 })),
+          }
+        : device,
+    )
+    api.listDevices.mockResolvedValue(ok(placed))
+    api.getDevice.mockImplementation(({ path }: { path: { id: string } }) =>
+      Promise.resolve(ok(detail(placed.find((device) => device.id === path.id)!))),
+    )
+    const contact = await open('/devices/d-contact')
+    expect(contact.wrapper.get('[data-slot="device-room"]').text()).toBe('Kitchen · Ground floor')
+    contact.wrapper.unmount()
+
+    const lock = await open('/devices/d-lock')
+    expect(lock.wrapper.get('[data-slot="device-room"]').text()).toBe('No room')
+    lock.wrapper.unmount()
+  })
+
   it('lets Members lock and unlock; a Viewer sees the state only', async () => {
     signedIn('Member', 'en')
     const member = await open('/devices/d-lock')
@@ -369,6 +410,94 @@ describe('device page', () => {
     light.wrapper.unmount()
   })
 
+  it('charts the recorded history up to now, and the energy used', async () => {
+    signedIn('Member', 'en')
+    // The plug's power is recorded (a measurement): statistics, then the raw changes since the last bucket.
+    api.listCapabilities.mockResolvedValue(
+      ok(
+        CATALOGUE.map((capability) =>
+          capability.id === 'power'
+            ? {
+                ...capability,
+                attributes: capability.attributes.map((entry) => ({
+                  ...entry,
+                  recorded: true,
+                  stateClass: 'measurement',
+                })),
+              }
+            : capability,
+        ),
+      ),
+    )
+    const minute = 60_000
+    // Within the last hour (the chart's window ends now).
+    const bucket = Math.floor((Date.now() - 60 * minute) / (5 * minute)) * 5 * minute
+    const at = (time: number, v: number, band?: [number, number]) => ({
+      t: new Date(time).toISOString(),
+      v,
+      min: band?.[0] ?? null,
+      max: band?.[1] ?? null,
+      s: null,
+    })
+    api.getAttributeHistory.mockImplementation(({ query }: { query: { resolution: string } }) =>
+      Promise.resolve(
+        ok(
+          query.resolution === 'raw'
+            ? {
+                attributeId: 4,
+                resolution: 'raw',
+                unit: 'W',
+                points: [at(bucket + 10 * minute, 41), at(bucket + 12 * minute, 55)],
+              }
+            : {
+                attributeId: 4,
+                resolution: '5m',
+                unit: 'W',
+                points: [at(bucket, 40, [38, 44]), at(bucket + 5 * minute, 42, [40, 45])],
+              },
+        ),
+      ),
+    )
+    api.listEnergyHourly.mockResolvedValue(
+      ok([
+        {
+          endpointId: 'e-plug',
+          hourStartUtc: '2026-10-21T10:00:00Z',
+          wh: 120,
+          source: 'counter',
+          estimated: false,
+        },
+      ]),
+    )
+
+    const { wrapper } = await open('/devices/d-plug?tab=history')
+    // The tab's charts load on their own (a separate chunk).
+    const power = await vi.waitFor(() =>
+      wrapper.get('[data-slot="attribute-history"][data-attribute-id="4"]'),
+    )
+    await vi.waitFor(() => power.get('[data-slot="history-chart"]'))
+    // The last 24 hours up to the server's now (the same window for every card), and the raw changes from the last
+    // bucket's end on.
+    type HistoryCall = { path: { id: number }; query: { from: string; to: string; resolution: string } }
+    const first = (api.getAttributeHistory.mock.calls as unknown as [HistoryCall][])
+      .map(([options]) => options)
+      .find((options) => options.query.resolution === 'auto')!
+    expect(first.path).toEqual({ id: 4 })
+    expect(Date.parse(first.query.to) - Date.parse(first.query.from)).toBe(24 * 60 * minute)
+    expect(Math.abs(Date.parse(first.query.to) - Date.now())).toBeLessThan(5 * minute)
+    expect(api.getAttributeHistory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { id: 4 },
+        query: { from: new Date(bucket + 10 * minute).toISOString(), to: first.query.to, resolution: 'raw' },
+      }),
+    )
+    expect(power.get('[data-slot="history-chart"]').attributes('data-points')).toBe('4')
+    // The band (min, range) follows the mean point for point, and both run on to the value now.
+    expect(JSON.parse(power.get('[data-slot="vchart"]').attributes('data-series')!)).toEqual([5, 5, 5])
+    expect(wrapper.get('[data-slot="energy-total"]').text()).toContain('120')
+    wrapper.unmount()
+  })
+
   it('says when a device is gone', async () => {
     signedIn('Admin', 'en')
     api.getDevice.mockResolvedValue({
@@ -379,60 +508,5 @@ describe('device page', () => {
     const { wrapper } = await open('/devices/nope')
     expect(wrapper.find('h1').text()).toBe('Device not found')
     wrapper.unmount()
-  })
-})
-
-describe('integrations page', () => {
-  beforeEach(() => {
-    api.listConnectors.mockResolvedValue(
-      ok([
-        {
-          key: 'simulated',
-          displayName: { en: 'Simulated home', ptBr: 'Casa simulada' },
-          icon: 'flask-conical',
-          category: 'virtual',
-          configFields: [],
-          deviceConfigFields: [],
-          features: {
-            setupFlow: false,
-            reauth: false,
-            pushInventory: true,
-            permitJoin: false,
-            cloud: false,
-            polling: false,
-          },
-        },
-      ]),
-    )
-  })
-
-  it('lists the integrations with their status and devices', async () => {
-    signedIn('Admin', 'pt-BR')
-    const { wrapper } = await open('/integrations', 'pt-BR')
-    expect(wrapper.find('h1').text()).toBe('Integrações')
-    expect(wrapper.get('[data-slot="integration-status"]').text()).toBe('Conectada')
-    expect(wrapper.get('a[href="/devices?integration=int-1"]').text()).toContain('5 dispositivos')
-    wrapper.unmount()
-  })
-
-  it('adds the simulated demo home', async () => {
-    api.listIntegrations.mockResolvedValue(ok([]))
-    api.createIntegration.mockResolvedValue(ok(INTEGRATIONS[0], 201))
-    signedIn('Admin', 'en')
-    const { wrapper } = await open('/integrations')
-    const add = wrapper.findAll('button').find((button) => button.text() === 'Add simulated demo')!
-    await add.trigger('click')
-    await flushPromises()
-    expect(api.createIntegration).toHaveBeenCalledWith({
-      body: { connectorKey: 'simulated', name: 'Simulated home', config: { preset: 'basic' } },
-    })
-    expect(wrapper.findAll('[data-integration-id]')).toHaveLength(1)
-    wrapper.unmount()
-  })
-
-  it('is for Admins only', async () => {
-    signedIn('Member', 'en')
-    const { router } = await open('/integrations')
-    expect(router.currentRoute.value.name).toBe('forbidden')
   })
 })

@@ -72,6 +72,11 @@ internal sealed class FlakyInventoryContext(RecordingContext inner, int failures
     public Task RemoveDeviceAsync(string externalDeviceId, CancellationToken cancellationToken) =>
         inner.RemoveDeviceAsync(externalDeviceId, cancellationToken);
 
+    public Task SyncInventoryAsync(IReadOnlyList<DiscoveredDevice> devices, CancellationToken cancellationToken) =>
+        Interlocked.Decrement(ref _failures) >= 0
+            ? Task.FromException(new InvalidOperationException("The database is unavailable."))
+            : inner.SyncInventoryAsync(devices, cancellationToken);
+
     public void SetStatus(IntegrationStatus status, string? message) => inner.SetStatus(status, message);
 }
 

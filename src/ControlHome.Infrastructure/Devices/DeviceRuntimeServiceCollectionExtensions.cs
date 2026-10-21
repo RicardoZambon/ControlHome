@@ -41,6 +41,7 @@ public static class DeviceRuntimeServiceCollectionExtensions
         services.TryAddSingleton<StateWriteBehind>();
         services.TryAddSingleton<DeviceInventoryService>();
         services.TryAddSingleton<IDeviceInventory>(sp => sp.GetRequiredService<DeviceInventoryService>());
+        services.Replace(ServiceDescriptor.Singleton<IDeviceInventoryAdmin>(sp => sp.GetRequiredService<DeviceInventoryService>()));
         services.TryAddSingleton(sp => new StateProcessor(
             sp.GetRequiredService<DeviceRegistry>(),
             sp.GetRequiredService<StateCache>(),
@@ -54,9 +55,11 @@ public static class DeviceRuntimeServiceCollectionExtensions
             sp.GetRequiredService<ILogger<StateProcessor>>()));
         services.TryAddSingleton<IntegrationSecretProtector>();
         services.Replace(ServiceDescriptor.Singleton<IIntegrationSecretProtector>(sp => sp.GetRequiredService<IntegrationSecretProtector>()));
+        services.Replace(ServiceDescriptor.Singleton<IIntegrationSecretStores, IntegrationSecretStores>());
         services.TryAddSingleton<IntegrationSupervisor>();
         services.Replace(ServiceDescriptor.Singleton<ICommandDispatcher>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
         services.Replace(ServiceDescriptor.Singleton<IIntegrationRuntimeControl>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
+        services.Replace(ServiceDescriptor.Singleton<ICameraSnapshotProvider>(sp => sp.GetRequiredService<IntegrationSupervisor>()));
         services.Replace(ServiceDescriptor.Scoped<IAttributeStateReader, RuntimeAttributeStateReader>());
         services.Replace(ServiceDescriptor.Singleton<IDeviceStatusReader, RuntimeDeviceStatusReader>());
         services.TryAddSingleton<RuntimeLease>();

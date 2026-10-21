@@ -245,6 +245,7 @@ async function finish(): Promise<void> {
               :draft="draft"
               :busy="submitting"
               :error="finishError"
+              @update:load-demo-home="(value) => (draft.loadDemoHome = value)"
               @edit="goTo"
               @back="goTo(previousStep(steps, 'review'))"
               @finish="finish"

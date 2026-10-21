@@ -1,3 +1,4 @@
+using ControlHome.Application.Common;
 using ControlHome.Application.Runtime;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
@@ -54,10 +55,58 @@ public interface IIntegrationRuntimeControl
     Task RemovedAsync(Guid integrationId, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// The device inventory as application services use it (implemented by Infrastructure's inventory service, which also
+/// keeps the runtime's device registry and state cache current).
+/// </summary>
+public interface IDeviceInventoryAdmin
+{
+    /// <summary>
+    /// Adds or merges a device as if its connector had reported it (the demo seed imports a virtual connector's devices
+    /// before its runtime first runs).
+    /// </summary>
+    /// <exception cref="ArgumentException">The device is malformed.</exception>
+    Task UpsertAsync(Guid integrationId, DiscoveredDevice device, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Moves everything the user set up on <paramref name="oldDeviceId"/> to <paramref name="newDeviceId"/> — name, room,
+    /// icon, endpoint names/rooms/icons/hidden/favorites (endpoints matched by key, or the only one of each), placements and
+    /// history (state log, events, statistics, energy) — then deletes the old device. Errors: 404 <c>devices.not_found</c>
+    /// (the old device); 400 <c>validation.failed</c> with <c>errors.newDeviceId</c> = <c>devices.not_found</c> or
+    /// <c>devices.replace_same</c>.
+    /// </summary>
+    Task<Result> ReplaceAsync(Guid oldDeviceId, Guid newDeviceId, CancellationToken cancellationToken);
+}
+
+/// <summary>The inventory of hosts without a device runtime: nothing can be imported or replaced there.</summary>
+public sealed class NoDeviceInventoryAdmin : IDeviceInventoryAdmin
+{
+    public static NoDeviceInventoryAdmin Instance { get; } = new();
+
+    public Task UpsertAsync(Guid integrationId, DiscoveredDevice device, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("No device runtime in this process.");
+
+    public Task<Result> ReplaceAsync(Guid oldDeviceId, Guid newDeviceId, CancellationToken cancellationToken) =>
+        Task.FromResult(Result.Failure(AppError.Unavailable(ErrorCodes.CommandsUnavailable, "No device runtime in this process.")));
+}
+
+/// <summary>Asks running connector runtimes for camera stills (implemented by the integration supervisor).</summary>
+public interface ICameraSnapshotProvider
+{
+    /// <summary>
+    /// The camera's still image from the integration's runtime (when it implements <see cref="ICameraSnapshotSource"/>),
+    /// or <c>null</c> when it is not running, has no cameras, or has no image right now.
+    /// </summary>
+    Task<CameraSnapshot?> GetSnapshotAsync(Guid integrationId, string externalDeviceId, string endpointKey, CancellationToken cancellationToken);
+}
+
 /// <summary>Dispatcher, runtime control and status for hosts without a device runtime: nothing runs.</summary>
-public sealed class NoDeviceRuntime : ICommandDispatcher, IIntegrationRuntimeControl, IRuntimeStatus
+public sealed class NoDeviceRuntime : ICommandDispatcher, IIntegrationRuntimeControl, IRuntimeStatus, ICameraSnapshotProvider
 {
     public static NoDeviceRuntime Instance { get; } = new();
+
+    public Task<CameraSnapshot?> GetSnapshotAsync(Guid integrationId, string externalDeviceId, string endpointKey, CancellationToken cancellationToken) =>
+        Task.FromResult<CameraSnapshot?>(null);
 
     public RuntimeMode Mode => RuntimeMode.Starting;
 

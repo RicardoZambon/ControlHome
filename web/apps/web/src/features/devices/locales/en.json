@@ -138,5 +138,29 @@
     "matter": "Matter ID",
     "zigbee": "Zigbee address",
     "uuid": "UUID"
+  },
+  "tabs": {
+    "controls": "Controls",
+    "history": "History"
+  },
+  "replace": {
+    "menu": "Replace with another device…",
+    "action": "Replace device",
+    "title": "Replace {name}",
+    "description": "Pick the device that takes over: it gets this device's name, room, icon, place on the plan, favorites and history. This device is then removed.",
+    "search": "Search devices",
+    "pick": "The device that takes over",
+    "none": "There is no other device to hand this one over to.",
+    "reasons": {
+      "duplicate": "Same hardware",
+      "sameClass": "Same kind"
+    },
+    "summary": "Name, room, icon, place on the plan, favorites and history move over.",
+    "confirm": "Replace",
+    "done": "{name} was handed over to its new device.",
+    "orphanedTitle": "No longer reported",
+    "orphanedText": "{integration} doesn't report this device any more. It keeps its name, room, place and history; if it was re-paired or swapped, replace it with the new device to keep them.",
+    "duplicateTitle": "The same device, twice?",
+    "duplicateText": "Another integration reaches hardware with the same address or serial number. Replace one with the other to keep a single device with everything it had."
   }
 }

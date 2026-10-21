@@ -24,6 +24,18 @@ public interface IConnectorFactory
     IConnectorRuntime CreateRuntime(IntegrationInstance instance);
 }
 
+/// <summary>
+/// Implemented by the factory of a connector whose devices follow from its configuration alone (a virtual connector such
+/// as the Simulated home), so the host can import them before the runtime first runs — the demo home is seeded with its
+/// devices already placed on the plan. The runtime still reports the same inventory when it starts.
+/// </summary>
+public interface IStaticInventorySource
+{
+    /// <summary>The devices an integration with this configuration has, in the order the runtime reports them.</summary>
+    /// <exception cref="ArgumentException">The configuration is invalid for this connector.</exception>
+    IReadOnlyList<DiscoveredDevice> DescribeDevices(JsonElement config);
+}
+
 /// <summary>What a runtime gets to know about its integration.</summary>
 /// <param name="Id">The <c>Integration.Id</c>.</param>
 /// <param name="Name">The user's name for the integration (for log messages).</param>

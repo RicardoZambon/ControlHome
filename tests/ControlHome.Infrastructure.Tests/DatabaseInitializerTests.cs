@@ -44,7 +44,7 @@ public sealed class DatabaseInitializerTests(SqlServerFixture sql)
                 [
                     "auth.RoleClaims", "auth.Roles", "auth.UserClaims", "auth.UserLogins", "auth.UserRoles", "auth.UserTokens",
                     "auth.Users", "ch.AuditLog", "ch.DataProtectionKeys", "ch.Homes", "ch.__EFMigrationsHistory",
-                    "ch.Floors", "ch.Rooms", "ch.StoredFiles",
+                    "ch.Floors", "ch.Rooms", "ch.StoredFiles", "ch.Placements",
                     "ch.Integrations", "ch.Devices", "ch.Endpoints", "ch.EndpointCapabilities", "ch.DeviceAttributes", "ch.AttributeState",
                     "ch.StateLog", "ch.DeviceEvent", "ch.StatShortTerm", "ch.StatHourly", "ch.RollupProgress", "ch.EnergyHourly",
                     "ch.EnergySourceSelection", "ch.RetentionSettings",

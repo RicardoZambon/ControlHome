@@ -51,7 +51,14 @@ public sealed record FieldSchema(
     ValueSchema Schema,
     bool Required,
     bool Secret,
-    LocalizedText? Help);
+    LocalizedText? Help)
+{
+    /// <summary>
+    /// Rarely changed (a test switch, a tuning value): forms fold it away under "Advanced", after the other fields. Only
+    /// for optional fields.
+    /// </summary>
+    public bool Advanced { get; init; }
+}
 
 /// <summary>How the integrations catalogue groups a connector.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<ConnectorCategory>))]

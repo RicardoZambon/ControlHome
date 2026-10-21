@@ -1,3 +1,5 @@
+using ControlHome.Application.Placements;
+
 namespace ControlHome.Application.Floors;
 
 /// <summary>A point on a floor plan in centimetres (origin: the floor's top-left corner; y grows downwards).</summary>
@@ -14,12 +16,15 @@ public sealed record FloorBackgroundDto(Guid FileId, double Opacity, double Offs
 /// <summary>A floor in the floor list.</summary>
 public sealed record FloorSummaryDto(int Id, string Name, int Level, int RoomCount);
 
-/// <summary>A floor with its rooms. Send <paramref name="RowVersion"/> back with every change to it.</summary>
+/// <summary>A floor with its rooms and the devices placed on it. Send <paramref name="RowVersion"/> back with every change to it.</summary>
 /// <param name="Level">Storey: 0 ground, negative below ground.</param>
 /// <param name="WidthCm">Plan width (the SVG viewBox is <c>0 0 WidthCm HeightCm</c>).</param>
 /// <param name="GridCm">Editor grid spacing.</param>
 /// <param name="Rooms">In display order.</param>
 /// <param name="RowVersion">Opaque concurrency token; a change sent with an older one gets 409 <c>floors.concurrency</c>.</param>
+/// <param name="Placements">
+/// The endpoints and devices on this floor (<c>PUT /api/placements</c>; not part of the layout's concurrency token).
+/// </param>
 public sealed record FloorDto(
     int Id,
     string Name,
@@ -29,7 +34,8 @@ public sealed record FloorDto(
     int GridCm,
     FloorBackgroundDto? Background,
     IReadOnlyList<RoomDto> Rooms,
-    string RowVersion);
+    string RowVersion,
+    IReadOnlyList<PlacementDto> Placements);
 
 /// <summary>A room of a floor.</summary>
 /// <param name="Icon">Icon key (e.g. <c>sofa</c>).</param>

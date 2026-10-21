@@ -34,7 +34,9 @@ public sealed class DatabaseReset(ControlHomeDbContext db)
             await db.EnergySourceSelections.ExecuteDeleteAsync(ct);
             await db.RetentionSettings.ExecuteDeleteAsync(ct);
 
-            // Devices (and everything below them) go with their integration; parent links and rooms do not cascade.
+            // Devices (and everything below them) go with their integration; placements of devices, parent links and rooms do
+            // not cascade.
+            await db.Placements.ExecuteDeleteAsync(ct);
             await db.Devices.Where(d => d.ParentDeviceId != null).ExecuteUpdateAsync(s => s.SetProperty(d => d.ParentDeviceId, (Guid?)null), ct);
             await db.Integrations.ExecuteDeleteAsync(ct);
             await db.Rooms.ExecuteDeleteAsync(ct);

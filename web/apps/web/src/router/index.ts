@@ -21,7 +21,8 @@ export function createAppRouter(options: { pinia?: Pinia; history?: RouterHistor
   const router = createRouter({
     history: options.history ?? createWebHistory(),
     routes: collectRoutes(),
-    scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
+    // Back and forward return to where the page was; a link to a part of a page (#dashboard-offline) goes to it.
+    scrollBehavior: (to, _from, saved) => saved ?? (to.hash ? { el: to.hash, top: 16 } : { top: 0 }),
   })
 
   router.beforeEach(async (to) => {

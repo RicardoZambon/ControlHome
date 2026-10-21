@@ -13,4 +13,9 @@
     <InternalsVisibleTo Include="ControlHome.Connectors.Tests" />
   </ItemGroup>
 
+  <!-- The demo cameras' snapshots: synthetic scenes drawn by a script (no real footage). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\*.png" LogicalName="ControlHome.Connectors.Simulated.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

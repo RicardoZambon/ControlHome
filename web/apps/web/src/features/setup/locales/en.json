@@ -90,7 +90,9 @@
     "edit": "Edit",
     "editSection": "Edit {section}",
     "finish": "Finish setup",
-    "finishing": "Setting up your home…"
+    "finishing": "Setting up your home…",
+    "demoTitle": "Start with the demo home",
+    "demoDescription": "Two floors, eight rooms and about twenty simulated devices already on the plans, to try everything at once. Remove its integration whenever you like."
   },
   "database": {
     "host": "Server",

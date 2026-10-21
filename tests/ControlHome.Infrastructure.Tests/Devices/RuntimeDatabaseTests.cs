@@ -164,6 +164,64 @@ public sealed class RuntimeDatabaseTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task A_full_inventory_orphans_the_devices_it_no_longer_lists_and_links_children_listed_first()
+    {
+        await using var database = await CreateAsync(sql, Ct);
+        var integration = Integration();
+        await database.WithDbAsync(async db =>
+        {
+            db.Integrations.Add(integration);
+            await db.SaveChangesAsync(Ct);
+        });
+        using var batcher = new RealtimeBatcher(NullRealtimePublisher.Instance, TimeProvider.System, Options.Create(new DeviceRuntimeOptions()), NullLogger<RealtimeBatcher>.Instance);
+        var inventory = new DeviceInventoryService(
+            database.Services.GetRequiredService<IServiceScopeFactory>(),
+            new DeviceRegistry(),
+            batcher,
+            new RuntimeClock(new FakeTimeProvider(Now)),
+            NullLogger<DeviceInventoryService>.Instance);
+        DiscoveredDevice Discovered(string id, string? parent = null) => new(
+            id,
+            id,
+            DeviceClasses.Camera,
+            null,
+            null,
+            null,
+            parent,
+            new Dictionary<string, string>(),
+            null,
+            [new DiscoveredEndpoint(Endpoint.MainKey, null, [CapabilityBinding.Of(CapabilityIds.Motion)])]);
+
+        // The child is listed before its parent: it is still linked to it.
+        (await inventory.SyncAsync(integration.Id, [Discovered("cam-1", "nvr-1"), Discovered("nvr-1"), Discovered("cam-2", "nvr-1")], Ct)).ShouldBeEmpty();
+        var orphaned = await inventory.SyncAsync(integration.Id, [Discovered("nvr-1"), Discovered("cam-1", "nvr-1")], Ct);
+
+        orphaned.ShouldBe(["cam-2"]);
+        await database.WithDbAsync(async db =>
+        {
+            var devices = await db.Devices.AsNoTracking().ToDictionaryAsync(d => d.ExternalId, Ct);
+            devices["cam-1"].ParentDeviceId.ShouldBe(devices["nvr-1"].Id);
+            (devices["cam-2"].IsOrphaned, devices["cam-2"].Availability).ShouldBe((true, Availability.Unknown));
+            devices["cam-1"].IsOrphaned.ShouldBeFalse();
+        });
+
+        // Listed again: no longer orphaned; already orphaned devices are not reported twice.
+        (await inventory.SyncAsync(integration.Id, [Discovered("nvr-1"), Discovered("cam-2", "nvr-1")], Ct)).ShouldBe(["cam-1"]);
+        (await database.WithDbAsync(db => db.Devices.AsNoTracking().SingleAsync(d => d.ExternalId == "cam-2", Ct))).IsOrphaned.ShouldBeFalse();
+        await Should.ThrowAsync<ArgumentException>(() => inventory.SyncAsync(integration.Id, [Discovered("nvr-1"), Discovered("nvr-1")], Ct));
+
+        // External ids compare like the database's unique key (case-insensitive): "CAM-1" is the stored "cam-1", merged by
+        // the upsert, so it is not missing.
+        (await inventory.SyncAsync(integration.Id, [Discovered("NVR-1"), Discovered("CAM-1", "NVR-1"), Discovered("cam-2", "nvr-1")], Ct)).ShouldBeEmpty();
+        await database.WithDbAsync(async db =>
+        {
+            var devices = await db.Devices.AsNoTracking().ToListAsync(Ct);
+            devices.Count.ShouldBe(3);
+            devices.ShouldAllBe(d => !d.IsOrphaned);
+        });
+    }
+
+    [Fact]
     public async Task The_state_store_never_changes_the_availability_of_an_orphaned_device()
     {
         await using var database = await CreateAsync(sql, Ct);

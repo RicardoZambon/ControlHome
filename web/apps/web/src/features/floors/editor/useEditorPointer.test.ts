@@ -28,6 +28,7 @@ function setup(rooms: FloorDto['rooms'] = [], options: { coarse?: boolean } = {}
     background: { fileId: 'f', opacity: 0.5, offsetXCm: 0, offsetYCm: 0, cmPerPx: 2 },
     rooms,
     rowVersion: 'v1',
+    placements: [],
   })
   const onCalibrationPoints = vi.fn()
   const pointer = useEditorPointer(state, {

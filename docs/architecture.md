@@ -208,8 +208,23 @@ holds objects and arrays only) and JSON objects/arrays in `Json` (`AttributeStat
 
 ### Placement
 
-`Placement(EndpointId | DeviceId, FloorId, X, Y in cm)`. When a device is dropped onto the plan, its room is assigned by
-a point-in-polygon test.
+`Placement(EndpointId | DeviceId, FloorId, X, Y in cm)` (1.3, table `Placements`: exactly one target, each endpoint and
+each device placed at most once). `PUT /api/placements` places or moves a target and sets its room by a point-in-polygon
+test (`RoomLocator`: the first room in display order whose outline contains the point, edges included; none outside every
+room — an endpoint then shows in its device's room); `DELETE /api/placements/{id}` takes it off the plan (its room stays);
+`GET /api/floors/{id}` and `GET /api/placements` list them with the room each point is in. A layout save moves placed
+targets whose point ended up in another room; a floor cannot be resized below a placement nor deleted while it has any
+(409 `floors.not_empty`). Endpoint placements cascade with their endpoint; device placements do not cascade in the
+database (one cascade path per table), so integration delete, device replace and the test reset remove them first.
+
+### Dashboard summary
+
+`GET /api/dashboard` (1.3, `DashboardService`): favorite endpoint ids, every room with its device count, active devices
+(a switch on, a media player powered, an appliance running), mean temperature (a temperature sensor, else a
+thermostat's current temperature) and summed power, the home's power now (every `power.power`), offline devices and the
+integrations' health. Each aggregate lists the attribute ids it is computed from, so clients keep it live from hub
+`StateChanged` deltas and refetch on `DevicesChanged`. Endpoints count in their own room, else their device's; hidden
+endpoints and orphaned devices are left out of the rooms.
 
 ---
 
@@ -232,13 +247,39 @@ a point-in-polygon test.
   - `UpsertDevice` / `RemoveDevice` for connectors that push their own inventory.
   - `SetStatus(Ok | Connecting | Degraded | NeedsReauth | PlanRequired | QuotaExceeded | Error)`.
   - A per-device secret store, and quota counters persisted in the DB.
+- **Flow runtime** (1.3, `IntegrationFlowService`): `POST /api/integrations/flows` (`StartFlowRequest(connectorKey)`) and
+  `POST /api/integrations/flows/{flowId}` (`ContinueFlowRequest(input)`) answer with a flat `FlowStepDto` (`type` =
+  `form` | `externalUrl` | `progress` | `choose` | `done` | `abort`); `DELETE …/flows/{flowId}` abandons one;
+  `POST /api/integrations/{id}/flows/reauth` runs the connector's flow for an existing integration (`FlowContext.Existing`
+  with its secret store); `FlowContext.Language` is the home's language, for names the flow suggests in it (the
+  integration's, a virtual connector's devices). Config fields marked `FieldSchema.Advanced` (test switches, tuning) are
+  folded away under "Advanced settings" by the schema form. Flows live in memory (`IntegrationFlowStore`) 15 min after their last step, at most 10 per admin,
+  owned by the admin who started them (flow ids are random v4 GUIDs, never time-ordered), one answer at a time (a cancel
+  waits for the answer in progress); typed secret fields are registered with the log redactor before the connector sees
+  them, and form values never echo secrets. A connector without a flow gets one form with its config fields
+  (`ConfigFieldsFlow`; an empty secret — missing, `null` or `""` — keeps the stored one, and is missing when required for a
+  new integration). `done` creates the integration (secrets
+  encrypted) or updates the one being re-authorized — stopped first so its runtime cannot save a rotated token over the new
+  secrets, integration-level secrets replaced, per-device secrets kept, devices kept — and starts it. Flows follow the
+  standby / starting rules of every integration change. `PUT /api/integrations/{id}` renames, enables and disables.
 - **Merge rules**
   - Devices match on `(IntegrationId, ExternalId)`; `ExternalId` is a stable vendor id, **never an IP**.
   - Vendor fields update; user fields (name, room, icon, placement) are **never overwritten**.
   - A device that disappears becomes **Orphaned** and the automations that use it are flagged. Nothing is deleted
-    automatically.
-  - "Replace device" moves history and automations to the new device.
-  - Likely duplicates across integrations are flagged at import.
+    automatically: `RemoveDeviceAsync`, or a device missing from a full inventory (`IConnectorContext.SyncInventoryAsync`,
+    which upserts parents before children; the database compares external ids — case-insensitively, like the unique key
+    the upsert matched on — so a device reported in another letter case is merged, not orphaned).
+  - Capabilities (and endpoints) no longer reported are `Retired` (history kept) and come back when reported again.
+  - "Replace device" (`POST /api/devices/{id}/replace`, `ReplaceDeviceRequest(newDeviceId)`) moves name, room, icon,
+    endpoint settings and favorites (endpoints matched by key, or the only one of each), placements and history
+    (`StateLog`, `DeviceEvent`, statistics and energy re-keyed in one transaction; where the new device already has a
+    bucket its own row wins) to the new device and deletes the old one; automations follow in Phase 3. Like integration
+    changes it is refused on a standby (409 `runtime.standby`) and while the runtime starts (503 `runtime.starting`).
+  - Likely duplicates across integrations (the same MAC address or serial number, `DeviceIdentity`) are flagged on every
+    read: `DeviceSummaryDto` / `DeviceDetailDto.PossibleDuplicateIds`.
+- **Optional runtime/factory interfaces:** `ICameraSnapshotSource` (camera stills, served behind the app's auth as
+  `GET /api/endpoints/{id}/camera/snapshot`, image types only, `no-store`) and `IStaticInventorySource` (a virtual
+  connector's devices from its config alone: the demo seed imports and places them before the runtime first runs).
 - **Commands**
   - Each CommandDefinition sets its own timeout; defaults are about 5 s local, 30 s cloud, 90 s for a TV wake.
   - Rapid writes to the same attribute are coalesced (about 300 ms, last one wins); any other command for the same
@@ -254,12 +295,21 @@ a point-in-polygon test.
 - **Command outcomes:** `CommandOutcome.Accepted | Completed | Rejected(code, message)`; standard codes in
   `CommandRejectionCodes` (`duplicate`, `idempotency_required`, `unknown_device`, `unknown_endpoint`,
   `unsupported_command`, `invalid_arguments`, `unavailable`, `refused`).
-- **Simulated connector** (`simulated`, config `{ "preset": "basic" | "demo", "seed": 42 }`, default seed from
-  `Simulated:Seed`): a dimmable light, a plug (power random walk, energy integrated over the clock), an AC (room
-  temperature drifting to the target; mode-dependent target range), a door contact with battery and a smart lock.
-  Ticks every 5 s of the context's `TimeProvider`; commands apply after 150 ms; idempotency keys are remembered for
-  10 min (a repeated key → `duplicate`; a safety-critical batch without a key → `idempotency_required`). Deterministic
-  for a seed and clock.
+- **Simulated connector** (`simulated`, config `{ "preset": "basic" | "demo", "language": "en" | "pt-BR", "seed": 42,
+  "simulateReauth": false }`, default seed from `Simulated:Seed`; the setup flow fills `language` with the home's, and
+  the devices, their controls and the rooms they suggest are named in it — `SimulatedNames`): `basic` is a dimmable light, a plug (power random walk, energy integrated over the
+  clock), an AC (room temperature drifting to the target; mode-dependent target range), a door contact with battery and a
+  smart lock; `demo` (1.3) adds a color lamp, a washer (`applianceCycle` counting down + phase power), a TV
+  (`mediaPlayer`), a sleepy motion sensor (reports only when it wakes), a 3-gang switch (endpoints `l1`–`l3`, each with
+  its own W), an NVR (`generic` storage use) with four camera children (bundled synthetic snapshots,
+  `ICameraSnapshotSource`), a gate (`cover` safety-critical on open + `contact`), blinds, a generic-only water tank
+  (`setPump` setter), a climate sensor and a second plug — 20 devices. Each run pushes its full inventory
+  (`SyncInventoryAsync`: switching presets orphans the devices left out). Setup is a flow (settings form → "press the
+  button on the hub" progress that completes on the first poll after 2 s → done with a `hubToken` secret); the same flow
+  re-authorizes. `simulateReauth` makes the hub "reject its token": status `NeedsReauth`, nothing reported, commands
+  `unavailable`. Ticks every 5 s of the context's `TimeProvider`; commands apply after 150 ms; idempotency keys are
+  remembered for 10 min (a repeated key → `duplicate`; a safety-critical batch without a key → `idempotency_required`).
+  Deterministic for a seed and clock.
 - **MQTT connector** (`mqtt`, 1.4; setup in [`docs/connectors/mqtt.md`](connectors/mqtt.md)): one MQTTnet 5.2 broker
   connection per integration (password is a secret field) with its own reconnect loop — exponential back-off 1 s → 60 s
   with ±20 % jitter, re-subscribing every adapter filter and device topic after each reconnect; devices are `Unknown`
@@ -640,7 +690,29 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   certificate** generated on first run at `/data/keys/dataprotection.pfx` (RSA 3072, mode 0600), so a DB leak alone
   exposes nothing.
 - Secret API fields are **write-only**.
-- Exports include secrets only when re-encrypted with a passphrase.
+- Exports include secrets only when re-encrypted with a passphrase (1.3, `BackupService` / `BackupCipher`): the key is
+  derived with PBKDF2-HMAC-SHA256 (600 000 iterations, random 16-byte salt) and each integration's secrets are sealed with
+  AES-256-GCM (random nonce, the integration id as associated data); the manifest carries a check value so a wrong
+  passphrase is refused before anything is written. The passphrase travels only in a POST body, never in a URL.
+- **Backups** (1.3): `GET /api/backup/export` (no secrets) and `POST /api/backup/export` (`ExportBackupRequest(passphrase)`)
+  return a zip — `manifest.json` (`schemaVersion` 1, counts, encryption parameters), `home.json`, `floors.json` (rooms),
+  `files.json` + `files/<id>.<ext>`, `integrations.json`, `devices.json`, `endpoints.json` (capabilities and attribute
+  keys), `placements.json`, `users.json` (no password hashes, no PINs); history is not included. `POST /api/backup/import`
+  (multipart `file` + optional `passphrase`, at most 200 MB) restores into an empty home only (no floors, integrations or
+  devices: 409 `backup.not_empty`), in one transaction under the `ControlHome.HomeContent` app lock (shared with the demo
+  home, so the two never both fill the home): ids of integrations, devices, endpoints and files are kept, floors and rooms
+  get new ids, user accounts that do not exist are created without a password (an admin resets it with
+  `POST /api/users/{id}/password`). Nothing is extracted to disk; every entry is read at most once (file records may not
+  repeat an entry), a file at most 10 MB and all entries together at most 256 MB decompressed (zip bombs), and everything
+  is checked before anything is written — lengths, references, uniqueness (case-insensitive, like the database's keys),
+  each target placed at most once and inside its floor, room geometry, file hashes, and the API's own rules for the home
+  (IANA time zone, language, currency) and accounts (user name characters, language, theme). Images are decoded and
+  re-encoded as WebP like uploads, so only pixels are stored. Errors: `backup.invalid`, `backup.unsupported_version`,
+  `backup.passphrase_required`, `backup.passphrase_incorrect`. A daily backup without secrets is written on the active
+  runtime to `{DataPath}/backups` (`BackupScheduler`, `Backup:Interval` 1 day, `Backup:Keep` 7 newest). Admins see them
+  (`GET /api/backup/scheduled`: the schedule, `LastFailedAtUtc` while the last attempt failed, the files kept), download
+  one by its exact listed name (`GET /api/backup/scheduled/{name}`, else 404 `backup.not_found`) and write one now
+  (`POST /api/backup/scheduled`, 503 `backup.write_failed`); the dashboard shows Admins a failed backup.
 - **Log redaction:** a `KnownSecretsRedactor` covers every Serilog event, HttpClient/YARP log levels are lowered, and
   request logs use route templates. A canary test checks that no secret appears in logs, responses or hub payloads.
   Never log connection strings or tokens.
@@ -717,6 +789,10 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
 - **App structure:** features are folders `apps/web/src/features/<feature>/` (`routes.ts`, optional `nav.ts`,
   `locales/en.json`, `locales/pt-BR.json`, pages, components) auto-registered via `import.meta.glob`. API calls only
   through the generated `@controlhome/api-client`, which sends `X-ControlHome: 1` and same-origin credentials.
+- **Server time:** every `/api` response carries `X-ControlHome-Time` (the runtime clock, ISO 8601 UTC — the clock of
+  state timestamps, history and "last seen"). The client keeps its offset (`lib/serverClock.ts`), so relative times
+  ("3 minutes ago") and the end of a chart window follow the server, not a phone's clock; `formatRelative` never says
+  "in 4 hours" (a time ahead of now is "just now").
 - **App libraries:** Vue 3.5 (`<script setup lang="ts">`, Composition API), Vite 8, TS ~6.0, Pinia 4 (setup stores),
   Vue Router 5, VueUse, vue-i18n 11 (pt-BR and en; **a missing key throws in tests**), @microsoft/signalr, ECharts
   through vue-echarts, @lucide/vue plus mdi device icons.
@@ -744,6 +820,26 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
     re-encoded server-side with SkiaSharp 3 (`SkiaSharp.NativeAssets.Linux.NoDependencies` in the chiseled image) to
     WebP quality 85, ≤ 4096 px, EXIF orientation applied and all metadata dropped. **No SVG.**
   - View mode shows live state and a tap-to-control popover.
+  - Devices on the plan (1.3, `PlacedDevice` / `PlacementLayer`): an icon in a disc whose ring has the live state color
+    (dashed when unreachable, a soft halo while on), with a sensor's or meter's reading beside it when zoomed in. It
+    grows and shrinks with the zoom (`markerRadiusPx`: 28 cm on the floor, between 9 px and the full 15/18 px) while
+    its tap target stays 44 px; at a zoom where markers of one room would overlap they are one bubble with their count
+    (`clusterMarkers`; a tap zooms in on them). Plans open fitted to what is drawn (`planBounds`: rooms and devices),
+    not the whole floor sheet; on phones the zoom and scale sit in a bar under the plan; previews draw small dots.
+    View mode: a tap opens `DeviceQuickPanel` (the registry's controls; a sheet on phones). The editor's Devices tab lists what is on no
+    plan yet (a multi-control device as a whole or control by control), places by dragging a row's handle or by
+    "Place" + a tap (touch, keyboard), moves by dragging a marker and takes one off; placements are saved at once
+    (`PUT /api/placements`), outside the layout draft and its undo history.
+- **History charts** (1.4, `components/charts/*`): every card of a device's History tab covers the same window — the
+  range up to the server's now (`historyWindow`, asked for with explicit `from`/`to`) — and the part of it before the
+  device started recording is shaded ("Recording since 06:40"). `HistoryChart` draws numbers as a line (raw changes as
+  steps, statistics as the mean over a min–max band that follows the line point for point), held to now and ending on
+  the live value (the card's "Now" headline), with the unit named on the value axis (amounts from zero); enums as steps.
+  On/off states are a compact `StateTimeline` bar ("On since 06:34"). `EnergyBars` has a bar for every hour (day) of
+  the range up to the current one, which always has its label (`EnergyHourly`, estimated hours lighter). On vue-echarts
+  with ECharts tree-shaken to line and bar charts, mark areas and the SVG renderer, loaded only with a device's History
+  tab. Statistics end with their last closed bucket, so the device page also fetches the raw changes after it and
+  appends them (`withRawTail`).
 
 ---
 
@@ -905,7 +1001,7 @@ These protect a public repository and a real home; they apply to people and agen
 - **Test hooks**
   - Setup code override (`Setup__Code`).
   - `ASPNETCORE_ENVIRONMENT=Testing`-only endpoints `/api/_test/{reset, seed-demo, clock, devices/{id}/state,
-    connector-event}`, plus a test that they return 404 in Production. Anonymous, but like every mutation they need
+    devices/{id}/availability, connector-event}`, plus a test that they return 404 in Production. Anonymous, but like every mutation they need
     the same-origin `Origin` and `X-ControlHome: 1`. Landed in 1.2:
     - `POST /api/_test/reset` → 204: stops every integration runtime, empties the database (roles kept), resets the setup
       code, step-up grants/lockouts and command idempotency keys.
@@ -916,11 +1012,24 @@ These protect a public repository and a real home; they apply to people and agen
       moves the runtime clock forward (connector runtimes — the Simulated home ticks every 5 s of it —, report
       timestamps, the history rollups and retention, and, later, the scheduler). It otherwise runs in real time, so E2E
       tests work without touching it; timers that become due fire at once. The history API's default range ends at
-      this clock's now.
+      this clock's now. Flows use it too (the Simulated "press the button" step completes 2 s of it after it starts).
+    - `POST /api/_test/seed-demo?locale=en|pt-BR` (1.3) → 204: loads the demo home into an empty home (409
+      `demo.not_empty` otherwise).
+    - `POST /api/_test/devices/{deviceId}/availability` with `{ "availability": "Online"|"Offline"|"Unknown" }` (1.3) →
+      204 once processed: the device's availability goes through the state pipeline as if its connector had reported it
+      (live status, hub `AvailabilityChanged`, write-behind) — the Simulated connector never reports a device offline, so
+      the dashboard's offline devices are exercised with it. 400 unknown value; 404 unknown device; 409 when the runtime
+      is not active.
   - `History:MaintenanceEnabled=false` stops the background rollups and retention job; integration tests that need
-    exact timing call `HistoryRollup.RunOnceAsync` / `RetentionPurge.PurgeOnceAsync` themselves.
-  - `FakeTimeProvider`; a seeded RNG for Simulated; `--seed-demo` (2 floors, 8 rooms, about 20 devices, fake
-    coordinates).
+    exact timing call `HistoryRollup.RunOnceAsync` / `RetentionPurge.PurgeOnceAsync` themselves. Likewise
+    `Backup:ScheduleEnabled=false` (set by `ControlHomeApiFactory`) stops the daily backup; tests call
+    `BackupScheduler.RunOnceAsync`.
+  - `FakeTimeProvider`; a seeded RNG for Simulated; the demo home (`DemoHome`: 2 floors, 8 rooms, the Simulated `demo`
+    preset's 20 devices placed on the plans, six favorites, everything named in Portuguese for a pt-BR home), loaded by
+    `dotnet ControlHome.Api.dll --seed-demo [en|pt-BR]` (run and exit: 0 loaded, 3 the home is not empty, 1 no database),
+    the setup's `CompleteSetupRequest.LoadDemoHome` and the test hook above. The emptiness check and the first writes
+    (floors, integration) run together under the `ControlHome.HomeContent` app lock, so concurrent loads (and a backup
+    import) fill the home once.
 - **Per-milestone verification:** `dotnet build -warnaserror`, `dotnet test`, the web suite (`lint`, `typecheck`,
   `test`, `check:colors`, `build`), the milestone's Playwright specs, and a compose smoke
   (`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --profile bundled-db up` →

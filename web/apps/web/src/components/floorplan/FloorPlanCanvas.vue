@@ -76,6 +76,8 @@ const props = withDefaults(
     /** Rooms are keyboard focusable buttons (`room-click` on Enter). */
     focusableRooms?: boolean
     cursorClass?: string
+    /** What "fit" shows (cm): by default the whole floor; the view fits what is drawn (`planBounds`). */
+    fitTo?: { x: number; y: number; width: number; height: number } | null
     class?: HTMLAttributes['class']
   }>(),
   { mode: 'view', interactive: true, panOnDrag: true, focusableRooms: true, backgroundImage: 'auto' },
@@ -101,7 +103,9 @@ const ringClipId = `floorplan-ring-${useId()}`
 const NARROW_PX = 560
 
 const container = ref<HTMLElement | null>(null)
-const content = computed(() => ({ x: 0, y: 0, width: props.floor.widthCm, height: props.floor.heightCm }))
+const content = computed(
+  () => props.fitTo ?? { x: 0, y: 0, width: props.floor.widthCm, height: props.floor.heightCm },
+)
 // Room for the dimension lines around the sheet (less on phones, where every pixel of plan counts; the view drops the
 // lines on phones, where the scale bar is enough).
 const panZoom = usePanZoom({
@@ -202,7 +206,7 @@ function onPointerMove(event: PointerEvent): void {
   }
   const pointer = pointerOf(event)
   props.handler?.move?.(pointer)
-  if (props.mode === 'view' && !props.handler) {
+  if (props.mode === 'view' && !props.handler?.move) {
     const room = event.pointerType === 'mouse' ? roomAt(pointer.cm) : undefined
     ownHover.value = room ? keyOf(room) : null
   }
@@ -316,7 +320,18 @@ const zoomControls = computed(() => [
   { label: t('floorplan.fit'), icon: Maximize, key: '0', run: fit },
 ])
 
-defineExpose({ zoomIn, zoomOut, fit, scale, toCm: panZoom.toCm, isFitted: panZoom.isFitted })
+/** A phone-size view: the zoom buttons and the scale sit in a bar under the plan instead of on it. */
+const controlsBelow = computed(() => !props.compact && props.mode === 'view' && narrow.value)
+
+defineExpose({
+  zoomIn,
+  zoomOut,
+  fit,
+  zoomTo: panZoom.zoomTo,
+  scale,
+  toCm: panZoom.toCm,
+  isFitted: panZoom.isFitted,
+})
 
 const ariaLabel = computed(() =>
   props.floor.name
@@ -327,159 +342,202 @@ const ariaLabel = computed(() =>
 
 <template>
   <div
-    ref="container"
-    :class="cn('relative isolate overflow-hidden bg-muted/50 select-none', props.class)"
+    :class="cn('relative isolate flex flex-col overflow-hidden bg-muted/50 select-none', props.class)"
     data-slot="floor-plan"
   >
-    <svg
-      :viewBox="`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`"
-      preserveAspectRatio="xMidYMid meet"
-      :role="compact ? undefined : 'group'"
-      :aria-label="compact ? undefined : ariaLabel"
-      :aria-hidden="compact ? 'true' : undefined"
-      :data-scale="scale"
-      :class="
-        cn(
-          'absolute inset-0 size-full',
-          interactive ? 'touch-none' : 'pointer-events-none',
-          panning ? 'cursor-grabbing' : cursorClass,
-        )
-      "
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerCancel"
-      @pointerleave="onPointerLeave"
-      @touchend="onTouchEnd"
-      @dblclick="onDblclick"
-      @wheel="onWheel"
-      @contextmenu.prevent
-    >
-      <defs v-if="!compact">
-        <pattern :id="patternId" patternUnits="userSpaceOnUse" :width="px(18)" :height="px(18)">
-          <circle :cx="px(9)" :cy="px(9)" :r="px(0.9)" class="fill-muted-foreground/30" />
-        </pattern>
-      </defs>
-      <!-- The drafting table around the sheet -->
-      <rect
-        v-if="!compact"
-        :x="viewBox.x"
-        :y="viewBox.y"
-        :width="viewBox.width"
-        :height="viewBox.height"
-        :fill="`url(#${patternId})`"
-        class="pointer-events-none"
-      />
+    <div ref="container" class="relative min-h-0 flex-1">
+      <svg
+        :viewBox="`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`"
+        preserveAspectRatio="xMidYMid meet"
+        :role="compact ? undefined : 'group'"
+        :aria-label="compact ? undefined : ariaLabel"
+        :aria-hidden="compact ? 'true' : undefined"
+        :data-scale="scale"
+        :class="
+          cn(
+            'absolute inset-0 size-full',
+            interactive ? 'touch-none' : 'pointer-events-none',
+            panning ? 'cursor-grabbing' : cursorClass,
+          )
+        "
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerCancel"
+        @pointerleave="onPointerLeave"
+        @touchend="onTouchEnd"
+        @dblclick="onDblclick"
+        @wheel="onWheel"
+        @contextmenu.prevent
+      >
+        <defs v-if="!compact">
+          <pattern :id="patternId" patternUnits="userSpaceOnUse" :width="px(18)" :height="px(18)">
+            <circle :cx="px(9)" :cy="px(9)" :r="px(0.9)" class="fill-muted-foreground/30" />
+          </pattern>
+        </defs>
+        <!-- The drafting table around the sheet -->
+        <rect
+          v-if="!compact"
+          :x="viewBox.x"
+          :y="viewBox.y"
+          :width="viewBox.width"
+          :height="viewBox.height"
+          :fill="`url(#${patternId})`"
+          class="pointer-events-none"
+        />
 
-      <!-- The sheet: the floor itself -->
-      <rect
-        x="0"
-        y="0"
-        :width="floor.widthCm"
-        :height="floor.heightCm"
-        class="pointer-events-none fill-card drop-shadow-md"
-      />
-      <BackgroundLayer
-        v-if="floor.background && backgroundVisible"
-        :background="floor.background"
-        :max-opacity="mode === 'edit' ? undefined : 0.15"
-        @loaded="emit('background-loaded', $event)"
-      />
-      <GridLayer
-        :width-cm="floor.widthCm"
-        :height-cm="floor.heightCm"
-        :grid-cm="floor.gridCm"
-        :scale="scale"
-        :minimal="compact"
-      />
-      <rect
-        x="0"
-        y="0"
-        :width="floor.widthCm"
-        :height="floor.heightCm"
-        fill="none"
-        class="pointer-events-none stroke-foreground/40"
-        :stroke-width="px(1.25)"
-      />
+        <!-- The sheet: the floor itself -->
+        <rect
+          x="0"
+          y="0"
+          :width="floor.widthCm"
+          :height="floor.heightCm"
+          class="pointer-events-none fill-card drop-shadow-md"
+        />
+        <BackgroundLayer
+          v-if="floor.background && backgroundVisible"
+          :background="floor.background"
+          :max-opacity="mode === 'edit' ? undefined : 0.15"
+          @loaded="emit('background-loaded', $event)"
+        />
+        <GridLayer
+          :width-cm="floor.widthCm"
+          :height-cm="floor.heightCm"
+          :grid-cm="floor.gridCm"
+          :scale="scale"
+          :minimal="compact"
+        />
+        <rect
+          x="0"
+          y="0"
+          :width="floor.widthCm"
+          :height="floor.heightCm"
+          fill="none"
+          class="pointer-events-none stroke-foreground/40"
+          :stroke-width="px(1.25)"
+        />
 
-      <!-- Dimension lines, like on a drawing -->
-      <g v-if="rulers" class="pointer-events-none" aria-hidden="true">
-        <g class="stroke-muted-foreground/60" :stroke-width="px(1)">
-          <path
-            :d="`M0 ${-px(22)}H${floor.widthCm}M0 ${-px(28)}V${-px(16)}M${floor.widthCm} ${-px(28)}V${-px(16)}`"
-          />
-          <path
-            :d="`M${-px(22)} 0V${floor.heightCm}M${-px(28)} 0H${-px(16)}M${-px(28)} ${floor.heightCm}H${-px(16)}`"
+        <!-- Dimension lines, like on a drawing -->
+        <g v-if="rulers" class="pointer-events-none" aria-hidden="true">
+          <g class="stroke-muted-foreground/60" :stroke-width="px(1)">
+            <path
+              :d="`M0 ${-px(22)}H${floor.widthCm}M0 ${-px(28)}V${-px(16)}M${floor.widthCm} ${-px(28)}V${-px(16)}`"
+            />
+            <path
+              :d="`M${-px(22)} 0V${floor.heightCm}M${-px(28)} 0H${-px(16)}M${-px(28)} ${floor.heightCm}H${-px(16)}`"
+            />
+          </g>
+          <text
+            :x="floor.widthCm / 2"
+            :y="-px(22)"
+            text-anchor="middle"
+            dominant-baseline="central"
+            :font-size="px(11)"
+            paint-order="stroke"
+            :stroke-width="px(6)"
+            class="fill-muted-foreground stroke-muted font-sans tabular-nums"
+          >
+            {{ widthLabel }}
+          </text>
+          <text
+            :transform="`translate(${-px(22)} ${floor.heightCm / 2}) rotate(-90)`"
+            text-anchor="middle"
+            dominant-baseline="central"
+            :font-size="px(11)"
+            paint-order="stroke"
+            :stroke-width="px(6)"
+            class="fill-muted-foreground stroke-muted font-sans tabular-nums"
+          >
+            {{ heightLabel }}
+          </text>
+        </g>
+
+        <g>
+          <RoomShape
+            v-for="room in floor.rooms"
+            :key="keyOf(room)"
+            :room="room"
+            :room-key="keyOf(room)"
+            :scale="scale"
+            :selected="same(selectedRoomId, keyOf(room))"
+            :hovered="same(hovered, keyOf(room))"
+            :invalid="invalid.has(keyOf(room))"
+            :focusable="focusableRooms && !compact"
+            :compact="compact"
+            :underlay="mode === 'view' && !backgroundVisible"
+            class="pointer-events-none"
+            @activate="emit('room-click', room, keyOf(room))"
           />
         </g>
-        <text
-          :x="floor.widthCm / 2"
-          :y="-px(22)"
-          text-anchor="middle"
-          dominant-baseline="central"
-          :font-size="px(11)"
-          paint-order="stroke"
-          :stroke-width="px(6)"
-          class="fill-muted-foreground stroke-muted font-sans tabular-nums"
+
+        <!-- The selected room: a ring just outside its outline, above every room -->
+        <g v-if="selectedRoom && ringClipPath" class="pointer-events-none" aria-hidden="true">
+          <clipPath :id="ringClipId" clipPathUnits="userSpaceOnUse">
+            <path :d="ringClipPath" clip-rule="evenodd" />
+          </clipPath>
+          <polygon
+            :points="pointsOf(selectedRoom.polygon)"
+            fill="none"
+            class="stroke-ring"
+            stroke-width="5.5"
+            stroke-linejoin="round"
+            vector-effect="non-scaling-stroke"
+            :clip-path="`url(#${ringClipId})`"
+          />
+        </g>
+
+        <slot name="overlay" :scale="scale" />
+      </svg>
+
+      <slot name="controls" />
+
+      <template v-if="!compact && !controlsBelow">
+        <!-- Scale bar -->
+        <div
+          class="pointer-events-none absolute bottom-3 left-3 flex flex-col items-start gap-1 rounded-md bg-background/80 px-2 py-1.5 text-xs leading-none text-muted-foreground tabular-nums shadow-xs backdrop-blur-sm"
+          aria-hidden="true"
         >
-          {{ widthLabel }}
-        </text>
-        <text
-          :transform="`translate(${-px(22)} ${floor.heightCm / 2}) rotate(-90)`"
-          text-anchor="middle"
-          dominant-baseline="central"
-          :font-size="px(11)"
-          paint-order="stroke"
-          :stroke-width="px(6)"
-          class="fill-muted-foreground stroke-muted font-sans tabular-nums"
+          <span>{{ barLabel }}</span>
+          <span
+            class="block h-1.5 border-x border-b border-muted-foreground"
+            :style="{ width: `${barPx}px` }"
+          />
+        </div>
+
+        <!-- Zoom: a row along the bottom edge, level with the scale bar -->
+        <div
+          v-if="interactive"
+          class="absolute right-3 bottom-3 flex overflow-hidden rounded-lg border bg-background/90 shadow-sm backdrop-blur-sm"
         >
-          {{ heightLabel }}
-        </text>
-      </g>
+          <Tooltip v-for="(control, index) in zoomControls" :key="control.label">
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                :class="cn('rounded-none', index === 1 && 'border-x')"
+                :aria-label="control.label"
+                @click="control.run"
+              >
+                <component :is="control.icon" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" class="flex items-center gap-2">
+              {{ control.label }}
+              <KeyHint v-if="mode === 'edit'" :keys="[control.key]" />
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </template>
+    </div>
 
-      <g>
-        <RoomShape
-          v-for="room in floor.rooms"
-          :key="keyOf(room)"
-          :room="room"
-          :room-key="keyOf(room)"
-          :scale="scale"
-          :selected="same(selectedRoomId, keyOf(room))"
-          :hovered="same(hovered, keyOf(room))"
-          :invalid="invalid.has(keyOf(room))"
-          :focusable="focusableRooms && !compact"
-          :compact="compact"
-          :underlay="mode === 'view' && !backgroundVisible"
-          class="pointer-events-none"
-          @activate="emit('room-click', room, keyOf(room))"
-        />
-      </g>
-
-      <!-- The selected room: a ring just outside its outline, above every room -->
-      <g v-if="selectedRoom && ringClipPath" class="pointer-events-none" aria-hidden="true">
-        <clipPath :id="ringClipId" clipPathUnits="userSpaceOnUse">
-          <path :d="ringClipPath" clip-rule="evenodd" />
-        </clipPath>
-        <polygon
-          :points="pointsOf(selectedRoom.polygon)"
-          fill="none"
-          class="stroke-ring"
-          stroke-width="5.5"
-          stroke-linejoin="round"
-          vector-effect="non-scaling-stroke"
-          :clip-path="`url(#${ringClipId})`"
-        />
-      </g>
-
-      <slot name="overlay" :scale="scale" />
-    </svg>
-
-    <slot name="controls" />
-
-    <template v-if="!compact">
-      <!-- Scale bar -->
+    <!-- Phones: the scale and the zoom under the plan, so they never cover it -->
+    <div
+      v-if="controlsBelow"
+      class="flex items-center justify-between gap-3 border-t bg-background/90 px-3 py-1.5"
+      data-slot="plan-controls"
+    >
       <div
-        class="pointer-events-none absolute bottom-3 left-3 flex flex-col items-start gap-1 rounded-md bg-background/80 px-2 py-1.5 text-xs leading-none text-muted-foreground tabular-nums shadow-xs backdrop-blur-sm"
+        class="flex flex-col items-start gap-1 text-xs leading-none text-muted-foreground tabular-nums"
         aria-hidden="true"
       >
         <span>{{ barLabel }}</span>
@@ -488,30 +546,19 @@ const ariaLabel = computed(() =>
           :style="{ width: `${barPx}px` }"
         />
       </div>
-
-      <!-- Zoom: a row along the bottom edge, level with the scale bar -->
-      <div
-        v-if="interactive"
-        class="absolute right-3 bottom-3 flex overflow-hidden rounded-lg border bg-background/90 shadow-sm backdrop-blur-sm"
-      >
-        <Tooltip v-for="(control, index) in zoomControls" :key="control.label">
-          <TooltipTrigger as-child>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              :class="cn('rounded-none', index === 1 && 'border-x')"
-              :aria-label="control.label"
-              @click="control.run"
-            >
-              <component :is="control.icon" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" class="flex items-center gap-2">
-            {{ control.label }}
-            <KeyHint v-if="mode === 'edit'" :keys="[control.key]" />
-          </TooltipContent>
-        </Tooltip>
+      <div v-if="interactive" class="flex overflow-hidden rounded-lg border bg-background">
+        <Button
+          v-for="(control, index) in zoomControls"
+          :key="control.label"
+          variant="ghost"
+          size="icon"
+          :class="cn('rounded-none', index === 1 && 'border-x')"
+          :aria-label="control.label"
+          @click="control.run"
+        >
+          <component :is="control.icon" />
+        </Button>
       </div>
-    </template>
+    </div>
   </div>
 </template>

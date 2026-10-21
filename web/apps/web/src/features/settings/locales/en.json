@@ -1,0 +1,111 @@
+{
+  "eyebrow": "Settings",
+  "home": {
+    "nav": "Home details",
+    "title": "Home details",
+    "description": "The home's name, where it is, its language, and the electricity price behind the energy costs.",
+    "save": "Save changes",
+    "saved": "Home details saved."
+  },
+  "backup": {
+    "nav": "Backup",
+    "title": "Backup",
+    "description": "Keep a copy of your home's setup, and bring it back on a new server.",
+    "export": {
+      "title": "Download a backup",
+      "description": "Floors with their plans, rooms, integrations, devices, their places on the plans and the accounts (without passwords).",
+      "secrets": "Include integration credentials",
+      "secretsHelp": "Sign-ins and tokens go in encrypted with a passphrase. Without them, integrations ask for their credentials again after a restore.",
+      "passphrase": "Passphrase",
+      "passphraseHelp": "At least {min} characters. You'll need it to restore the credentials; it can't be recovered.",
+      "confirm": "Passphrase again",
+      "problems": {
+        "required": "Enter a passphrase to include the credentials.",
+        "tooShort": "Use at least {min} characters.",
+        "tooLong": "Use at most {max} characters.",
+        "mismatch": "The passphrases don't match."
+      },
+      "noHistory": "History isn't included.",
+      "action": "Download backup",
+      "done": "Backup downloaded.",
+      "doneWithSecrets": "Backup downloaded, with the credentials encrypted. Keep the passphrase somewhere safe."
+    },
+    "import": {
+      "title": "Restore a backup",
+      "description": "Brings a backup into a new, empty home: everything comes back as it was saved.",
+      "notEmpty": "Restoring works only on a fresh install: set up the new server, then restore the backup there.",
+      "drop": "Drop a backup file (.zip) here",
+      "choose": "Choose a file",
+      "another": "Choose another file",
+      "notZip": "That isn't a backup file. Choose the .zip that ControlHome downloaded.",
+      "passphrase": "Passphrase",
+      "passphraseHelp": "Only if the backup includes the integrations' credentials.",
+      "action": "Restore",
+      "done": "Backup restored.",
+      "restored": "Your home is back.",
+      "counts": {
+        "floors": "Floors",
+        "rooms": "Rooms",
+        "integrations": "Integrations",
+        "devices": "Devices",
+        "placements": "On the plans",
+        "users": "New accounts"
+      },
+      "secretsBack": "The integrations' credentials came back too; they're starting now.",
+      "secretsMissing": "The backup had no credentials: sign each integration in again from its page.",
+      "usersNote": "No accounts were added | The restored account has no password yet: set one in Users. | The {n} restored accounts have no password yet: set one for each in Users.",
+      "openHome": "Open the home",
+      "hasCredentials": "It includes credentials"
+    },
+    "daily": {
+      "title": "Automatic backups",
+      "description": "The server writes a backup without credentials every day and keeps the last {keep}.",
+      "now": "Back up now",
+      "written": "Backup written.",
+      "failed": "The last automatic backup failed ({time}). Check that the server has free space, then back up now.",
+      "last": "Last automatic backup: {time} · {count} kept",
+      "none": "No automatic backup yet. The first one is written within a day.",
+      "download": "Download the backup of {time}",
+      "downloadShort": "Download",
+      "noCredentials": "They don't include credentials; copy them somewhere safe now and then."
+    }
+  },
+  "history": {
+    "nav": "Data retention",
+    "title": "Data retention",
+    "description": "How long ControlHome keeps what your devices did. Keeping more means a bigger database.",
+    "tiers": {
+      "heading": "How a reading ages",
+      "raw": "Every change",
+      "short": "5-minute averages",
+      "hourly": "Hourly averages and energy"
+    },
+    "forever": "Kept forever",
+    "fields": {
+      "stateLogDays": {
+        "label": "Every change",
+        "help": "Each value as it changed: charts of the last few hours."
+      },
+      "shortTermStatsDays": {
+        "label": "5-minute averages",
+        "help": "With their lows and highs: charts of up to a week."
+      },
+      "deviceEventDays": {
+        "label": "Button presses and other events",
+        "help": "Momentary events such as a press or a doorbell ring."
+      },
+      "auditLogDays": {
+        "label": "Audit log",
+        "help": "Who did what: sign-ins, settings, safety actions."
+      }
+    },
+    "days": "no days | 1 day | {n} days",
+    "daysUnit": "days",
+    "limits": "{min} to {max}",
+    "range": "Use a whole number of days from {min} to {max}.",
+    "saved": "History settings saved.",
+    "problems": {
+      "shortBelowRaw": "Keep 5-minute averages at least as long as every change ({days})."
+    }
+  }
+}

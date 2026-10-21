@@ -26,7 +26,8 @@ public sealed class FileService(IControlHomeDb db, IImageProcessor images, IAudi
 
     public const string WebpContentType = "image/webp";
 
-    private static readonly ImageEncodingOptions _encoding = new(MaxDimensionPx, WebpQuality, MaxSourcePixels);
+    /// <summary>How every stored image is encoded (uploads, and the images of an imported backup).</summary>
+    public static ImageEncodingOptions ImageEncoding { get; } = new(MaxDimensionPx, WebpQuality, MaxSourcePixels);
 
     /// <summary>
     /// Validates, re-encodes and stores the upload; audits <c>files.uploaded</c>. 400: <c>validation.failed</c>
@@ -55,7 +56,7 @@ public sealed class FileService(IControlHomeDb db, IImageProcessor images, IAudi
             return AppError.Validation(ErrorCodes.FilesUnsupportedType, "Only PNG, JPEG and WebP images are accepted.");
         }
 
-        var image = images.ReencodeAsWebp(data, format, _encoding);
+        var image = images.ReencodeAsWebp(data, format, ImageEncoding);
         switch (image.Status)
         {
             case ImageProcessingStatus.TooManyPixels:
