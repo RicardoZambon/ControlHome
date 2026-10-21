@@ -161,6 +161,12 @@ export function enumCategories(
   return seen
 }
 
+/**
+ * A time label on the window's first or last instant is centred on the chart's edge, so half of it was cut off ("06:17
+ * A"): the first one is aligned to start there and the last one to end there.
+ */
+const EDGE_LABELS = { alignMinLabel: 'left', alignMaxLabel: 'right' } as const
+
 export function historyOption(input: HistoryOptionInput): ChartOption {
   const { series, kind, window, palette } = input
   const raw = series.resolution === 'raw'
@@ -175,7 +181,11 @@ export function historyOption(input: HistoryOptionInput): ChartOption {
     max: window.max,
     splitLine: { show: false },
     axisTick: { show: false },
-    axisLabel: { hideOverlap: true, formatter: (value: number) => input.formatTime(value, withDate) },
+    axisLabel: {
+      ...EDGE_LABELS,
+      hideOverlap: true,
+      formatter: (value: number) => input.formatTime(value, withDate),
+    },
   }
   const grid = { left: 4, right: 12, top: 12, bottom: 4, containLabel: true }
   const area = {
@@ -418,6 +428,7 @@ export function energyOption(input: EnergyOptionInput): ChartOption {
       splitLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
+        ...EDGE_LABELS,
         hideOverlap: true,
         formatter: (value: number) => input.formatTime(value, input.bucket === 'hour' ? 'hour' : 'day'),
       },

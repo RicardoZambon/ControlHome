@@ -193,6 +193,14 @@ describe('historyOption', () => {
     ])
   })
 
+  it('keeps the time labels at the edges of the window inside the chart', () => {
+    for (const kind of ['number', 'bool', 'enum'] as const) {
+      const option = historyOption(input({ kind, series: { resolution: 'raw', points: [point(NOW, 1)] } }))
+      const xAxis = option.xAxis as { axisLabel: { alignMinLabel?: string; alignMaxLabel?: string } }
+      expect(xAxis.axisLabel).toMatchObject({ alignMinLabel: 'left', alignMaxLabel: 'right' })
+    }
+  })
+
   it('formats the tooltip with escaped text', () => {
     const option = historyOption(input({ formatValue: () => '<b>1 W</b>' }))
     const tooltip = option.tooltip as { formatter: (params: unknown) => string }
@@ -299,5 +307,8 @@ describe('energy', () => {
     expect(bars!.data[2]!.itemStyle.color).toBe(PALETTE.line)
     const tooltip = option.tooltip as { formatter: (params: unknown) => string }
     expect(tooltip.formatter([{ value: [NOW, 0.35], data: { estimated: true } }])).toContain('(estimated)')
+    // The time labels at the edges stay inside the chart.
+    const xAxis = option.xAxis as { axisLabel: { alignMinLabel?: string; alignMaxLabel?: string } }
+    expect(xAxis.axisLabel).toMatchObject({ alignMinLabel: 'left', alignMaxLabel: 'right' })
   })
 })
