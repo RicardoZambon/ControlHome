@@ -307,6 +307,29 @@ describe('device page', () => {
     member.wrapper.unmount()
   })
 
+  it('names the room its endpoints are in when the device itself has none (placed on a plan)', async () => {
+    signedIn('Member', 'en')
+    const placed = basicHome().map((device) =>
+      device.id === 'd-contact'
+        ? {
+            ...device,
+            endpoints: device.endpoints.map((endpoint) => ({ ...endpoint, roomId: 11, effectiveRoomId: 11 })),
+          }
+        : device,
+    )
+    api.listDevices.mockResolvedValue(ok(placed))
+    api.getDevice.mockImplementation(({ path }: { path: { id: string } }) =>
+      Promise.resolve(ok(detail(placed.find((device) => device.id === path.id)!))),
+    )
+    const contact = await open('/devices/d-contact')
+    expect(contact.wrapper.get('[data-slot="device-room"]').text()).toBe('Kitchen · Ground floor')
+    contact.wrapper.unmount()
+
+    const lock = await open('/devices/d-lock')
+    expect(lock.wrapper.get('[data-slot="device-room"]').text()).toBe('No room')
+    lock.wrapper.unmount()
+  })
+
   it('lets Members lock and unlock; a Viewer sees the state only', async () => {
     signedIn('Member', 'en')
     const member = await open('/devices/d-lock')

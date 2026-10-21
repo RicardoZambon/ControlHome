@@ -128,7 +128,18 @@ usePageTrail(() =>
 
 const summary = computed(() => (device.value ? toSummary(device.value) : null))
 const availability = computed(() => (device.value ? devices.availabilityOf(device.value) : 'Unknown'))
-const room = computed(() => (device.value?.roomId ? devices.roomsById.get(device.value.roomId) : undefined))
+/**
+ * The device's room; a device without one is in the room all its endpoints are in (a plug placed on a plan puts its
+ * endpoint in a room, not the device), so the header agrees with its tile and the plan.
+ */
+const room = computed(() => {
+  const current = device.value
+  if (!current) return undefined
+  const endpointRooms = new Set(current.endpoints.map((endpoint) => endpoint.effectiveRoomId))
+  const roomId =
+    current.roomId ?? (endpointRooms.size === 1 ? (endpointRooms.values().next().value ?? null) : null)
+  return roomId === null ? undefined : devices.roomsById.get(roomId)
+})
 const canFavorite = computed(() => session.hasRole('Admin', 'Member'))
 const multiple = computed(() => (device.value?.endpoints.length ?? 0) > 1)
 
@@ -337,7 +348,7 @@ const info = computed(() => {
           class="max-sm:size-12 max-sm:rounded-xl max-sm:[&_svg]:size-6"
         />
         <div class="grid min-w-0 flex-1 gap-1.5">
-          <p class="eyebrow truncate">
+          <p class="eyebrow truncate" data-slot="device-room">
             {{ room?.name ?? t('device.noRoom')
             }}<template v-if="room && room.floorName"> · {{ room.floorName }}</template>
           </p>
