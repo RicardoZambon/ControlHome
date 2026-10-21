@@ -19,11 +19,7 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-21 — Milestone 1.5 merged (PR #19): Umbrel community store template (`deploy/umbrel/`), Dockerfile NuGet layer fix, VersionPrefix 0.2.0.
 
 ## In progress (2026-10-21)
-- **PAUSED 2026-10-21 ~14:58 UTC for the 5-hour usage limit (88%; resets 17:50 UTC).** Phase 2 wave A workflow `wayv3mbur` (run wf_ea0b675b-d0e, script workflows/scripts/p2a-vendor-connectors-wf_ea0b675b-d0e.js, base c4a0238) was stopped while all three implementers were in final verification; each had committed its work (worktrees clean):
-  - LG ThinQ: worktree wf_ea0b675b-d0e-1, branch worktree-wf_ea0b675b-d0e-1, ef14c87 (+ d803678 energy windows into EnergyHourly).
-  - DahuaHttp + go2rtc backend: worktree wf_ea0b675b-d0e-2, branch worktree-wf_ea0b675b-d0e-2, 9c8ed59 (+ c45129d).
-  - SmartThings: worktree wf_ea0b675b-d0e-3, branch worktree-wf_ea0b675b-d0e-3, d4bcbbb.
-  Resume plan (no implement step completed, so resumeFromRunId has nothing cached): edit the script so stage 1 is a short "finish" agent per track (reset to the commit above, check the task scope is complete, run the full suite, report), then the adversarial review stage as written.
+- Running `wwpkfzdcm` (run wf_1bee2b70-67a, same script p2a-vendor-connectors-wf_ea0b675b-d0e.js, edited): one finish + adversarial review agent per connector, starting from the first run's commits (stopped for the usage limit): LG ThinQ ef14c87 (worktree wf_ea0b675b-d0e-1), DahuaHttp + go2rtc 9c8ed59 (wf_ea0b675b-d0e-2), SmartThings d4bcbbb (wf_ea0b675b-d0e-3). Next: merge the three result branches into `milestone/2-vendor-connectors`, add the catalogue Experimental flag, then UI + E2E (second workflow). Weekly limit was 86% at the 17:50 UTC reset: stop new workflows at 92% until the weekly reset (2026-10-26 05:00 UTC).
 - 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans.
 - Next phases: Phase 2 (docs/plans/phase-2-vendor-connectors.md: LG ThinQ, DahuaHttp + go2rtc, SmartThings), Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
 - Usage guard: session cron every 10 min, pause at ≥ 90% of the 5-hour limit (TaskStop running tasks, one-shot resume after reset); no new workflows at ≥ 92% weekly.
