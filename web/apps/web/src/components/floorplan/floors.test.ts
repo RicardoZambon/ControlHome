@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { floorEyebrow, levelLabel, primaryFloor, sortFloors, totalAreaM2 } from './floors'
+import { floorEyebrow, levelLabel, planBounds, primaryFloor, sortFloors, totalAreaM2 } from './floors'
 
 const t = (key: string, named?: Record<string, unknown>) => `${key}${named ? JSON.stringify(named) : ''}`
 
@@ -53,5 +53,33 @@ describe('totalAreaM2', () => {
       { x: 0, y: size },
     ]
     expect(totalAreaM2({ rooms: [{ polygon: square(300) }, { polygon: square(100) }] as never })).toBe(10)
+  })
+})
+
+describe('planBounds', () => {
+  const rect = (x: number, y: number, w: number, h: number) => [
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + h },
+    { x, y: y + h },
+  ]
+  const floor = { widthCm: 1600, heightCm: 1200 }
+
+  it('is what is drawn — the rooms and the devices — with a margin, inside the floor', () => {
+    const bounds = planBounds({
+      ...floor,
+      rooms: [{ polygon: rect(100, 100, 500, 500) }, { polygon: rect(600, 100, 900, 900) }],
+      placements: [{ xCm: 50, yCm: 1050 }],
+    })
+    expect(bounds).toEqual({ x: 0, y: 40, width: 1560, height: 1070 })
+  })
+
+  it('is the whole floor without rooms', () => {
+    expect(planBounds({ ...floor, rooms: [], placements: [] })).toEqual({
+      x: 0,
+      y: 0,
+      width: 1600,
+      height: 1200,
+    })
   })
 })

@@ -129,6 +129,7 @@ try
 
     app.UseStatusCodePages();
     app.UseControlHomeRequestEdge(); // forwarded headers, security headers, network allowlist, origin/header checks
+    app.UseMiddleware<ServerTimeHeaderMiddleware>(); // X-ControlHome-Time: the runtime clock, for the UI's "now"
     app.UseControlHomeSpaStaticFiles();
     app.UseRouting();
     app.UseMiddleware<DatabaseGateMiddleware>();

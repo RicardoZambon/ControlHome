@@ -5,6 +5,7 @@ using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Common;
 using ControlHome.Application.Devices;
+using ControlHome.Application.Homes;
 using ControlHome.Application.Runtime;
 using ControlHome.Application.Security;
 using ControlHome.Connectors.Abstractions;
@@ -34,6 +35,7 @@ public sealed partial class IntegrationFlowService(
     IRuntimeClock clock,
     ICurrentActor actor,
     IAuditLog auditLog,
+    IHomeLanguage homeLanguage,
     KnownSecrets knownSecrets,
     TimeProvider timeProvider,
     ILogger<IntegrationFlowService> logger)
@@ -169,12 +171,14 @@ public sealed partial class IntegrationFlowService(
 
     private async Task<Result<FlowStepDto>> BeginAsync(IConnectorFactory factory, IntegrationInstance? existing, CancellationToken cancellationToken)
     {
+        // The home's language: what the flow names in it (the integration, a virtual connector's devices).
+        var language = await homeLanguage.GetAsync(cancellationToken);
         var flow = factory.CreateSetupFlow() ?? new ConfigFieldsFlow(factory.Descriptor);
 
         // Fully random (not time-ordered like the other ids): a flow id must not be guessable.
         var session = new FlowSession(Guid.NewGuid(), factory.Descriptor.Key, existing?.Id, OwnerId, flow);
         await flows.AddAsync(session);
-        var context = new FlowContext(clock.Time, logger, existing);
+        var context = new FlowContext(clock.Time, logger, existing) { Language = language };
         await session.Gate.WaitAsync(cancellationToken);
         try
         {

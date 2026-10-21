@@ -26,6 +26,7 @@ const FIELDS: FieldSchemaDto[] = [
     schema: { type: 'enum', values: ['basic', 'demo'] },
     required: true,
     secret: false,
+    advanced: false,
     help: null,
   },
   {
@@ -34,6 +35,7 @@ const FIELDS: FieldSchemaDto[] = [
     schema: { type: 'number', min: 0, integer: true },
     required: false,
     secret: false,
+    advanced: true,
     help: text('Same seed, same home.', 'Mesma semente, mesma casa.'),
   },
   {
@@ -42,6 +44,7 @@ const FIELDS: FieldSchemaDto[] = [
     schema: { type: 'bool' },
     required: false,
     secret: false,
+    advanced: false,
     help: null,
   },
   {
@@ -50,6 +53,7 @@ const FIELDS: FieldSchemaDto[] = [
     schema: { type: 'string' },
     required: true,
     secret: true,
+    advanced: false,
     help: null,
   },
 ]
@@ -88,6 +92,7 @@ describe('flow steps', () => {
     const fields = formFields(step('form', { fields: FIELDS }), 'pt-BR')
     expect(fields.map((field) => field.label)).toEqual(['Conjunto', 'Seed', 'Expire', 'Token'])
     expect(fields[1]!.help).toBe('Mesma semente, mesma casa.')
+    expect(fields.map((field) => field.advanced)).toEqual([false, true, false, false])
     expect(fields[3]!.secret).toBe(true)
   })
 

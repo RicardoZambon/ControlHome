@@ -1,5 +1,6 @@
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
+using ControlHome.Application.Common;
 using ControlHome.Application.HomeBackup;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -59,7 +60,50 @@ public static class BackupEndpoints
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
+        backup.MapGet("/scheduled", (IScheduledBackups scheduled) => TypedResults.Ok(scheduled.Describe()))
+            .WithName("listScheduledBackups")
+            .WithSummary("The automatic backups: the schedule, whether the last attempt failed, and the files kept.")
+            .WithDescription(
+                "The server writes a backup without credentials to its data folder on a schedule (daily, keeping seven by " +
+                "default). LastFailedAtUtc is set while the last attempt failed and none succeeded since.")
+            .RequireAuthorization(AuthorizationPolicies.Admin);
+
+        backup.MapPost("/scheduled", RunScheduledAsync)
+            .WithName("runScheduledBackup")
+            .WithSummary("Writes an automatic backup now (whatever the schedule) and answers with it.")
+            .WithDescription("Older backups beyond the number kept are deleted. 503 backup.write_failed when the data folder cannot be written.")
+            .RequireAuthorization(AuthorizationPolicies.Admin)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        backup.MapGet("/scheduled/{name}", GetScheduledAsync)
+            .WithName("getScheduledBackup")
+            .WithSummary("Downloads one automatic backup (zip) by its name.")
+            .WithDescription("Only the names listed by GET /api/backup/scheduled; any other name is 404 backup.not_found.")
+            .RequireAuthorization(AuthorizationPolicies.Admin)
+            .Produces<Stream>(StatusCodes.Status200OK, BackupService.ContentType)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
+    }
+
+    private static async Task<Results<Ok<ScheduledBackupDto>, ProblemHttpResult>> RunScheduledAsync(
+        IScheduledBackups scheduled,
+        CancellationToken cancellationToken) =>
+        (await scheduled.RunNowAsync(cancellationToken)).ToHttpResult();
+
+    private static async Task<Results<FileContentHttpResult, ProblemHttpResult>> GetScheduledAsync(
+        string name,
+        IScheduledBackups scheduled,
+        HttpResponse response,
+        CancellationToken cancellationToken)
+    {
+        if (await scheduled.ReadAsync(name, cancellationToken) is not { } content)
+        {
+            return Problems.From(AppError.NotFound(ErrorCodes.BackupNotFound, "No automatic backup has this name."));
+        }
+
+        response.Headers.CacheControl = "no-store";
+        return TypedResults.File(content, BackupService.ContentType, name);
     }
 
     private static async Task<FileContentHttpResult> ExportAsync(BackupService backups, HttpResponse response, CancellationToken cancellationToken) =>

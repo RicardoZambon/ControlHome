@@ -81,6 +81,9 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         { "GET", "/api/backup/export", "exportBackup", AuthorizationPolicies.Admin, null },
         { "POST", "/api/backup/export", "exportBackupWithSecrets", AuthorizationPolicies.Admin, null },
         { "POST", "/api/backup/import", "importBackup", AuthorizationPolicies.Admin, null },
+        { "GET", "/api/backup/scheduled", "listScheduledBackups", AuthorizationPolicies.Admin, null },
+        { "POST", "/api/backup/scheduled", "runScheduledBackup", AuthorizationPolicies.Admin, null },
+        { "GET", "/api/backup/scheduled/{name}", "getScheduledBackup", AuthorizationPolicies.Admin, null },
     };
 
     [Fact]

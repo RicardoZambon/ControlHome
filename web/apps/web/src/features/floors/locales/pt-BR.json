@@ -59,6 +59,8 @@
     "noRoomsShort": "Nenhum cômodo neste andar ainda.",
     "drawRooms": "Desenhar cômodos",
     "deviceCount": "Nenhum dispositivo | 1 dispositivo | {n} dispositivos",
+    "activeOf": "Nenhum dispositivo | {active} de 1 ligado | {active} de {total} ligados",
+    "outside": "Fora dos cômodos",
     "noDevicesAdmin": "Ainda não há dispositivos neste andar.",
     "placeDevices": "Posicionar dispositivos"
   },
@@ -275,7 +277,7 @@
       "allPlaced": "Todos os dispositivos estão em uma planta.",
       "noneHere": "Nada neste andar ainda.",
       "elsewhere": "Nenhum dispositivo em outros andares | Mais 1 dispositivo está em outro andar | Mais {n} dispositivos estão em outros andares",
-      "summary": "{placed} aqui · {unplaced} a posicionar",
+      "summary": "Nenhum dispositivo | 1 dispositivo | {n} dispositivos",
       "saveFailed": "Não foi possível salvar o lugar do dispositivo."
     }
   }

@@ -40,7 +40,8 @@
     "fit": "Fit to screen",
     "devices": {
       "openDevice": "Open device",
-      "panelDescription": "The device's controls and state."
+      "panelDescription": "The device's controls and state.",
+      "group": "{count} devices here: {names}. Zoom in to tell them apart."
     }
   },
   "theme": {
@@ -76,7 +77,8 @@
     "chooseLanguage": "Change language",
     "chooseTheme": "Change theme",
     "preferencesNotSaved": "Applied here, but not saved to your profile.",
-    "systemReady": "All systems normal",
+    "systemReady": "Server running",
+    "devicesOffline": "{n} device offline | {n} devices offline",
     "systemDatabase": "Database: {state}",
     "nav": {
       "groups": {
@@ -137,6 +139,7 @@
     "noValue": "—",
     "noFlags": "None",
     "choose": "Choose…",
+    "advanced": "Advanced settings",
     "errors": {
       "between": "Use a value from {min} to {max}.",
       "atLeast": "Use {min} or more.",
@@ -243,6 +246,9 @@
       "remoteControlEnabled": "Remote control"
     },
     "attributesIn": {
+      "switch": {
+        "on": "On/off"
+      },
       "power": {
         "power": "Power use"
       },
@@ -647,7 +653,9 @@
       "invalid": "That file isn't a ControlHome backup, or it is damaged.",
       "unsupported_version": "This backup comes from a newer ControlHome version. Update ControlHome first.",
       "passphrase_required": "This backup contains encrypted secrets. Enter the passphrase used to export it.",
-      "passphrase_incorrect": "That passphrase doesn't open this backup's secrets."
+      "passphrase_incorrect": "That passphrase doesn't open this backup's secrets.",
+      "not_found": "That automatic backup is no longer kept. Refresh the list.",
+      "write_failed": "The backup couldn't be written to the server's data folder. Check that it has free space."
     },
     "demo": {
       "not_empty": "The demo home can only be loaded into an empty home."
@@ -690,6 +698,12 @@
     "perDay": "Per day",
     "noEnergy": "No energy used in this period yet.",
     "estimated": "estimated",
-    "partlyEstimated": "Partly estimated from power readings"
+    "partlyEstimated": "Partly estimated from power readings",
+    "now": "Now",
+    "recordingSince": "Recording since {time}",
+    "notRecorded": "Not recorded yet",
+    "since": "{state} since {time}",
+    "throughout": "{state} the whole time",
+    "energyTotal": "{amount} in {range}"
   }
 }

@@ -1,4 +1,5 @@
 using ControlHome.Application.Devices;
+using ControlHome.Application.Homes;
 using ControlHome.Application.Runtime;
 using ControlHome.Application.Security;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,6 +23,7 @@ public static class IntegrationsServiceCollectionExtensions
         services.TryAddSingleton<IIntegrationSecretStores>(NoIntegrationSecretStores.Instance);
         services.TryAddSingleton<IRuntimeClock>(sp => new AppRuntimeClock(sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IntegrationFlowStore>();
+        services.TryAddScoped<IHomeLanguage, HomeLanguage>();
         services.AddScoped<IntegrationService>();
         services.AddScoped<IntegrationFlowService>();
         return services;

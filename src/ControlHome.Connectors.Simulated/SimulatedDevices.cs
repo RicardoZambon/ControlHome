@@ -95,9 +95,10 @@ internal abstract class SimulatedDevice(string externalId, int index, int seed)
     /// <summary>The device's endpoints; by default only the main endpoint with <see cref="Capabilities"/>.</summary>
     public virtual IReadOnlyList<DiscoveredEndpoint> Endpoints => [new DiscoveredEndpoint(Endpoint.MainKey, null, Capabilities)];
 
-    public DiscoveredDevice Describe() => new(
+    /// <summary>The device as the inventory reports it, its names (device, controls, room) in <paramref name="language"/>.</summary>
+    public DiscoveredDevice Describe(string language) => new(
         ExternalId,
-        Name,
+        SimulatedNames.In(language, Name),
         DeviceClass,
         "ControlHome",
         Model,
@@ -111,8 +112,8 @@ internal abstract class SimulatedDevice(string externalId, int index, int seed)
                 $"02:00:{(seed >> 16) & 0xFF:X2}:{(seed >> 8) & 0xFF:X2}:{seed & 0xFF:X2}:{index:X2}"),
             ["serial"] = string.Create(CultureInfo.InvariantCulture, $"SIM-{seed}-{index}"),
         },
-        SuggestedRoom,
-        Endpoints);
+        SimulatedNames.In(language, SuggestedRoom),
+        [.. Endpoints.Select(e => e.Name is null ? e : e with { Name = SimulatedNames.In(language, e.Name) })]);
 
     /// <summary>The current value of every attribute, in a fixed order.</summary>
     public abstract IEnumerable<SimulatedValue> Snapshot();

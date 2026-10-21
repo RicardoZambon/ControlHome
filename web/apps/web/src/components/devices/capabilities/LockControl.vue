@@ -65,32 +65,41 @@ const quickClass = computed(() => {
 </script>
 
 <template>
-  <button
-    v-if="variant === 'tile'"
-    type="button"
-    :aria-label="`${quickLabel} · ${control.name.value}`"
-    :title="quickLabel"
-    :aria-busy="busy || undefined"
-    :disabled="!control.enabled.value || busy"
-    data-slot="lock-quick"
-    :data-state="lockState"
-    :data-action="quickCommand"
-    :class="
-      cn(
-        'relative inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full transition-[background-color,border-color,transform] duration-300 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 motion-safe:active:scale-95 [&_svg]:size-5',
-        quickClass,
-      )
-    "
-    @click="control.send(quickCommand)"
-  >
-    <KeyRound v-if="quickCommand === 'unlock'" aria-hidden="true" :stroke-width="2" />
-    <Lock v-else aria-hidden="true" :stroke-width="2.25" />
+  <!-- Tiles: the action and, under it, what it does ("Unlock"): a safety action never hides behind an icon -->
+  <span v-if="variant === 'tile'" class="flex flex-col items-center gap-1">
+    <button
+      type="button"
+      :aria-label="`${quickLabel} · ${control.name.value}`"
+      :title="quickLabel"
+      :aria-busy="busy || undefined"
+      :disabled="!control.enabled.value || busy"
+      data-slot="lock-quick"
+      :data-state="lockState"
+      :data-action="quickCommand"
+      :class="
+        cn(
+          'relative inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full transition-[background-color,border-color,transform] duration-300 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 motion-safe:active:scale-95 [&_svg]:size-5',
+          quickClass,
+        )
+      "
+      @click="control.send(quickCommand)"
+    >
+      <KeyRound v-if="quickCommand === 'unlock'" aria-hidden="true" :stroke-width="2" />
+      <Lock v-else aria-hidden="true" :stroke-width="2.25" />
+      <span
+        v-if="busy"
+        aria-hidden="true"
+        class="pointer-events-none absolute -inset-1 rounded-full border-2 border-transparent border-t-foreground/70 motion-safe:animate-spin"
+      />
+    </button>
     <span
-      v-if="busy"
+      class="text-xs leading-none font-medium text-muted-foreground"
       aria-hidden="true"
-      class="pointer-events-none absolute -inset-1 rounded-full border-2 border-transparent border-t-foreground/70 motion-safe:animate-spin"
-    />
-  </button>
+      data-slot="quick-verb"
+    >
+      {{ quickLabel }}
+    </span>
+  </span>
 
   <div v-else class="flex flex-col items-center gap-5 py-2 text-center" data-slot="lock-control">
     <span

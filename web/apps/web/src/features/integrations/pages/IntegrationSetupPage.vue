@@ -67,6 +67,12 @@ async function load(): Promise<void> {
 watch([reauthId, connectorKey], load, { immediate: true })
 
 const name = computed(() => (connector.value ? localized(connector.value.displayName, locale.value) : ''))
+/** Signing in again (a connector with credentials) or changing its settings (one without, like the simulated hub). */
+const reauthLabel = computed(() =>
+  connector.value?.configFields.some((field) => field.secret)
+    ? t('integrations.setup.reauthTitle')
+    : t('integrations.detail.reconfigure'),
+)
 const icon = computed(() => connectorIcon(connector.value?.icon))
 
 usePageTrail(() => {
@@ -75,7 +81,7 @@ usePageTrail(() => {
     return [
       { label: t('integrations.title'), to: { name: 'integrations' } },
       { label: integration.value.name, to: { name: 'integration', params: { id: integration.value.id } } },
-      { label: t('integrations.setup.reauthTitle') },
+      { label: reauthLabel.value },
     ]
   return [
     { label: t('integrations.title'), to: { name: 'integrations' } },
@@ -166,7 +172,7 @@ const steps = computed(() =>
         </span>
         <div class="grid min-w-0 gap-1">
           <p class="eyebrow">
-            {{ reauthId ? t('integrations.setup.reauthEyebrow') : t('integrations.setup.eyebrow') }}
+            {{ reauthId ? reauthLabel : t('integrations.setup.eyebrow') }}
           </p>
           <h1 class="truncate font-serif text-3xl font-medium tracking-tight md:text-4xl">
             {{ reauthId ? (integration?.name ?? name) : name }}
@@ -216,6 +222,7 @@ const steps = computed(() =>
             :key="attempt"
             :start="start"
             :connector="connector"
+            :eyebrow="reauthId ? undefined : t('integrations.setup.stepConnect')"
             @done="onDone"
             @cancel="onCancel"
           />

@@ -251,7 +251,9 @@ endpoints and orphaned devices are left out of the rooms.
   `POST /api/integrations/flows/{flowId}` (`ContinueFlowRequest(input)`) answer with a flat `FlowStepDto` (`type` =
   `form` | `externalUrl` | `progress` | `choose` | `done` | `abort`); `DELETE …/flows/{flowId}` abandons one;
   `POST /api/integrations/{id}/flows/reauth` runs the connector's flow for an existing integration (`FlowContext.Existing`
-  with its secret store). Flows live in memory (`IntegrationFlowStore`) 15 min after their last step, at most 10 per admin,
+  with its secret store); `FlowContext.Language` is the home's language, for names the flow suggests in it (the
+  integration's, a virtual connector's devices). Config fields marked `FieldSchema.Advanced` (test switches, tuning) are
+  folded away under "Advanced settings" by the schema form. Flows live in memory (`IntegrationFlowStore`) 15 min after their last step, at most 10 per admin,
   owned by the admin who started them (flow ids are random v4 GUIDs, never time-ordered), one answer at a time (a cancel
   waits for the answer in progress); typed secret fields are registered with the log redactor before the connector sees
   them, and form values never echo secrets. A connector without a flow gets one form with its config fields
@@ -293,8 +295,9 @@ endpoints and orphaned devices are left out of the rooms.
 - **Command outcomes:** `CommandOutcome.Accepted | Completed | Rejected(code, message)`; standard codes in
   `CommandRejectionCodes` (`duplicate`, `idempotency_required`, `unknown_device`, `unknown_endpoint`,
   `unsupported_command`, `invalid_arguments`, `unavailable`, `refused`).
-- **Simulated connector** (`simulated`, config `{ "preset": "basic" | "demo", "seed": 42, "simulateReauth": false }`,
-  default seed from `Simulated:Seed`): `basic` is a dimmable light, a plug (power random walk, energy integrated over the
+- **Simulated connector** (`simulated`, config `{ "preset": "basic" | "demo", "language": "en" | "pt-BR", "seed": 42,
+  "simulateReauth": false }`, default seed from `Simulated:Seed`; the setup flow fills `language` with the home's, and
+  the devices, their controls and the rooms they suggest are named in it — `SimulatedNames`): `basic` is a dimmable light, a plug (power random walk, energy integrated over the
   clock), an AC (room temperature drifting to the target; mode-dependent target range), a door contact with battery and a
   smart lock; `demo` (1.3) adds a color lamp, a washer (`applianceCycle` counting down + phase power), a TV
   (`mediaPlayer`), a sleepy motion sensor (reports only when it wakes), a 3-gang switch (endpoints `l1`–`l3`, each with
@@ -706,7 +709,10 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   (IANA time zone, language, currency) and accounts (user name characters, language, theme). Images are decoded and
   re-encoded as WebP like uploads, so only pixels are stored. Errors: `backup.invalid`, `backup.unsupported_version`,
   `backup.passphrase_required`, `backup.passphrase_incorrect`. A daily backup without secrets is written on the active
-  runtime to `{DataPath}/backups` (`BackupScheduler`, `Backup:Interval` 1 day, `Backup:Keep` 7 newest).
+  runtime to `{DataPath}/backups` (`BackupScheduler`, `Backup:Interval` 1 day, `Backup:Keep` 7 newest). Admins see them
+  (`GET /api/backup/scheduled`: the schedule, `LastFailedAtUtc` while the last attempt failed, the files kept), download
+  one by its exact listed name (`GET /api/backup/scheduled/{name}`, else 404 `backup.not_found`) and write one now
+  (`POST /api/backup/scheduled`, 503 `backup.write_failed`); the dashboard shows Admins a failed backup.
 - **Log redaction:** a `KnownSecretsRedactor` covers every Serilog event, HttpClient/YARP log levels are lowered, and
   request logs use route templates. A canary test checks that no secret appears in logs, responses or hub payloads.
   Never log connection strings or tokens.
@@ -783,6 +789,10 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
 - **App structure:** features are folders `apps/web/src/features/<feature>/` (`routes.ts`, optional `nav.ts`,
   `locales/en.json`, `locales/pt-BR.json`, pages, components) auto-registered via `import.meta.glob`. API calls only
   through the generated `@controlhome/api-client`, which sends `X-ControlHome: 1` and same-origin credentials.
+- **Server time:** every `/api` response carries `X-ControlHome-Time` (the runtime clock, ISO 8601 UTC — the clock of
+  state timestamps, history and "last seen"). The client keeps its offset (`lib/serverClock.ts`), so relative times
+  ("3 minutes ago") and the end of a chart window follow the server, not a phone's clock; `formatRelative` never says
+  "in 4 hours" (a time ahead of now is "just now").
 - **App libraries:** Vue 3.5 (`<script setup lang="ts">`, Composition API), Vite 8, TS ~6.0, Pinia 4 (setup stores),
   Vue Router 5, VueUse, vue-i18n 11 (pt-BR and en; **a missing key throws in tests**), @microsoft/signalr, ECharts
   through vue-echarts, @lucide/vue plus mdi device icons.
@@ -811,17 +821,25 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
     WebP quality 85, ≤ 4096 px, EXIF orientation applied and all metadata dropped. **No SVG.**
   - View mode shows live state and a tap-to-control popover.
   - Devices on the plan (1.3, `PlacedDevice` / `PlacementLayer`): an icon in a disc whose ring has the live state color
-    (dashed when unreachable, a soft halo while on), sized in screen pixels; previews draw small dots. View mode: a tap
-    opens `DeviceQuickPanel` (the registry's controls; a sheet on phones). The editor's Devices tab lists what is on no
+    (dashed when unreachable, a soft halo while on), with a sensor's or meter's reading beside it when zoomed in. It
+    grows and shrinks with the zoom (`markerRadiusPx`: 28 cm on the floor, between 9 px and the full 15/18 px) while
+    its tap target stays 44 px; at a zoom where markers of one room would overlap they are one bubble with their count
+    (`clusterMarkers`; a tap zooms in on them). Plans open fitted to what is drawn (`planBounds`: rooms and devices),
+    not the whole floor sheet; on phones the zoom and scale sit in a bar under the plan; previews draw small dots.
+    View mode: a tap opens `DeviceQuickPanel` (the registry's controls; a sheet on phones). The editor's Devices tab lists what is on no
     plan yet (a multi-control device as a whole or control by control), places by dragging a row's handle or by
     "Place" + a tap (touch, keyboard), moves by dragging a marker and takes one off; placements are saved at once
     (`PUT /api/placements`), outside the layout draft and its undo history.
-- **History charts** (1.4, `components/charts/*`): `HistoryChart` (numbers as a line — raw changes as steps held to now,
-  statistics as the mean over the min–max band; booleans and enums as steps) and `EnergyBars` (`EnergyHourly` per hour
-  or per local day, estimated hours lighter), on vue-echarts with ECharts tree-shaken to line and bar charts and the
-  SVG renderer, loaded only with a device's History tab. Statistics end with their last closed bucket, so the device
-  page also fetches the raw changes after it and appends them (`withRawTail`): a chart always runs up to now, and a
-  device that just started reporting shows its raw changes.
+- **History charts** (1.4, `components/charts/*`): every card of a device's History tab covers the same window — the
+  range up to the server's now (`historyWindow`, asked for with explicit `from`/`to`) — and the part of it before the
+  device started recording is shaded ("Recording since 06:40"). `HistoryChart` draws numbers as a line (raw changes as
+  steps, statistics as the mean over a min–max band that follows the line point for point), held to now and ending on
+  the live value (the card's "Now" headline), with the unit named on the value axis (amounts from zero); enums as steps.
+  On/off states are a compact `StateTimeline` bar ("On since 06:34"). `EnergyBars` has a bar for every hour (day) of
+  the range up to the current one, which always has its label (`EnergyHourly`, estimated hours lighter). On vue-echarts
+  with ECharts tree-shaken to line and bar charts, mark areas and the SVG renderer, loaded only with a device's History
+  tab. Statistics end with their last closed bucket, so the device page also fetches the raw changes after it and
+  appends them (`withRawTail`).
 
 ---
 
@@ -1007,7 +1025,7 @@ These protect a public repository and a real home; they apply to people and agen
     `Backup:ScheduleEnabled=false` (set by `ControlHomeApiFactory`) stops the daily backup; tests call
     `BackupScheduler.RunOnceAsync`.
   - `FakeTimeProvider`; a seeded RNG for Simulated; the demo home (`DemoHome`: 2 floors, 8 rooms, the Simulated `demo`
-    preset's 20 devices placed on the plans, six favorites, Portuguese names for a pt-BR home), loaded by
+    preset's 20 devices placed on the plans, six favorites, everything named in Portuguese for a pt-BR home), loaded by
     `dotnet ControlHome.Api.dll --seed-demo [en|pt-BR]` (run and exit: 0 loaded, 3 the home is not empty, 1 no database),
     the setup's `CompleteSetupRequest.LoadDemoHome` and the test hook above. The emptiness check and the first writes
     (floors, integration) run together under the `ControlHome.HomeContent` app lock, so concurrent loads (and a backup

@@ -21,8 +21,10 @@ public sealed class SimulatedSetupFlowTests
 
         var form = (await flow.StartAsync(new FlowContext(time, NullLogger.Instance, null), Ct)).ShouldBeOfType<FormStep>();
         form.StepId.ShouldBe(SimulatedSetupFlow.SettingsStep);
-        form.Fields.Select(f => f.Key).ShouldBe(["preset", "seed", "simulateReauth"]);
-        form.Values!.Value.GetRawText().ShouldBe("""{"preset":"basic","seed":42,"simulateReauth":false}""");
+        form.Title.En.ShouldBe("Choose what to simulate");
+        form.Fields.Select(f => f.Key).ShouldBe(["preset", "language", "seed", "simulateReauth"]);
+        form.Fields.Where(f => f.Advanced).Select(f => f.Key).ShouldBe(["language", "seed", "simulateReauth"], "test settings stay folded away");
+        form.Values!.Value.GetRawText().ShouldBe("""{"preset":"basic","language":"en","seed":42,"simulateReauth":false}""");
         form.Errors.ShouldBeEmpty();
 
         var progress = (await flow.ContinueAsync(form.StepId, SimulatedHarness.Json("""{"preset":"demo","seed":7}"""), Ct)).ShouldBeOfType<ProgressStep>();
@@ -37,11 +39,29 @@ public sealed class SimulatedSetupFlowTests
         time.Advance(TimeSpan.FromSeconds(1));
         var done = (await flow.ContinueAsync(progress.StepId, _empty, Ct)).ShouldBeOfType<DoneStep>();
         done.Name.ShouldBe("Demo home");
-        done.Config.GetRawText().ShouldBe("""{"preset":"demo","seed":7,"simulateReauth":false}""");
+        done.Config.GetRawText().ShouldBe("""{"preset":"demo","language":"en","seed":7,"simulateReauth":false}""");
         done.Secrets.Keys.ShouldBe([SimulatedSetupFlow.TokenSecret]);
         done.Secrets[SimulatedSetupFlow.TokenSecret].ShouldStartWith("sim-");
         done.Secrets[SimulatedSetupFlow.TokenSecret].Length.ShouldBe(36);
         JsonSerializer.Serialize<FlowStep>(done).ShouldNotContain("sim-", Case.Sensitive, "secrets are never serialized");
+    }
+
+    [Fact]
+    public async Task A_portuguese_home_gets_portuguese_device_names_and_integration_name()
+    {
+        var time = new FakeTimeProvider(SimulatedHarness.Start);
+        await using var flow = new SimulatedConnectorFactory().CreateSetupFlow()!;
+
+        var form = (await flow.StartAsync(new FlowContext(time, NullLogger.Instance, null) { Language = "pt-BR" }, Ct))
+            .ShouldBeOfType<FormStep>();
+        form.Values!.Value.GetProperty("language").GetString().ShouldBe("pt-BR");
+
+        await flow.ContinueAsync(form.StepId, form.Values.Value, Ct);
+        time.Advance(SimulatedSetupFlow.PairingDelay);
+        var done = (await flow.ContinueAsync(SimulatedSetupFlow.PairingStep, _empty, Ct)).ShouldBeOfType<DoneStep>();
+
+        done.Name.ShouldBe("Casa simulada");
+        done.Config.GetProperty("language").GetString().ShouldBe("pt-BR");
     }
 
     [Fact]
@@ -84,8 +104,11 @@ public sealed class SimulatedSetupFlowTests
             EmptySecretStore.Instance);
         await using var flow = new SimulatedConnectorFactory().CreateSetupFlow()!;
 
-        var form = (await flow.StartAsync(new FlowContext(time, NullLogger.Instance, existing), Ct)).ShouldBeOfType<FormStep>();
-        form.Values!.Value.GetRawText().ShouldBe("""{"preset":"demo","seed":3,"simulateReauth":false}""");
+        var form = (await flow.StartAsync(new FlowContext(time, NullLogger.Instance, existing) { Language = "pt-BR" }, Ct))
+            .ShouldBeOfType<FormStep>();
+        form.Values!.Value.GetRawText().ShouldBe(
+            """{"preset":"demo","language":"en","seed":3,"simulateReauth":false}""",
+            "its devices keep the language they were named in");
 
         await flow.ContinueAsync(form.StepId, form.Values.Value, Ct);
         time.Advance(SimulatedSetupFlow.PairingDelay);

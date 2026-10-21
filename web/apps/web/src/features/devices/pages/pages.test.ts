@@ -476,19 +476,24 @@ describe('device page', () => {
       wrapper.get('[data-slot="attribute-history"][data-attribute-id="4"]'),
     )
     await vi.waitFor(() => power.get('[data-slot="history-chart"]'))
-    // The last 24 hours (the server's default range), and the raw changes from the last bucket's end on.
-    expect(api.getAttributeHistory).toHaveBeenCalledWith(
-      expect.objectContaining({ path: { id: 4 }, query: { resolution: 'auto' } }),
-    )
+    // The last 24 hours up to the server's now (the same window for every card), and the raw changes from the last
+    // bucket's end on.
+    type HistoryCall = { path: { id: number }; query: { from: string; to: string; resolution: string } }
+    const first = (api.getAttributeHistory.mock.calls as unknown as [HistoryCall][])
+      .map(([options]) => options)
+      .find((options) => options.query.resolution === 'auto')!
+    expect(first.path).toEqual({ id: 4 })
+    expect(Date.parse(first.query.to) - Date.parse(first.query.from)).toBe(24 * 60 * minute)
+    expect(Math.abs(Date.parse(first.query.to) - Date.now())).toBeLessThan(5 * minute)
     expect(api.getAttributeHistory).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { id: 4 },
-        query: { from: new Date(bucket + 10 * minute).toISOString(), resolution: 'raw' },
+        query: { from: new Date(bucket + 10 * minute).toISOString(), to: first.query.to, resolution: 'raw' },
       }),
     )
     expect(power.get('[data-slot="history-chart"]').attributes('data-points')).toBe('4')
-    // The band (min, range) under the mean; the mean runs on with the latest value to now.
-    expect(JSON.parse(power.get('[data-slot="vchart"]').attributes('data-series')!)).toEqual([4, 4, 5])
+    // The band (min, range) follows the mean point for point, and both run on to the value now.
+    expect(JSON.parse(power.get('[data-slot="vchart"]').attributes('data-series')!)).toEqual([5, 5, 5])
     expect(wrapper.get('[data-slot="energy-total"]').text()).toContain('120')
     wrapper.unmount()
   })

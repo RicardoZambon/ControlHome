@@ -36,6 +36,20 @@ export function endpointName(
   return device.endpoints.length > 1 ? `${device.name} · ${endpoint.key}` : device.name
 }
 
+/**
+ * The endpoint named with its device wherever it stands alone (a plan, a list of what to place): "Living room wall
+ * switch · Ceiling" rather than just "Ceiling".
+ */
+export function fullEndpointName(
+  device: Pick<DeviceSummaryDto, 'name' | 'endpoints'>,
+  endpoint: EndpointDto,
+): string {
+  const name = endpointName(device, endpoint)
+  return endpoint.name && device.endpoints.length > 1 && endpoint.name !== device.name
+    ? `${device.name} · ${name}`
+    : name
+}
+
 /** A device detail reduced to the list's shape. */
 export function toSummary(detail: DeviceDetailDto): DeviceSummaryDto {
   return {

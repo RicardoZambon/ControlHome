@@ -6,6 +6,7 @@ import {
   advanceClock,
   attributeIdOf,
   attributeValue,
+  chartsWiderThanTheirCard,
   completeSetup,
   createSimulatedHome,
   createUser,
@@ -36,18 +37,32 @@ const outputDir = fileURLToPath(new URL('./screenshots/', import.meta.url))
 const WIDTHS = [1440, 375] as const
 const THEMES = ['light', 'dark'] as const
 
+/** Every history chart is drawn at its box's width (charts redraw a moment after their box resizes). */
+async function chartsSettled(page: Page): Promise<boolean> {
+  return page.evaluate(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>('[data-slot="history-chart"], [data-slot="energy-bars"]'),
+    ].every((box) => {
+      const svg = box.querySelector('svg')
+      return !svg || Math.abs(Number(svg.getAttribute('width')) - box.clientWidth) <= 1
+    }),
+  )
+}
+
 /**
- * The whole page. On phones the viewport is first stretched to the page's height, so fixed parts (the bottom tab bar)
- * sit where they belong instead of where the first screen ended, as a stitched full-page capture would put them.
+ * The whole page: the viewport is first stretched to the page's height (the width stays), so fixed parts (the phone's
+ * bottom tab bar) sit where they belong instead of where the first screen ended. A full-page capture would also shrink
+ * the window for an instant, and the charts would be caught redrawing for it; here they settle first.
  */
 async function screenshotWholePage(page: Page, path: string): Promise<void> {
   const viewport = page.viewportSize()
-  if (!viewport || viewport.width >= 768) {
+  if (!viewport) {
     await page.screenshot({ path, fullPage: true })
     return
   }
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   await page.setViewportSize({ width: viewport.width, height: Math.max(height, viewport.height) })
+  await expect.poll(() => chartsSettled(page), { message: 'charts drawn at their width' }).toBe(true)
   await page.screenshot({ path })
   await page.setViewportSize(viewport)
 }
@@ -290,9 +305,14 @@ function homeRoutes(home: SimulatedHome, floor: { id: number }, integrationId: s
       ready: (page) => page.locator('[data-slot="energy-history"] [data-slot="energy-bars"]'),
     },
     {
+      path: '/settings/home',
+      name: 'settings-home',
+      ready: (page) => page.locator('[data-slot="home-save"]'),
+    },
+    {
       path: '/settings/backup',
       name: 'settings-backup',
-      ready: (page) => page.locator('[data-slot="backup-export"]'),
+      ready: (page) => page.locator('[data-slot="backup-scheduled"][data-loaded="true"]'),
     },
     {
       path: '/settings/history',
@@ -844,7 +864,7 @@ for (const width of WIDTHS) {
   }
 }
 
-/** Demo devices this file needs, by their names in each language (DemoHome.PortugueseDeviceNames). */
+/** Demo devices this file needs, by their names in each language (the Simulated connector's SimulatedNames). */
 const DEMO_DEVICES = {
   plug: { en: 'Coffee maker plug', 'pt-BR': 'Tomada da cafeteira' },
   washer: { en: 'Washing machine', 'pt-BR': 'Máquina de lavar' },
@@ -909,7 +929,9 @@ for (const width of WIDTHS) {
 
           // The dashboard: the ground floor's plan with its devices, the favorites, every room, the integration working.
           await page.goto('/')
-          await expect(page.locator('[data-slot="integration-chip"][data-status="Ok"]')).toBeVisible()
+          await expect(page.locator('[data-stat="integrations"]')).toContainText(
+            l('dashboard.glance.allConnected'),
+          )
           await expect(
             page.locator('[data-slot="dashboard-favorites"] [data-slot="device-tile"]'),
           ).toHaveCount(6)
@@ -986,6 +1008,7 @@ for (const width of WIDTHS) {
               Number(await page.locator('[data-slot="energy-bars"]').getAttribute('data-buckets')),
             )
             .toBeGreaterThanOrEqual(1)
+          await expect.poll(() => chartsWiderThanTheirCard(page)).toEqual([])
           await shot('device-history')
 
           // A second integration: its setup flow waiting for the hub's button (its polls held back), then the review.

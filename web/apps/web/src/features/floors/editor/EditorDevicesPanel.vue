@@ -11,7 +11,7 @@ import {
   type PlacementTarget,
   type PlanMarker,
 } from '../../../components/floorplan/placements'
-import { endpointName, useDevicesStore } from '../../../stores/devices'
+import { fullEndpointName, useDevicesStore } from '../../../stores/devices'
 import { useEditor } from './useEditorState'
 import { usePlacementEditorContext } from './usePlacementEditor'
 
@@ -79,7 +79,7 @@ function rowsOf(device: DeviceSummaryDto, endpoints: EndpointDto[], whole: boole
     rows.push({
       key: `e:${endpoint.id}`,
       target: { endpointId: endpoint.id },
-      name: endpointName(device, endpoint),
+      name: fullEndpointName(device, endpoint),
       detail: '',
       nested: false,
       endpoints: [endpoint],

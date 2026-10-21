@@ -35,6 +35,17 @@ export function backupFileName(contentDisposition: string | null, now: Date): st
   return safe ? safe : fallback
 }
 
+/** A file size as people read it: "820 kB", "1.4 MB" (decimal units, like the operating systems' file lists). */
+export function formatBytes(bytes: number, locale: string): string {
+  const [unit, size] =
+    bytes >= 1_000_000 ? (['megabyte', 1_000_000] as const) : (['kilobyte', 1_000] as const)
+  return new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit,
+    maximumFractionDigits: unit === 'megabyte' ? 1 : 0,
+  }).format(Math.max(bytes / size, unit === 'kilobyte' && bytes > 0 ? 1 : 0))
+}
+
 /** Whether a chosen file looks like a backup (a zip), before sending it. */
 export function looksLikeBackup(file: Pick<File, 'name' | 'type'>): boolean {
   return file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip'

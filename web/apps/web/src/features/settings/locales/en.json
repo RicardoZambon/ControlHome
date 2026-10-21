@@ -1,5 +1,12 @@
 {
   "eyebrow": "Settings",
+  "home": {
+    "nav": "Home details",
+    "title": "Home details",
+    "description": "The home's name, where it is, its language, and the electricity price behind the energy costs.",
+    "save": "Save changes",
+    "saved": "Home details saved."
+  },
   "backup": {
     "nav": "Backup",
     "title": "Backup",
@@ -26,7 +33,7 @@
     "import": {
       "title": "Restore a backup",
       "description": "Brings a backup into a new, empty home: everything comes back as it was saved.",
-      "notEmpty": "This home already has floors, integrations or devices. A backup can only be restored into an empty home.",
+      "notEmpty": "Restoring works only on a fresh install: set up the new server, then restore the backup there.",
       "drop": "Drop a backup file (.zip) here",
       "choose": "Choose a file",
       "another": "Choose another file",
@@ -47,17 +54,26 @@
       "secretsBack": "The integrations' credentials came back too; they're starting now.",
       "secretsMissing": "The backup had no credentials: sign each integration in again from its page.",
       "usersNote": "No accounts were added | The restored account has no password yet: set one in Users. | The {n} restored accounts have no password yet: set one for each in Users.",
-      "openHome": "Open the home"
+      "openHome": "Open the home",
+      "hasCredentials": "It includes credentials"
     },
     "daily": {
-      "title": "A backup every day",
-      "description": "ControlHome also saves a backup on its own every day in the backups folder of its data, keeping the last seven. Those don't include credentials; copy them somewhere safe now and then."
+      "title": "Automatic backups",
+      "description": "The server writes a backup without credentials every day and keeps the last {keep}.",
+      "now": "Back up now",
+      "written": "Backup written.",
+      "failed": "The last automatic backup failed ({time}). Check that the server has free space, then back up now.",
+      "last": "Last automatic backup: {time} · {count} kept",
+      "none": "No automatic backup yet. The first one is written within a day.",
+      "download": "Download the backup of {time}",
+      "downloadShort": "Download",
+      "noCredentials": "They don't include credentials; copy them somewhere safe now and then."
     }
   },
   "history": {
-    "nav": "History",
-    "title": "History",
-    "description": "How long ControlHome keeps what your devices did. Longer means bigger databases; hourly averages and energy are always kept.",
+    "nav": "Data retention",
+    "title": "Data retention",
+    "description": "How long ControlHome keeps what your devices did. Keeping more means a bigger database.",
     "tiers": {
       "heading": "How a reading ages",
       "raw": "Every change",
@@ -65,7 +81,6 @@
       "hourly": "Hourly averages and energy"
     },
     "forever": "Kept forever",
-    "foreverNote": "Hourly averages and hourly energy are kept forever, so long charts and energy totals never lose their past.",
     "fields": {
       "stateLogDays": {
         "label": "Every change",
@@ -88,6 +103,9 @@
     "daysUnit": "days",
     "limits": "{min} to {max}",
     "range": "Use a whole number of days from {min} to {max}.",
-    "saved": "History settings saved."
+    "saved": "History settings saved.",
+    "problems": {
+      "shortBelowRaw": "Keep 5-minute averages at least as long as every change ({days})."
+    }
   }
 }

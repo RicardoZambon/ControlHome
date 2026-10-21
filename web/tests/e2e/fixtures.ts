@@ -389,6 +389,29 @@ export async function waitForLive(page: Page): Promise<void> {
 
 // --- UI helpers ------------------------------------------------------------------------------------------------------
 
+/**
+ * The history charts on the page drawn wider than their card, described ("history-chart ends at 1270 px, its card at
+ * 836 px"). Empty when every chart follows its card's width. Poll it: charts redraw a moment after their card resizes.
+ */
+export async function chartsWiderThanTheirCard(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-slot="history-chart"], [data-slot="energy-bars"], [data-slot="state-timeline"]',
+      ),
+    ].flatMap((chart) => {
+      const card = chart.closest('section')
+      if (!card) return []
+      const limit = card.getBoundingClientRect().right + 1
+      const drawn = [chart, ...chart.querySelectorAll<Element>('svg, canvas')]
+      const widest = Math.max(...drawn.map((element) => element.getBoundingClientRect().right))
+      return widest > limit
+        ? [`${chart.dataset.slot} ends at ${Math.round(widest)} px, its card at ${Math.round(limit)} px`]
+        : []
+    }),
+  )
+}
+
 /** Phones get the sidebar as a sheet (below Tailwind's md breakpoint). */
 export function isPhone(page: Page): boolean {
   return (page.viewportSize()?.width ?? 1440) < 768

@@ -18,6 +18,7 @@ import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { isNavItemActive, navItems, visibleNavGroups, type NavItem } from '../../lib/nav'
+import { useDevicesStore } from '../../stores/devices'
 import { useHomeStore } from '../../stores/home'
 import { useSessionStore } from '../../stores/session'
 import BrandMark from '../brand/BrandMark.vue'
@@ -27,6 +28,7 @@ const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 const homeStore = useHomeStore()
+const devices = useDevicesStore()
 const { isMobile, setOpenMobile } = useSidebar()
 
 const groups = computed(() => visibleNavGroups(navItems, session.me?.roles ?? []))
@@ -45,11 +47,22 @@ const status = computed(() => session.status)
 const databaseReady = computed(() => status.value?.databaseState === 'Ready')
 // The informational version may carry build metadata (`0.3.0+abc123`); the short form is enough here.
 const version = computed(() => status.value?.version.split('+')[0])
+/** Devices that can't be reached (once the device list is in): the footer says so instead of "running". */
+const offlineCount = computed(() =>
+  devices.loaded
+    ? devices.devices.filter((device) => !device.isOrphaned && devices.availabilityOf(device) === 'Offline')
+        .length
+    : 0,
+)
+const healthy = computed(() => databaseReady.value && offlineCount.value === 0)
 const statusText = computed(() => {
   const state = status.value?.databaseState
-  if (!state || databaseReady.value) return t('shell.systemReady')
-  const known = ['NotConfigured', 'Connecting', 'Migrating', 'Ready', 'Failed']
-  return t('shell.systemDatabase', { state: known.includes(state) ? t(`databaseStates.${state}`) : state })
+  if (state && !databaseReady.value) {
+    const known = ['NotConfigured', 'Connecting', 'Migrating', 'Ready', 'Failed']
+    return t('shell.systemDatabase', { state: known.includes(state) ? t(`databaseStates.${state}`) : state })
+  }
+  if (offlineCount.value > 0) return t('shell.devicesOffline', { n: offlineCount.value }, offlineCount.value)
+  return t('shell.systemReady')
 })
 </script>
 
@@ -112,12 +125,10 @@ const statusText = computed(() => {
       >
         <span class="relative flex size-2.5 shrink-0" aria-hidden="true">
           <span
-            v-if="databaseReady"
+            v-if="healthy"
             class="absolute inset-0 rounded-full bg-state-on/50 motion-safe:animate-ping motion-safe:[animation-duration:3s]"
           />
-          <span
-            :class="cn('relative size-2.5 rounded-full', databaseReady ? 'bg-state-on' : 'bg-state-warn')"
-          />
+          <span :class="cn('relative size-2.5 rounded-full', healthy ? 'bg-state-on' : 'bg-state-warn')" />
         </span>
         <span class="min-w-0 truncate group-data-[collapsible=icon]:sr-only">
           {{ statusText }}

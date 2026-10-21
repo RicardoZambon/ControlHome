@@ -2,6 +2,7 @@ using System.Text.Json;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Devices;
+using ControlHome.Application.Homes;
 using ControlHome.Application.Integrations;
 using ControlHome.Application.Runtime;
 using ControlHome.Application.Security;
@@ -65,6 +66,7 @@ public sealed class IntegrationFlowServiceTests
             new AppRuntimeClock(TimeProvider.System),
             actor,
             Substitute.For<IAuditLog>(),
+            Substitute.For<IHomeLanguage>(),
             new KnownSecrets(),
             TimeProvider.System,
             NullLogger<IntegrationFlowService>.Instance);

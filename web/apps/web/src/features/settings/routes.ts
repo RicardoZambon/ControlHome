@@ -2,6 +2,12 @@ import type { RouteRecordRaw } from 'vue-router'
 
 export const routes: RouteRecordRaw[] = [
   {
+    path: '/settings/home',
+    name: 'settings-home',
+    component: () => import('./pages/HomeSettingsPage.vue'),
+    meta: { roles: ['Admin'], titleKey: 'settings.home.title' },
+  },
+  {
     path: '/settings/backup',
     name: 'settings-backup',
     component: () => import('./pages/BackupPage.vue'),

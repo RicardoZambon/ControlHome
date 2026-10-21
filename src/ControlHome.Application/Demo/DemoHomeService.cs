@@ -61,7 +61,7 @@ public sealed class DemoHomeService(
         }
 
         var (floors, integration) = created.Value;
-        using (var config = JsonDocument.Parse(DemoHome.IntegrationConfigJson))
+        using (var config = JsonDocument.Parse(integration.ConfigJson))
         {
             foreach (var device in source.DescribeDevices(config.RootElement))
             {
@@ -101,25 +101,6 @@ public sealed class DemoHomeService(
         foreach (var (externalId, endpointKey) in DemoHome.Favorites)
         {
             byExternalId[externalId].Endpoints.Single(e => e.Key == endpointKey).Favorite = true;
-        }
-
-        if (portuguese)
-        {
-            foreach (var device in devices)
-            {
-                if (DemoHome.PortugueseDeviceNames.TryGetValue(device.ExternalId, out var name))
-                {
-                    device.Name = name;
-                }
-
-                foreach (var endpoint in device.Endpoints)
-                {
-                    if (DemoHome.PortugueseEndpointNames.TryGetValue((device.ExternalId, endpoint.Key), out var endpointName))
-                    {
-                        endpoint.Name = endpointName;
-                    }
-                }
-            }
         }
 
         var summary = new DemoHomeSummary(floors.Count, floors.Values.Sum(f => f.Rooms.Count), devices.Count, DemoHome.Placements.Count);
@@ -183,7 +164,7 @@ public sealed class DemoHomeService(
             Id = integrationId,
             ConnectorKey = DemoHome.ConnectorKey,
             Name = portuguese ? DemoHome.IntegrationNamePt : DemoHome.IntegrationNameEn,
-            ConfigJson = DemoHome.IntegrationConfigJson,
+            ConfigJson = DemoHome.IntegrationConfigJson(portuguese ? "pt-BR" : "en"),
             Status = IntegrationStatus.Connecting,
             Enabled = true,
             CreatedAtUtc = now,

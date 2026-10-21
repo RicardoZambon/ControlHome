@@ -31,6 +31,7 @@ import {
   KeyRound,
   RefreshCw,
   SearchX,
+  SlidersHorizontal,
   Trash,
   TriangleAlert,
 } from '@lucide/vue'
@@ -40,6 +41,7 @@ import { useRoute, useRouter } from 'vue-router'
 import FormAlert from '../../../components/FormAlert.vue'
 import DeviceIcon from '../../../components/devices/DeviceIcon.vue'
 import StateBadge from '../../../components/devices/StateBadge.vue'
+import { deviceKindLabel } from '../../../components/devices/format'
 import IntegrationStatusBadge from '../../../components/integrations/IntegrationStatusBadge.vue'
 import { connectorIcon, statusStyle } from '../../../components/integrations/integrationStatus'
 import { localized } from '../../../components/schema/schema'
@@ -54,7 +56,7 @@ import { useRealtimeStore } from '../../../stores/realtime'
  * Admin: one integration — its live status (and a way to sign in again when it needs one), its devices (orphaned ones
  * flagged), turning it off and on, and removing it with everything it brought.
  */
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const problem = useProblem()
@@ -114,6 +116,8 @@ const status = computed(() =>
 )
 const attention = computed(() => statusStyle(status.value).attention ?? false)
 const canReauth = computed(() => connector.value?.features.reauth ?? false)
+/** It signs in with credentials (a token, a password): "Sign in again"; otherwise the same flow changes its settings. */
+const usesCredentials = computed(() => connector.value?.configFields.some((field) => field.secret) ?? false)
 const connectorName = computed(() =>
   connector.value ? localized(connector.value.displayName, locale.value) : integration.value?.connectorKey,
 )
@@ -125,7 +129,7 @@ const deviceRows = computed(() =>
     .sort((a, b) => Number(a.isOrphaned) - Number(b.isOrphaned) || a.name.localeCompare(b.name))
     .map((device) => ({
       device,
-      room: device.roomId === null ? undefined : devices.roomsById.get(device.roomId)?.name,
+      kind: deviceKindLabel(device, t, te),
       availability: devices.availabilityOf(device),
       capabilities: device.endpoints.flatMap((endpoint) => endpoint.capabilities.map((c) => c.capabilityId)),
       /** Left out of dashboards and lists (every endpoint hidden, e.g. in the import review). */
@@ -133,6 +137,23 @@ const deviceRows = computed(() =>
     })),
 )
 const orphanedCount = computed(() => deviceRows.value.filter((row) => row.device.isOrphaned).length)
+
+/** The devices by room, in the home's room order; devices in no room last. */
+const deviceGroups = computed(() => {
+  const order = new Map(devices.rooms.map((room, index) => [room.id, index]))
+  const groups = new Map<number | null, typeof deviceRows.value>()
+  for (const row of deviceRows.value) {
+    const roomId = row.device.roomId !== null && order.has(row.device.roomId) ? row.device.roomId : null
+    groups.set(roomId, [...(groups.get(roomId) ?? []), row])
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : order.get(a)! - order.get(b)!))
+    .map(([roomId, rows]) => ({
+      key: roomId ?? 'none',
+      name: roomId === null ? t('integrations.detail.noRoom') : devices.roomsById.get(roomId)!.name,
+      rows,
+    }))
+})
 
 // --- Enable / disable --------------------------------------------------------------------------------------------------
 const toggling = ref(false)
@@ -284,8 +305,8 @@ function onDeleteOpenChange(open: boolean): void {
         <!-- Devices -->
         <section class="grid gap-3" aria-labelledby="integration-devices">
           <div class="flex items-baseline justify-between gap-3">
-            <h2 id="integration-devices" class="eyebrow">
-              {{ t('integrations.detail.devices') }}
+            <h2 id="integration-devices" class="eyebrow tabular-nums">
+              {{ t('integrations.detail.devices', { count: deviceRows.length }) }}
             </h2>
             <RouterLink
               v-if="deviceRows.length > 0"
@@ -306,59 +327,82 @@ function onDeleteOpenChange(open: boolean): void {
               integration.enabled ? t('integrations.detail.noDevices') : t('integrations.detail.noDevicesOff')
             }}
           </p>
-          <ul
+          <div
             v-else
             class="grid divide-y overflow-hidden rounded-2xl border bg-card shadow-xs"
             data-slot="integration-devices"
           >
-            <li v-for="row in deviceRows" :key="row.device.id">
-              <RouterLink
-                :to="{ name: 'device', params: { id: row.device.id } }"
-                class="group flex items-center gap-3 px-4 py-3 outline-none hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              >
-                <DeviceIcon
-                  size="sm"
-                  :icon="row.device.icon"
-                  :device-class="row.device.deviceClass"
-                  :capabilities="row.capabilities"
-                  :class="row.device.isOrphaned && 'opacity-60'"
-                />
-                <span class="grid min-w-0 flex-1">
-                  <span class="flex min-w-0 items-center gap-1.5">
-                    <span class="truncate text-sm font-medium">{{ row.device.name }}</span>
-                    <EyeOff
-                      v-if="row.hidden"
-                      class="size-3.5 shrink-0 text-muted-foreground"
-                      :aria-label="t('device.hidden')"
-                      role="img"
-                      data-slot="device-hidden"
-                    />
-                  </span>
-                  <span class="truncate text-xs text-muted-foreground">
-                    <!-- Phones have no room for the badge: the line under the name says it -->
-                    <span v-if="row.device.isOrphaned" class="font-medium text-foreground sm:hidden">
-                      {{ t('device.orphaned') }} ·
+            <section v-for="group in deviceGroups" :key="group.key" :aria-label="group.name">
+              <h3 class="eyebrow bg-muted/40 px-4 py-2">{{ group.name }}</h3>
+              <ul class="grid divide-y">
+                <li v-for="row in group.rows" :key="row.device.id">
+                  <RouterLink
+                    :to="{ name: 'device', params: { id: row.device.id } }"
+                    class="group flex items-center gap-3 px-4 py-3 outline-none hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  >
+                    <span class="relative shrink-0">
+                      <DeviceIcon
+                        size="sm"
+                        :icon="row.device.icon"
+                        :device-class="row.device.deviceClass"
+                        :capabilities="row.capabilities"
+                        :class="row.device.isOrphaned && 'opacity-60'"
+                      />
+                      <!-- Reachable or not, at a glance -->
+                      <span
+                        :class="
+                          cn(
+                            'absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-card',
+                            row.availability === 'Online'
+                              ? 'bg-state-on'
+                              : row.availability === 'Offline'
+                                ? 'bg-state-offline'
+                                : 'bg-muted-foreground/50',
+                          )
+                        "
+                        aria-hidden="true"
+                        data-slot="device-availability"
+                        :data-availability="row.availability"
+                      />
                     </span>
-                    {{ row.room ?? t('device.noRoom') }}
-                  </span>
-                </span>
-                <StateBadge
-                  v-if="row.device.isOrphaned || row.availability !== 'Online'"
-                  :availability="row.availability"
-                  :orphaned="row.device.isOrphaned"
-                  class="max-sm:hidden"
-                />
-                <ChevronRight
-                  class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </RouterLink>
-            </li>
-          </ul>
+                    <span class="grid min-w-0 flex-1">
+                      <span class="flex min-w-0 items-center gap-1.5">
+                        <span class="truncate text-sm font-medium">{{ row.device.name }}</span>
+                        <EyeOff
+                          v-if="row.hidden"
+                          class="size-3.5 shrink-0 text-muted-foreground"
+                          :aria-label="t('device.hidden')"
+                          role="img"
+                          data-slot="device-hidden"
+                        />
+                      </span>
+                      <span class="truncate text-xs text-muted-foreground">
+                        <!-- Phones have no room for the badge: the line under the name says it -->
+                        <span v-if="row.device.isOrphaned" class="font-medium text-foreground sm:hidden">
+                          {{ t('device.orphaned') }} ·
+                        </span>
+                        {{ row.kind }}
+                      </span>
+                    </span>
+                    <StateBadge
+                      v-if="row.device.isOrphaned || row.availability !== 'Online'"
+                      :availability="row.availability"
+                      :orphaned="row.device.isOrphaned"
+                      class="max-sm:hidden"
+                    />
+                    <ChevronRight
+                      class="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                      aria-hidden="true"
+                    />
+                  </RouterLink>
+                </li>
+              </ul>
+            </section>
+          </div>
         </section>
 
-        <!-- Settings -->
-        <aside class="grid gap-4" :aria-label="t('integrations.detail.settings')">
+        <!-- Settings: on phones before the (long) device list -->
+        <aside class="grid gap-4 max-lg:order-first" :aria-label="t('integrations.detail.settings')">
           <div class="grid gap-3 rounded-2xl border bg-card p-4 shadow-xs">
             <div class="flex items-center justify-between gap-3">
               <Label :for="enabledId" class="text-sm font-medium">{{
@@ -377,8 +421,9 @@ function onDeleteOpenChange(open: boolean): void {
 
           <Button v-if="canReauth" as-child variant="outline" class="justify-start">
             <RouterLink :to="{ name: 'integration-reauth', params: { id: integration.id } }">
-              <KeyRound aria-hidden="true" />
-              {{ t('integrations.detail.reauth') }}
+              <KeyRound v-if="usesCredentials" aria-hidden="true" />
+              <SlidersHorizontal v-else aria-hidden="true" />
+              {{ usesCredentials ? t('integrations.detail.reauth') : t('integrations.detail.reconfigure') }}
             </RouterLink>
           </Button>
 

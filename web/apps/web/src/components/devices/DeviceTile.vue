@@ -2,10 +2,11 @@
 import type { DeviceSummaryDto, EndpointDto } from '@controlhome/api-client'
 import { cn } from '@controlhome/ui'
 import { EyeOff, Star, Unlink, WifiOff } from '@lucide/vue'
-import { useNow } from '@vueuse/core'
+
 import { computed, useId, type HTMLAttributes } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatRelative } from '../../lib/format'
+import { useServerNow } from '../../lib/serverClock'
 import { asNumber } from '../../lib/stateValue'
 import { endpointName, useDevicesStore } from '../../stores/devices'
 import { useRealtimeStore } from '../../stores/realtime'
@@ -47,7 +48,7 @@ const realtime = useRealtimeStore()
 const devices = useDevicesStore()
 const session = useSessionStore()
 const nameId = useId()
-const now = useNow({ interval: 30_000 })
+const now = useServerNow(30_000)
 
 const ids = computed(() => {
   const map = new Map<string, number>()
@@ -180,14 +181,28 @@ const iconTone = computed(() => iconToneOf(summary.value.tone, lit.value))
     />
 
     <div class="flex items-start justify-between gap-3">
-      <DeviceIcon
-        :icon="endpoint.icon ?? device.icon"
-        :device-class="device.deviceClass"
-        :capabilities="capabilityIds"
-        :tone="iconTone"
-        :open="open"
-        :class="offline && 'opacity-60'"
-      />
+      <!-- A favorite's star sits on the icon's corner: always in the same place, never in the name's way -->
+      <span class="relative shrink-0">
+        <DeviceIcon
+          :icon="endpoint.icon ?? device.icon"
+          :device-class="device.deviceClass"
+          :capabilities="capabilityIds"
+          :tone="iconTone"
+          :open="open"
+          :class="offline && 'opacity-60'"
+        />
+        <span
+          v-if="endpoint.favorite"
+          class="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border bg-card shadow-xs"
+          data-slot="tile-favorite"
+        >
+          <Star
+            class="size-3 fill-state-energy text-state-energy"
+            :aria-label="t('device.favorite')"
+            role="img"
+          />
+        </span>
+      </span>
       <div v-if="quick" class="relative z-10 -mt-0.5 -mr-0.5">
         <CapabilityControl
           :device="device"
@@ -214,18 +229,13 @@ const iconTone = computed(() => iconToneOf(summary.value.tone, lit.value))
           cn('flex min-w-0 items-center gap-1.5 leading-snug font-medium', offline && 'text-muted-foreground')
         "
       >
+        <!-- Two lines at most, broken between words (never hyphenated) -->
         <RouterLink
           :to="{ name: 'device', params: { id: device.id } }"
-          class="line-clamp-2 break-words outline-none after:absolute after:inset-0 after:content-['']"
+          class="line-clamp-2 hyphens-manual outline-none after:absolute after:inset-0 after:content-['']"
         >
           {{ name }}
         </RouterLink>
-        <Star
-          v-if="endpoint.favorite"
-          class="size-3.5 shrink-0 fill-state-energy text-state-energy"
-          :aria-label="t('device.favorite')"
-          role="img"
-        />
         <Unlink
           v-if="device.isOrphaned"
           class="size-3.5 shrink-0 text-state-warn"
@@ -243,9 +253,12 @@ const iconTone = computed(() => iconToneOf(summary.value.tone, lit.value))
       <p v-if="showRoom" class="truncate text-xs text-muted-foreground">
         {{ roomName ?? t('device.noRoom') }}
       </p>
-      <!-- The state wraps to a second line on narrow tiles instead of being cut. -->
+      <!-- One line: the state first, its details cut short (the device page has them all). -->
       <p
-        class="line-clamp-2 min-w-0 text-sm leading-snug break-words"
+        class="min-w-0 truncate text-sm leading-snug"
+        :title="
+          stateLine.details.length > 0 ? `${stateLine.label} · ${stateLine.details.join(' · ')}` : undefined
+        "
         data-slot="tile-state"
         :data-pending="pending ? (pending.awaitingPin ? 'pin' : 'true') : undefined"
       >

@@ -27,11 +27,12 @@ public sealed class DemoHomeTests(DevicesApiFactory factory) : DevicesTestBase(f
         using var admin = await Factory.CompleteSetupAsync(AuthTestExtensions.SetupRequest() with { LoadDemoHome = true }, Ct);
 
         var floors = (await admin.GetFromJsonAsync<FloorSummaryDto[]>("/api/floors", Ct))!;
-        floors.Select(f => (f.Name, f.Level, f.RoomCount)).ShouldBe([("Térreo", 0, 4), ("Superior", 1, 4)]);
+        floors.Select(f => (f.Name, f.Level, f.RoomCount)).ShouldBe([("Térreo", 0, 4), ("1º andar", 1, 4)]);
         (await admin.GetFromJsonAsync<IntegrationDto[]>("/api/integrations", Ct))!.ShouldHaveSingleItem().Name.ShouldBe("Casa de demonstração");
         var devices = await WaitForDevicesAsync(admin, 20);
         devices.Select(d => d.Name).ShouldContain("Luz da sala");
         devices.Select(d => d.Name).ShouldContain("Caixa d'água");
+        devices.Select(d => d.Name).ShouldContain("Sensor de presença do escritório");
 
         var ground = await admin.GetFloorAsync(floors[0].Id, Ct);
         var upper = await admin.GetFloorAsync(floors[1].Id, Ct);
@@ -98,7 +99,7 @@ public sealed class DemoHomeTests(DevicesApiFactory factory) : DevicesTestBase(f
         second.ShouldBe(SeedDemoCommand.ExitNotEmpty);
         error.ShouldContain("Nothing was changed");
         (await QueryDbAsync(db => db.Devices.CountAsync(Ct))).ShouldBe(20);
-        (await QueryDbAsync(db => db.Floors.OrderBy(f => f.Level).Select(f => f.Name).ToListAsync(Ct))).ShouldBe(["Térreo", "Superior"]);
+        (await QueryDbAsync(db => db.Floors.OrderBy(f => f.Level).Select(f => f.Name).ToListAsync(Ct))).ShouldBe(["Térreo", "1º andar"]);
         (await RunSeedDemoAsync("fr")).ExitCode.ShouldBe(SeedDemoCommand.ExitUsage);
     }
 
@@ -203,7 +204,7 @@ public sealed class DemoHomeDataTests
     [Fact]
     public void Every_demo_device_is_placed_once_inside_its_floor_and_every_room_is_valid()
     {
-        var devices = new SimulatedConnectorFactory().DescribeDevices(Json.Of(DemoHome.IntegrationConfigJson));
+        var devices = new SimulatedConnectorFactory().DescribeDevices(Json.Of(DemoHome.IntegrationConfigJson("en")));
         var floors = DemoHome.Floors.ToDictionary(f => f.Key);
 
         foreach (var floor in DemoHome.Floors)
@@ -229,7 +230,9 @@ public sealed class DemoHomeDataTests
 
         DemoHome.Placements.Select(p => p.ExternalId).Distinct().ShouldBe(devices.Select(d => d.ExternalId), ignoreOrder: true);
         DemoHome.Placements.GroupBy(p => (p.ExternalId, p.EndpointKey)).ShouldAllBe(g => g.Count() == 1);
-        DemoHome.PortugueseDeviceNames.Keys.ShouldBe(devices.Select(d => d.ExternalId), ignoreOrder: true);
+        new SimulatedConnectorFactory().DescribeDevices(Json.Of(DemoHome.IntegrationConfigJson("pt-BR")))
+            .Select(d => d.Name)
+            .ShouldContain("Luz da sala", "a pt-BR demo home's devices are named in Portuguese");
         DemoHome.Favorites.ShouldAllBe(f => devices.Any(d => d.ExternalId == f.ExternalId && d.Endpoints.Any(e => e.Key == f.EndpointKey)));
     }
 

@@ -181,6 +181,12 @@ export function usePanZoom(options: PanZoomOptions) {
     custom.value = pinchView(view.value, before, after, size.value, limits.value)
   }
 
+  /** Shows `rect` (cm) as large as it fits, within the zoom limits (a room tapped in a list, a group of markers). */
+  function zoomTo(rect: Rect): void {
+    const target = fitView(rect, size.value, toValue(options.padding) ?? 24)
+    custom.value = { ...target, scale: Math.min(limits.value.max, Math.max(limits.value.min, target.scale)) }
+  }
+
   /** Viewport coordinates (e.g. `event.clientX/Y`) → container px. */
   function toLocal(clientX: number, clientY: number): Point {
     const rect = options.container.value?.getBoundingClientRect()
@@ -192,7 +198,7 @@ export function usePanZoom(options: PanZoomOptions) {
     return screenToCm(view.value, size.value, toLocal(clientX, clientY))
   }
 
-  return { size, view, viewBox, scale, limits, isFitted, fit, zoomBy, pan, pinch, toLocal, toCm }
+  return { size, view, viewBox, scale, limits, isFitted, fit, zoomBy, zoomTo, pan, pinch, toLocal, toCm }
 }
 
 export type PanZoom = ReturnType<typeof usePanZoom>

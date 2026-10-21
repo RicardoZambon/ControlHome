@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ControlHome.Api.IntegrationTests.Floors;
 using ControlHome.Application.Devices;
+using ControlHome.Application.Homes;
 using ControlHome.Application.Integrations;
 using ControlHome.Domain.Devices;
 using ControlHome.Domain.Security;
@@ -22,9 +24,10 @@ public sealed class IntegrationFlowTests(DevicesApiFactory factory) : DevicesTes
 
         var form = await StartAsync(admin, "simulated");
         (form.Type, form.StepId).ShouldBe(("form", "settings"));
-        form.Fields.Select(f => f.Key).ShouldBe(["preset", "seed", "simulateReauth"]);
+        form.Fields.Select(f => f.Key).ShouldBe(["preset", "language", "seed", "simulateReauth"]);
         form.Values!.Value.GetProperty("preset").GetString().ShouldBe("basic");
-        form.Title!.PtBr.ShouldBe("Casa simulada");
+        form.Values!.Value.GetProperty("language").GetString().ShouldBe("pt-BR", "the home's language");
+        form.Title!.PtBr.ShouldBe("Escolha o que simular");
 
         var progress = await ContinueAsync(admin, form.FlowId, """{"preset":"basic","seed":5}""");
         (progress.Type, progress.StepId, progress.TimeoutSeconds).ShouldBe(("progress", "pairing", 60d));
@@ -35,7 +38,7 @@ public sealed class IntegrationFlowTests(DevicesApiFactory factory) : DevicesTes
 
         done.Type.ShouldBe("done");
         var integrationId = done.IntegrationId.ShouldNotBeNull();
-        (await viewer.GetFromJsonAsync<IntegrationDto[]>("/api/integrations", Ct))!.ShouldHaveSingleItem().Name.ShouldBe("Simulated home");
+        (await viewer.GetFromJsonAsync<IntegrationDto[]>("/api/integrations", Ct))!.ShouldHaveSingleItem().Name.ShouldBe("Casa simulada", "named in the home's language");
         await WaitForDevicesAsync(viewer, 5);
         var saved = await QueryDbAsync(db => db.Integrations.AsNoTracking().SingleAsync(i => i.Id == integrationId, Ct));
         saved.ConfigJson.ShouldNotContain("hubToken");
@@ -49,6 +52,37 @@ public sealed class IntegrationFlowTests(DevicesApiFactory factory) : DevicesTes
 
         using var again = await ContinueRawAsync(admin, form.FlowId, "{}");
         await again.ShouldBeProblemAsync(HttpStatusCode.NotFound, "flows.not_found");
+    }
+
+    [Fact]
+    public async Task A_portuguese_home_gets_simulated_devices_named_in_portuguese_in_its_rooms()
+    {
+        var (admin, _, viewer) = await SignInAllAsync();
+        var home = (await admin.GetFromJsonAsync<HomeDto>("/api/home", Ct))!;
+        using (var update = await admin.PutAsJsonAsync(
+            "/api/home",
+            new UpdateHomeRequest(home.Name, home.TimeZoneId, null, null, "pt-BR", home.Currency, null),
+            Ct))
+        {
+            await update.ShouldHaveStatusAsync(HttpStatusCode.OK);
+        }
+
+        // Case and accents do not count when a device's suggested room is matched to the home's rooms.
+        var floor = await admin.CreateFloorAsync(Ct);
+        floor = await admin.SaveLayoutOkAsync(floor, [FloorApi.Room("SALA", FloorApi.Square(0, 0, 300)), FloorApi.Room("Cózinha", FloorApi.Square(300, 0, 300))], Ct);
+
+        var form = await StartAsync(admin, "simulated");
+        form.Fields.Where(f => f.Advanced).Select(f => f.Key).ShouldBe(["language", "seed", "simulateReauth"]);
+        form.Values!.Value.GetProperty("language").GetString().ShouldBe("pt-BR");
+        await ContinueAsync(admin, form.FlowId, """{"preset":"basic"}""");
+        await AdvanceClockAsync(admin, 3);
+        var done = await ContinueAsync(admin, form.FlowId, "{}");
+
+        (await viewer.GetFromJsonAsync<IntegrationDto[]>("/api/integrations", Ct))!.Single(i => i.Id == done.IntegrationId).Name.ShouldBe("Casa simulada");
+        var devices = await WaitForDevicesAsync(viewer, 5);
+        devices.Single(d => d.Name == "Luz da sala").RoomId.ShouldBe(floor.Rooms.Single(r => r.Name == "SALA").Id);
+        devices.Single(d => d.Name == "Tomada da cafeteira").RoomId.ShouldBe(floor.Rooms.Single(r => r.Name == "Cózinha").Id);
+        devices.Single(d => d.Name == "Ar-condicionado do quarto").RoomId.ShouldBeNull("the home has no Quarto");
     }
 
     [Fact]

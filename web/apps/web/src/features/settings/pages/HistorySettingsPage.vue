@@ -12,7 +12,7 @@ import FormAlert from '../../../components/FormAlert.vue'
 import PageHeader from '../../../components/PageHeader.vue'
 import { useProblem } from '../../../composables/useProblem'
 import { fieldErrorsOf, unwrap } from '../../../lib/problem'
-import { RETENTION_FIELDS, retentionProblems, type RetentionField } from '../retention'
+import { RETENTION_FIELDS, retentionProblems, tierWidths, type RetentionField } from '../retention'
 
 /**
  * Admin: how long the history is kept (`GET/PUT /api/settings/retention`): every change (used for ranges up to 6 h),
@@ -62,7 +62,10 @@ const dirty = computed(
 )
 
 function errorOf(key: RetentionField): string {
-  const local = attempted.value ? problems.value[key] : undefined
+  // Averages kept shorter than the changes they replace: said at once, not only after Save.
+  const local = problems.value[key] === 'shortBelowRaw' || attempted.value ? problems.value[key] : undefined
+  if (local === 'shortBelowRaw')
+    return t('settings.history.problems.shortBelowRaw', { days: days(values.stateLogDays) })
   if (local) {
     const field = RETENTION_FIELDS.find((entry) => entry.key === key)!
     return t('settings.history.range', { min: field.min, max: field.max })
@@ -107,22 +110,36 @@ const days = (value: string) => {
   return Number.isFinite(number) && value.trim() !== '' ? t('settings.history.days', number) : '—'
 }
 
-/** The three tiers of a reading's history, from fine and short-lived to coarse and kept forever. */
-const tiers = computed(() => [
-  { key: 'raw', label: t('settings.history.tiers.raw'), keep: days(values.stateLogDays), tone: 'bg-primary' },
-  {
-    key: 'short',
-    label: t('settings.history.tiers.short'),
-    keep: days(values.shortTermStatsDays),
-    tone: 'bg-primary/60',
-  },
-  {
-    key: 'hourly',
-    label: t('settings.history.tiers.hourly'),
-    keep: t('settings.history.forever'),
-    tone: 'bg-primary/25',
-  },
-])
+/**
+ * The three tiers a reading goes through as it ages — every change, then 5-minute averages, then hourly averages kept
+ * forever — each as long as it lasts (a log scale of days), so equal settings draw an empty middle tier.
+ */
+const tiers = computed(() => {
+  const [raw, short, hourly] = tierWidths(Number(values.stateLogDays), Number(values.shortTermStatsDays))
+  return [
+    {
+      key: 'raw',
+      label: t('settings.history.tiers.raw'),
+      keep: days(values.stateLogDays),
+      tone: 'bg-primary',
+      width: raw,
+    },
+    {
+      key: 'short',
+      label: t('settings.history.tiers.short'),
+      keep: days(values.shortTermStatsDays),
+      tone: 'bg-primary/60',
+      width: short,
+    },
+    {
+      key: 'hourly',
+      label: t('settings.history.tiers.hourly'),
+      keep: t('settings.history.forever'),
+      tone: 'bg-primary/25',
+      width: hourly,
+    },
+  ]
+})
 const number = computed(() => new Intl.NumberFormat(locale.value))
 </script>
 
@@ -156,20 +173,26 @@ const number = computed(() => new Intl.NumberFormat(locale.value))
         aria-labelledby="history-tiers"
       >
         <h2 id="history-tiers" class="eyebrow">{{ t('settings.history.tiers.heading') }}</h2>
+        <!-- The tiers in a row, each as long as it lasts -->
+        <div
+          class="flex h-2 gap-0.5 overflow-hidden rounded-full"
+          aria-hidden="true"
+          data-slot="retention-bar"
+        >
+          <span
+            v-for="tier in tiers"
+            :key="tier.key"
+            :class="cn('h-full transition-[width] duration-300', tier.tone)"
+            :style="{ width: `${tier.width}%` }"
+          />
+        </div>
         <ol class="grid gap-3 sm:grid-cols-3 sm:gap-2">
-          <li v-for="(tier, index) in tiers" :key="tier.key" class="grid gap-2">
-            <span
-              :class="
-                cn(
-                  'h-2 rounded-full',
-                  tier.tone,
-                  index === 0 && 'sm:rounded-r-sm',
-                  index === 2 && 'sm:rounded-l-sm',
-                )
-              "
-              aria-hidden="true"
-            />
-            <span class="text-sm font-medium">{{ tier.label }}</span>
+          <li v-for="(tier, index) in tiers" :key="tier.key" class="grid content-start gap-1">
+            <span class="flex items-center gap-2 text-sm font-medium">
+              <span :class="cn('size-2.5 shrink-0 rounded-full', tier.tone)" aria-hidden="true" />
+              <span class="sr-only">{{ index + 1 }}.</span>
+              {{ tier.label }}
+            </span>
             <span class="flex items-center gap-1.5 text-sm text-muted-foreground tabular-nums">
               <InfinityIcon v-if="tier.key === 'hourly'" class="size-4" aria-hidden="true" />
               {{ tier.keep }}
@@ -228,11 +251,6 @@ const number = computed(() => new Intl.NumberFormat(locale.value))
             </p>
           </div>
         </div>
-
-        <p class="flex items-start gap-2 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
-          <InfinityIcon class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          {{ t('settings.history.foreverNote') }}
-        </p>
 
         <div class="flex flex-wrap justify-end gap-2 border-t pt-5">
           <Button type="button" variant="outline" :disabled="!dirty || saving" @click="reset">

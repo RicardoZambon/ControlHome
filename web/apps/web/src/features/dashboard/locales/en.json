@@ -12,11 +12,15 @@
   "loadFailed": "Couldn't load the home's summary.",
   "planTeaser": "Your floor plan will live here",
   "planTeaserDetail": "Draw your floors and rooms to see your home at a glance.",
-  "planBanner": "Draw your floor plan in Floors.",
   "plan": {
+    "heading": "Floor plans",
     "open": "Open plan",
     "draw": "Draw a floor",
-    "openFloors": "Open Floors"
+    "openFloors": "Open Floors",
+    "switchFloor": "Show a floor",
+    "legendOn": "On",
+    "legendOff": "Off",
+    "legendOffline": "Offline"
   },
   "glance": {
     "heading": "At a glance",
@@ -26,12 +30,19 @@
     "active": "On now",
     "activeHint": "Of no devices | Of 1 device | Of {total} devices",
     "offline": "Offline",
-    "offlineHint": "See them below",
+    "offlineHint": "See which ones",
     "allReachable": "Everything is reachable",
     "integrations": "Integrations",
     "noIntegrations": "None connected yet",
     "allConnected": "All working",
     "attention": "None needs you | 1 needs attention | {n} need attention"
+  },
+  "attention": {
+    "heading": "Needs attention",
+    "backupFailed": "The last automatic backup failed. Open Backup to see the backups kept and try again."
+  },
+  "nudge": {
+    "price": "Set the electricity price to see what your devices cost"
   },
   "start": {
     "heading": "Get started",
@@ -60,24 +71,12 @@
     "noDevices": "No devices yet",
     "temperature": "Temperature",
     "power": "Power",
+    "offline": "{n} offline",
     "empty": "Rooms show up here once an admin draws the floors.",
     "emptyAdmin": "Draw your floors and rooms to see each room here."
   },
   "offline": {
     "heading": "Offline devices",
-    "none": "Every device is reachable."
-  },
-  "integrations": {
-    "heading": "Integrations"
-  },
-  "details": {
-    "heading": "Home details",
-    "timeZone": "Time zone",
-    "location": "Location",
-    "language": "Language",
-    "currency": "Currency",
-    "price": "Electricity price",
-    "perKwh": "{price} per kWh",
-    "loadFailed": "Couldn't load the home details."
+    "since": "Offline since {time}"
   }
 }

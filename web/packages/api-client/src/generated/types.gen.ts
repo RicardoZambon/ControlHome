@@ -681,6 +681,10 @@ export type FieldSchemaDto = {
      */
     secret: boolean;
     help: null | LocalizedTextDto;
+    /**
+     * Rarely changed: shown folded away under "Advanced", after the other fields.
+     */
+    advanced: boolean;
 };
 
 /**
@@ -1200,6 +1204,41 @@ export type SaveFloorLayoutRequest = {
      * From the FloorDto being edited.
      */
     rowVersion: string;
+};
+
+/**
+ * One automatic backup (a zip without credentials): download it with `GET /api/backup/scheduled/{name}`.
+ */
+export type ScheduledBackupDto = {
+    name: string;
+    writtenAtUtc: string;
+    sizeBytes: number;
+};
+
+/**
+ * The automatic backups (`GET /api/backup/scheduled`, Admin): the schedule, how it went, the files kept.
+ */
+export type ScheduledBackupsDto = {
+    /**
+     * Backups are written on a schedule (off: only "back up now" writes one).
+     */
+    enabled: boolean;
+    /**
+     * How often one is written (24: every day).
+     */
+    intervalHours: number;
+    /**
+     * How many are kept; older ones are deleted.
+     */
+    keep: number;
+    /**
+     * When the last attempt failed, if it did and none succeeded since (show a warning).
+     */
+    lastFailedAtUtc: null | string;
+    /**
+     * The backups kept, newest first.
+     */
+    files: Array<ScheduledBackupDto>;
 };
 
 /**
@@ -3782,3 +3821,100 @@ export type ImportBackupResponses = {
 };
 
 export type ImportBackupResponse = ImportBackupResponses[keyof ImportBackupResponses];
+
+export type ListScheduledBackupsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/backup/scheduled';
+};
+
+export type ListScheduledBackupsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type ListScheduledBackupsError = ListScheduledBackupsErrors[keyof ListScheduledBackupsErrors];
+
+export type ListScheduledBackupsResponses = {
+    /**
+     * OK
+     */
+    200: ScheduledBackupsDto;
+};
+
+export type ListScheduledBackupsResponse = ListScheduledBackupsResponses[keyof ListScheduledBackupsResponses];
+
+export type RunScheduledBackupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/backup/scheduled';
+};
+
+export type RunScheduledBackupErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunScheduledBackupError = RunScheduledBackupErrors[keyof RunScheduledBackupErrors];
+
+export type RunScheduledBackupResponses = {
+    /**
+     * OK
+     */
+    200: ScheduledBackupDto;
+};
+
+export type RunScheduledBackupResponse = RunScheduledBackupResponses[keyof RunScheduledBackupResponses];
+
+export type GetScheduledBackupData = {
+    body?: never;
+    path: {
+        name: string;
+    };
+    query?: never;
+    url: '/api/backup/scheduled/{name}';
+};
+
+export type GetScheduledBackupErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type GetScheduledBackupError = GetScheduledBackupErrors[keyof GetScheduledBackupErrors];
+
+export type GetScheduledBackupResponses = {
+    /**
+     * OK
+     */
+    200: Stream;
+};
+
+export type GetScheduledBackupResponse = GetScheduledBackupResponses[keyof GetScheduledBackupResponses];

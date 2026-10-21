@@ -26,7 +26,15 @@ public sealed record LocalizedTextDto(string En, string PtBr);
 /// <param name="Key">camelCase member name of the submitted <c>config</c> object.</param>
 /// <param name="Schema">The value's shape (discriminator <c>type</c>).</param>
 /// <param name="Secret">Write-only: stored encrypted, never returned.</param>
-public sealed record FieldSchemaDto(string Key, LocalizedTextDto Label, ValueSchema Schema, bool Required, bool Secret, LocalizedTextDto? Help);
+/// <param name="Advanced">Rarely changed: shown folded away under "Advanced", after the other fields.</param>
+public sealed record FieldSchemaDto(
+    string Key,
+    LocalizedTextDto Label,
+    ValueSchema Schema,
+    bool Required,
+    bool Secret,
+    LocalizedTextDto? Help,
+    bool Advanced);
 
 /// <summary>What a connector supports.</summary>
 /// <param name="SetupFlow">
@@ -107,6 +115,13 @@ public sealed class ConnectorCatalog
     public static FieldSchemaDto ToDto(FieldSchema field)
     {
         ArgumentNullException.ThrowIfNull(field);
-        return new FieldSchemaDto(field.Key, ToDto(field.Label), field.Schema, field.Required, field.Secret, field.Help is null ? null : ToDto(field.Help));
+        return new FieldSchemaDto(
+            field.Key,
+            ToDto(field.Label),
+            field.Schema,
+            field.Required,
+            field.Secret,
+            field.Help is null ? null : ToDto(field.Help),
+            field.Advanced);
     }
 }

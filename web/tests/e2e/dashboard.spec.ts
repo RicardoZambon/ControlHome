@@ -89,16 +89,20 @@ test('the demo home fills the dashboard: its plan, favorites, rooms, power and i
   await expect(roomCard(page, 'Kitchen').locator('[data-slot="room-power"]')).toHaveText(/\d+(\.\d+)?\s*k?W/)
   await expect(roomCard(page, 'Bathroom').locator('[data-slot="room-temperature"]')).toHaveText(/\d.*°C/)
 
-  // At a glance: the power drawn now (from every meter), nothing offline, the integration working.
+  // At a glance: the power drawn now (from every meter), nothing offline, the integration working. Lists of offline
+  // devices and of integrations show up only when something needs someone.
   await expect(stat(page, 'power')).toHaveText(/^\s*\d[\d.,]*\s*$/)
   await expect(page.locator('[data-stat="power"]')).toContainText(/k?W/)
   await expect(stat(page, 'offline')).toHaveText('0')
-  await expect(page.locator('[data-slot="dashboard-offline"]')).toContainText(t('dashboard.offline.none'))
+  await expect(page.locator('[data-stat="offline"]')).toContainText(t('dashboard.glance.allReachable'))
+  await expect(page.locator('[data-slot="dashboard-offline"]')).toHaveCount(0)
   await expect(stat(page, 'integrations')).toHaveText('1')
-  const chip = page.locator('[data-slot="integration-chip"]')
-  await expect(chip).toHaveCount(1)
-  await expect(chip).toContainText('Demo home')
-  await expect(chip).toHaveAttribute('data-status', 'Ok')
+  await expect(page.locator('[data-stat="integrations"]')).toContainText(t('dashboard.glance.allConnected'))
+  await expect(page.locator('[data-slot="integration-chip"]')).toHaveCount(0)
+  // Twenty devices (the 3-gang switch is one device with three controls).
+  await expect(page.locator('[data-stat="active"]')).toContainText(
+    t('dashboard.glance.activeHint', { total: 20 }).split(' | ')[2]!,
+  )
   await gates.check('dashboard with the demo home')
 
   // Switching the living room light from its tile: "On now" and the living room follow at once.
@@ -135,13 +139,19 @@ test('a device that goes offline is listed on the dashboard until it is back', a
   await expect(stat(page, 'offline')).toHaveText('0')
   await expect(favoriteTile(page, plug.name).getByRole('switch')).toBeVisible()
 
-  // The plug stops answering: counted, listed with its room, and its tile and marker say so.
+  // The plug stops answering: counted, listed with its room and since when, and its tile, room and marker say so.
   await reportAvailability(page.request, plug, 'Offline')
   await expect(stat(page, 'offline')).toHaveText('1')
   const offline = page.locator('[data-slot="dashboard-offline"] li')
   await expect(offline).toHaveCount(1)
   await expect(offline).toContainText(plug.name)
   await expect(offline).toContainText('Kitchen')
+  await expect(offline).toContainText(t('dashboard.offline.since', { time: '' }).trim())
+  await expect(roomCard(page, 'Kitchen').locator('[data-slot="room-offline"]')).toBeVisible()
+  // The tile leads to the list.
+  await page.locator('[data-stat="offline"]').click()
+  await expect(page).toHaveURL(/#dashboard-offline$/)
+  await expect(page.locator('[data-slot="dashboard-offline"]')).toBeInViewport()
   await expect(favoriteTile(page, plug.name).locator('[data-slot="tile-offline"]')).toBeVisible()
   await expect(favoriteTile(page, plug.name).getByRole('switch')).toHaveCount(0)
   await expect(await planMarker(page, plug)).toHaveAttribute('data-tone', 'offline')
@@ -162,7 +172,7 @@ test('a device that goes offline is listed on the dashboard until it is back', a
   await reportAvailability(page.request, plug, 'Online')
   await expect(stat(page, 'offline')).toHaveText('0')
   await expect(offline).toHaveCount(0)
-  await expect(page.locator('[data-slot="dashboard-offline"]')).toContainText(t('dashboard.offline.none'))
+  await expect(page.locator('[data-slot="dashboard-offline"]')).toHaveCount(0)
   await expect(favoriteTile(page, plug.name).getByRole('switch')).toBeVisible()
 })
 
@@ -186,6 +196,6 @@ test('a demo home set up in Portuguese is named in Portuguese', async ({ page, g
     'Banheiro',
   ])
     await expect(roomCard(page, name)).toHaveCount(1)
-  await expect(page.locator('[data-slot="integration-chip"]')).toContainText('Casa de demonstração')
+  await expect(page.locator('[data-stat="integrations"]')).toContainText(l('dashboard.glance.allConnected'))
   await gates.check('dashboard with the demo home in Portuguese')
 })

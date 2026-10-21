@@ -46,9 +46,8 @@
   "setup": {
     "title": "Set up an integration",
     "eyebrow": "New integration",
-    "reauthEyebrow": "Sign in again",
     "reauthTitle": "Sign in again",
-    "reauthDone": "{name} is signed in again. Its devices stay as they were.",
+    "reauthDone": "{name} is updated. Its devices stay as they were.",
     "notFound": "This integration isn't available",
     "progress": "Setup progress",
     "stepConnect": "Connect",
@@ -62,7 +61,7 @@
     "openPage": "Open {host}",
     "unsafeUrl": "The page this step points to isn't a secure (https) address, so it isn't shown.",
     "finishedThere": "I've finished there",
-    "waiting": "Waiting for the device",
+    "waiting": "Waiting for the hub…",
     "secondsLeft": "{s} s left",
     "timeLeft": "Time left",
     "retrying": "Lost touch with the server for a moment; trying again…",
@@ -73,8 +72,12 @@
     "back": "Back",
     "options": {
       "preset": {
-        "basic": "Basic: five devices",
-        "demo": "Demo home: about twenty devices"
+        "basic": "Basic — a light, a plug, an AC, a door sensor and a lock",
+        "demo": "Demo home — every kind of simulated device"
+      },
+      "language": {
+        "en": "English",
+        "ptBR": "Português (Brasil)"
       }
     }
   },
@@ -82,18 +85,20 @@
     "eyebrow": "Review devices",
     "title": "No devices found | 1 device found | {count} devices found",
     "waitingTitle": "Looking for devices…",
-    "description": "Keep the ones you want to see, and put each in its room. Rooms are suggested by the integration or from the device names; you can change everything later.",
+    "description": "Keep the ones you want to see, and put each in its room. You can change everything later.",
     "waiting": "The devices arrive a moment after the integration starts.",
     "none": "No devices showed up yet. They can take a while; they'll appear in your device list as they come in.",
     "keep": "Keep {name}",
-    "kept": "Shown in your home",
+    "keepAll": "Keep every device",
+    "keptCount": "{kept} of {total} kept",
     "hidden": "Hidden from dashboards and lists",
     "room": "Room of {name}",
     "suggested": "Suggested from the name",
     "suggestedByIntegration": "Suggested by the integration",
+    "legend": "Room suggested by the integration or from the device's name",
     "noRooms": "Draw your floors and rooms to put devices in them.",
-    "stillArriving": "More devices may still be arriving…",
-    "skip": "Skip",
+    "stillArriving": "Still looking for devices… no devices yet | Still looking for devices… 1 found so far | Still looking for devices… {count} found so far",
+    "skip": "Keep as imported",
     "finish": "Finish",
     "saved": "All set: no devices kept. | All set: 1 device is ready. | All set: {count} devices are ready."
   },
@@ -101,17 +106,19 @@
     "title": "Integration",
     "notFound": "Integration not found",
     "reauth": "Sign in again",
+    "reconfigure": "Change settings",
     "needsReauthTitle": "This integration needs you to sign in again",
     "needsReauth": "Its devices are kept; they come back once it is signed in.",
     "statusTitle": "Status",
-    "devices": "Devices",
+    "devices": "Devices · {count}",
+    "noRoom": "Not in a room",
     "openGrid": "Open in Devices",
     "orphaned": "No devices are orphaned | 1 device is no longer reported by this integration. | {n} devices are no longer reported by this integration.",
     "noDevices": "No devices yet. They appear here as the integration finds them.",
     "noDevicesOff": "No devices. Turn the integration on to find them.",
     "settings": "Integration settings",
     "enabled": "Turned on",
-    "enabledHelp": "Turned off, it stops talking to its devices; they stay, with their history.",
+    "enabledHelp": "Turn it off to pause it: it stops talking to its devices. The devices and their history are kept.",
     "enabledToast": "{name} is on.",
     "disabledToast": "{name} is off.",
     "remove": "Remove integration"

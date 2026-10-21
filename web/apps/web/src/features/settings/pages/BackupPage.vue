@@ -3,32 +3,42 @@ import {
   exportBackup,
   exportBackupWithSecrets,
   getDashboard,
+  getScheduledBackup,
   importBackup,
+  listScheduledBackups,
+  runScheduledBackup,
   type BackupImportResultDto,
+  type ScheduledBackupsDto,
 } from '@controlhome/api-client'
-import { Button, Label, Switch, cn, toast } from '@controlhome/ui'
+import { Button, Label, Skeleton, Switch, cn, toast } from '@controlhome/ui'
 import {
   ArchiveRestore,
   CalendarClock,
   CircleCheck,
   Download,
   FileArchive,
+  Info,
   KeyRound,
+  RefreshCw,
   TriangleAlert,
   Upload,
 } from '@lucide/vue'
+import { useMediaQuery } from '@vueuse/core'
 import { computed, onMounted, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
 import PageHeader from '../../../components/PageHeader.vue'
 import PasswordInput from '../../../components/PasswordInput.vue'
 import { useProblem } from '../../../composables/useProblem'
+import { formatDateTime } from '../../../lib/format'
 import { unwrap } from '../../../lib/problem'
 import { useDevicesStore } from '../../../stores/devices'
+import { useHomeStore } from '../../../stores/home'
 import {
   PASSPHRASE_MAX,
   PASSPHRASE_MIN,
   backupFileName,
+  formatBytes,
   looksLikeBackup,
   passphraseProblem,
   saveBlob,
@@ -37,12 +47,16 @@ import {
 /**
  * Admin: the home's backup. Export downloads a zip of the configuration (floors and their plans, rooms, integrations,
  * devices, places on the plans, accounts without passwords) — with the integrations' credentials too when a passphrase
- * protects them. Restore loads a backup into an empty home. The server also keeps a backup of every day on its own.
+ * protects them. Restore loads a backup into an empty home (a home with anything in it gets a note instead). The server
+ * also writes a backup every day: when it last did, whether that failed, the ones it keeps (to download), and "back up
+ * now".
  */
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const problem = useProblem()
 const devices = useDevicesStore()
+const homeStore = useHomeStore()
 const id = useId()
+const touch = useMediaQuery('(pointer: coarse)')
 
 // --- Export ------------------------------------------------------------------------------------------------------------
 const withSecrets = ref(false)
@@ -90,6 +104,8 @@ async function download(): Promise<void> {
 // --- Import ------------------------------------------------------------------------------------------------------------
 const file = ref<File | null>(null)
 const importPassphrase = ref('')
+/** The passphrase field shows once a backup turns out to hold credentials (or the admin says it does). */
+const askPassphrase = ref(false)
 const importing = ref(false)
 const importError = ref('')
 const result = ref<BackupImportResultDto | null>(null)
@@ -97,15 +113,6 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const dragging = ref(false)
 /** The home already has floors, integrations or devices: a backup can't be restored into it. */
 const notEmpty = ref(false)
-
-onMounted(async () => {
-  try {
-    const summary = unwrap(await getDashboard())
-    notEmpty.value = summary.floorCount > 0 || summary.deviceCount > 0 || summary.integrations.length > 0
-  } catch {
-    // The server says so on import (409 backup.not_empty).
-  }
-})
 
 function choose(files: FileList | null | undefined): void {
   const chosen = files?.[0]
@@ -125,13 +132,7 @@ function onDrop(event: DragEvent): void {
   choose(event.dataTransfer?.files)
 }
 
-const fileSize = computed(() =>
-  file.value
-    ? new Intl.NumberFormat(undefined, { style: 'unit', unit: 'megabyte', maximumFractionDigits: 1 }).format(
-        file.value.size / 1_000_000,
-      )
-    : '',
-)
+const fileSize = computed(() => (file.value ? formatBytes(file.value.size, locale.value) : ''))
 
 async function restore(): Promise<void> {
   if (!file.value) return
@@ -143,12 +144,18 @@ async function restore(): Promise<void> {
     result.value = unwrap(await importBackup({ body }))
     file.value = null
     importPassphrase.value = ''
+    askPassphrase.value = false
     notEmpty.value = true
     void devices.load(true)
+    void homeStore.load(true)
+    void loadScheduled()
     toast.success(t('settings.backup.import.done'))
   } catch (error) {
+    const code = problem.codeOf(error)
     importError.value = problem.message(error)
-    if (problem.codeOf(error) === 'backup.not_empty') notEmpty.value = true
+    if (code === 'backup.passphrase_required' || code === 'backup.passphrase_incorrect')
+      askPassphrase.value = true
+    if (code === 'backup.not_empty') notEmpty.value = true
   } finally {
     importing.value = false
   }
@@ -165,6 +172,61 @@ const restored = computed(() => {
     { key: 'placements', count: value.placements },
     { key: 'users', count: value.usersCreated },
   ]
+})
+
+// --- Automatic backups ---------------------------------------------------------------------------------------------------
+const scheduled = ref<ScheduledBackupsDto | null>(null)
+const scheduledError = ref<unknown>(null)
+const backingUp = ref(false)
+const fetching = ref<string | null>(null)
+
+async function loadScheduled(): Promise<void> {
+  try {
+    scheduled.value = unwrap(await listScheduledBackups())
+    scheduledError.value = null
+  } catch (error) {
+    scheduledError.value = error
+  }
+}
+
+async function backUpNow(): Promise<void> {
+  backingUp.value = true
+  try {
+    unwrap(await runScheduledBackup())
+    toast.success(t('settings.backup.daily.written'))
+  } catch (error) {
+    problem.toastError(error)
+  } finally {
+    backingUp.value = false
+    void loadScheduled()
+  }
+}
+
+async function downloadScheduled(name: string): Promise<void> {
+  fetching.value = name
+  try {
+    const blob = unwrap(await getScheduledBackup({ path: { name }, parseAs: 'blob' })) as Blob
+    saveBlob(blob, name)
+  } catch (error) {
+    problem.toastError(error)
+    void loadScheduled()
+  } finally {
+    fetching.value = null
+  }
+}
+
+const timeZone = computed(() => homeStore.home?.timeZoneId)
+const latest = computed(() => scheduled.value?.files[0] ?? null)
+
+onMounted(async () => {
+  void homeStore.load()
+  void loadScheduled()
+  try {
+    const summary = unwrap(await getDashboard())
+    notEmpty.value = summary.floorCount > 0 || summary.deviceCount > 0 || summary.integrations.length > 0
+  } catch {
+    // The server says so on import (409 backup.not_empty).
+  }
 })
 </script>
 
@@ -310,17 +372,18 @@ const restored = computed(() => {
           </Button>
         </div>
 
-        <template v-else>
-          <p
-            v-if="notEmpty"
-            class="flex items-start gap-3 rounded-xl border border-state-warn/50 bg-state-warn/10 p-4 text-sm"
-            data-slot="backup-not-empty"
-          >
-            <TriangleAlert class="mt-0.5 size-4 shrink-0 text-state-warn" aria-hidden="true" />
-            {{ t('settings.backup.import.notEmpty') }}
-          </p>
+        <!-- A home with something in it: restoring is for a new server, so just say how -->
+        <p
+          v-else-if="notEmpty"
+          class="flex items-start gap-3 rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground"
+          data-slot="backup-not-empty"
+        >
+          <Info class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          {{ t('settings.backup.import.notEmpty') }}
+        </p>
 
-          <!-- The file: drop it here or choose it -->
+        <template v-else>
+          <!-- The file: drop it here or choose it (phones: the button only) -->
           <div
             :class="
               cn(
@@ -328,17 +391,19 @@ const restored = computed(() => {
                 dragging ? 'border-primary bg-accent/50' : 'bg-muted/30',
               )
             "
-            @dragover.prevent="dragging = !notEmpty"
+            @dragover.prevent="dragging = true"
             @dragleave="dragging = false"
-            @drop.prevent="!notEmpty && onDrop($event)"
+            @drop.prevent="onDrop"
           >
             <FileArchive class="size-8 text-muted-foreground" aria-hidden="true" />
             <p v-if="file" class="text-sm">
               <span class="font-medium">{{ file.name }}</span>
               <span class="text-muted-foreground"> · {{ fileSize }}</span>
             </p>
-            <p v-else class="text-sm text-muted-foreground">{{ t('settings.backup.import.drop') }}</p>
-            <Button variant="outline" size="sm" :disabled="notEmpty || importing" @click="fileInput?.click()">
+            <p v-else-if="!touch" class="text-sm text-muted-foreground">
+              {{ t('settings.backup.import.drop') }}
+            </p>
+            <Button variant="outline" size="sm" :disabled="importing" @click="fileInput?.click()">
               {{ file ? t('settings.backup.import.another') : t('settings.backup.import.choose') }}
             </Button>
             <input
@@ -353,27 +418,31 @@ const restored = computed(() => {
             />
           </div>
 
-          <div class="grid gap-2">
+          <div v-if="askPassphrase" class="grid gap-2" data-slot="backup-import-passphrase">
             <Label :for="`${id}-import-passphrase`">{{ t('settings.backup.import.passphrase') }}</Label>
             <PasswordInput
               :id="`${id}-import-passphrase`"
               v-model="importPassphrase"
               autocomplete="off"
               :maxlength="PASSPHRASE_MAX"
-              :disabled="notEmpty"
             />
             <p class="text-xs text-muted-foreground">{{ t('settings.backup.import.passphraseHelp') }}</p>
           </div>
 
           <FormAlert v-if="importError" :message="importError" />
 
-          <div class="flex justify-end">
+          <div class="flex flex-wrap items-center justify-end gap-2">
             <Button
-              :disabled="!file || notEmpty"
-              :loading="importing"
-              data-slot="backup-restore"
-              @click="restore"
+              v-if="file && !askPassphrase"
+              variant="link"
+              size="sm"
+              class="mr-auto px-0"
+              @click="askPassphrase = true"
             >
+              <KeyRound aria-hidden="true" />
+              {{ t('settings.backup.import.hasCredentials') }}
+            </Button>
+            <Button :disabled="!file" :loading="importing" data-slot="backup-restore" @click="restore">
               <Upload aria-hidden="true" />
               {{ t('settings.backup.import.action') }}
             </Button>
@@ -382,16 +451,106 @@ const restored = computed(() => {
       </section>
     </div>
 
-    <!-- Kept by the server every day -->
+    <!-- Written by the server every day -->
     <section
-      class="mt-6 flex items-start gap-4 rounded-2xl border border-dashed bg-card/60 p-5"
+      class="mt-6 grid gap-4 rounded-2xl border bg-card p-6 shadow-xs"
       aria-labelledby="backup-daily"
+      data-slot="backup-scheduled"
+      :data-loaded="scheduled ? 'true' : undefined"
     >
-      <CalendarClock class="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <div class="grid gap-1">
-        <h2 id="backup-daily" class="font-medium">{{ t('settings.backup.daily.title') }}</h2>
-        <p class="text-sm text-muted-foreground">{{ t('settings.backup.daily.description') }}</p>
-      </div>
+      <header class="flex flex-wrap items-start gap-4">
+        <span
+          class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"
+          aria-hidden="true"
+        >
+          <CalendarClock class="size-5" />
+        </span>
+        <!-- At least 14rem wide: on a phone the button moves under the text (to the right) rather than covering it -->
+        <div class="grid min-w-0 flex-[1_1_14rem] gap-1">
+          <h2 id="backup-daily" class="font-serif text-2xl font-medium tracking-tight">
+            {{ t('settings.backup.daily.title') }}
+          </h2>
+          <p class="text-sm text-muted-foreground">
+            {{
+              scheduled
+                ? t('settings.backup.daily.description', { keep: scheduled.keep })
+                : t('settings.backup.daily.description', { keep: 7 })
+            }}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          class="ml-auto"
+          :loading="backingUp"
+          data-slot="backup-now"
+          @click="backUpNow"
+        >
+          <RefreshCw aria-hidden="true" />
+          {{ t('settings.backup.daily.now') }}
+        </Button>
+      </header>
+
+      <Skeleton v-if="!scheduled && !scheduledError" class="h-20 rounded-xl" />
+      <FormAlert v-else-if="scheduledError && !scheduled" :message="problem.message(scheduledError)" />
+      <template v-else-if="scheduled">
+        <!-- How it went last time -->
+        <p
+          v-if="scheduled.lastFailedAtUtc"
+          class="flex items-start gap-3 rounded-xl border border-state-warn/50 bg-state-warn/10 p-4 text-sm"
+          role="status"
+          data-slot="backup-failed"
+        >
+          <TriangleAlert class="mt-0.5 size-4 shrink-0 text-state-warn" aria-hidden="true" />
+          {{
+            t('settings.backup.daily.failed', {
+              time: formatDateTime(scheduled.lastFailedAtUtc, locale, timeZone),
+            })
+          }}
+        </p>
+        <p v-else-if="latest" class="flex items-center gap-2 text-sm" role="status" data-slot="backup-last">
+          <CircleCheck class="size-4 shrink-0 text-state-on" aria-hidden="true" />
+          {{
+            t('settings.backup.daily.last', {
+              time: formatDateTime(latest.writtenAtUtc, locale, timeZone),
+              count: scheduled.files.length,
+            })
+          }}
+        </p>
+        <p v-else class="text-sm text-muted-foreground">{{ t('settings.backup.daily.none') }}</p>
+
+        <ul
+          v-if="scheduled.files.length > 0"
+          class="grid divide-y rounded-xl border"
+          data-slot="backup-files"
+        >
+          <li
+            v-for="entry in scheduled.files"
+            :key="entry.name"
+            class="flex items-center gap-3 px-4 py-2.5 text-sm"
+          >
+            <FileArchive class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span class="min-w-0 flex-1 truncate tabular-nums">
+              {{ formatDateTime(entry.writtenAtUtc, locale, timeZone) }}
+              <span class="text-muted-foreground"> · {{ formatBytes(entry.sizeBytes, locale) }}</span>
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              :loading="fetching === entry.name"
+              :aria-label="
+                t('settings.backup.daily.download', {
+                  time: formatDateTime(entry.writtenAtUtc, locale, timeZone),
+                })
+              "
+              @click="downloadScheduled(entry.name)"
+            >
+              <Download aria-hidden="true" />
+              <span class="max-sm:sr-only">{{ t('settings.backup.daily.downloadShort') }}</span>
+            </Button>
+          </li>
+        </ul>
+        <p class="text-xs text-muted-foreground">{{ t('settings.backup.daily.noCredentials') }}</p>
+      </template>
     </section>
   </div>
 </template>

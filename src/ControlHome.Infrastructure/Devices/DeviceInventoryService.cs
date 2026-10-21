@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Text.Json;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Common;
@@ -555,10 +556,15 @@ public sealed partial class DeviceInventoryService(
         int? roomId = null;
         if (!string.IsNullOrWhiteSpace(discovered.SuggestedRoom))
         {
+            // "Escritorio" from a vendor app is the home's "Escritório": case and accents do not count.
             var suggested = discovered.SuggestedRoom.Trim();
             var rooms = await db.Rooms.AsNoTracking().Select(r => new { r.Id, r.Name }).ToListAsync(cancellationToken).ConfigureAwait(false);
             roomId = rooms
-                .Where(r => string.Equals(r.Name.Trim(), suggested, StringComparison.OrdinalIgnoreCase))
+                .Where(r => string.Compare(
+                    r.Name.Trim(),
+                    suggested,
+                    CultureInfo.InvariantCulture,
+                    CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) == 0)
                 .OrderBy(r => r.Id)
                 .Select(r => (int?)r.Id)
                 .FirstOrDefault();

@@ -1,5 +1,6 @@
 using System.Globalization;
 using ControlHome.Application.Abstractions;
+using ControlHome.Application.Common;
 using ControlHome.Application.HomeBackup;
 using ControlHome.Application.Runtime;
 using ControlHome.Infrastructure.Configuration;
@@ -44,11 +45,80 @@ public sealed partial class BackupScheduler(
     DataDirectory dataDirectory,
     TimeProvider timeProvider,
     IOptions<BackupOptions> options,
-    ILogger<BackupScheduler> logger) : BackgroundService
+    ILogger<BackupScheduler> logger) : BackgroundService, IScheduledBackups
 {
     public const string Folder = "backups";
     public const string FilePrefix = "controlhome-backup-";
     private const string TimestampFormat = "yyyyMMdd-HHmmss";
+
+    /// <summary>When the last attempt failed (cleared by the next backup written); ticks, 0 = none.</summary>
+    private long _lastFailedAtTicks;
+
+    public ScheduledBackupsDto Describe()
+    {
+        var failed = Interlocked.Read(ref _lastFailedAtTicks);
+        return new ScheduledBackupsDto(
+            options.Value.ScheduleEnabled,
+            options.Value.Interval.TotalHours,
+            Math.Max(1, options.Value.Keep),
+            failed == 0 ? null : new DateTimeOffset(failed, TimeSpan.Zero),
+            [.. Existing().Select(f => ToDto(f.Path, f.WrittenAtUtc)).OfType<ScheduledBackupDto>()]);
+    }
+
+    public async Task<Result<ScheduledBackupDto>> RunNowAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var path = await RunOnceAsync(force: true, cancellationToken).ConfigureAwait(false);
+            foreach (var (file, writtenAtUtc) in Existing())
+            {
+                if (path is not null && string.Equals(file, path, StringComparison.Ordinal) && ToDto(file, writtenAtUtc) is { } dto)
+                {
+                    return dto;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            RecordFailure();
+            LogFailed(ex.GetType().Name);
+        }
+
+        return AppError.Unavailable(ErrorCodes.BackupWriteFailed, "The backup could not be written to the data folder.");
+    }
+
+    public async Task<byte[]?> ReadAsync(string name, CancellationToken cancellationToken)
+    {
+        // Only a kept backup, by its exact file name: never a path into (or out of) the data folder.
+        var match = Existing().FirstOrDefault(f => string.Equals(Path.GetFileName(f.Path), name, StringComparison.Ordinal));
+        if (match.Path is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await File.ReadAllBytesAsync(match.Path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (FileNotFoundException)
+        {
+            return null; // pruned meanwhile
+        }
+    }
+
+    private static ScheduledBackupDto? ToDto(string path, DateTimeOffset writtenAtUtc)
+    {
+        try
+        {
+            return new ScheduledBackupDto(Path.GetFileName(path), writtenAtUtc, new FileInfo(path).Length);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    private void RecordFailure() => Interlocked.Exchange(ref _lastFailedAtTicks, timeProvider.GetUtcNow().UtcTicks);
 
     /// <summary>
     /// Writes a backup when one is due (or always with <paramref name="force"/>) and prunes old ones; returns the new file's
@@ -83,6 +153,7 @@ public sealed partial class BackupScheduler(
         var temporary = path + ".tmp";
         await File.WriteAllBytesAsync(temporary, archive.Content, cancellationToken).ConfigureAwait(false);
         File.Move(temporary, path, overwrite: true);
+        Interlocked.Exchange(ref _lastFailedAtTicks, 0);
         LogWritten(name, archive.Content.Length);
 
         foreach (var old in Existing().Skip(Math.Max(1, options.Value.Keep)))
@@ -135,6 +206,7 @@ public sealed partial class BackupScheduler(
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {
+                    RecordFailure();
                     LogFailed(ex.GetType().Name);
                 }
 
@@ -164,6 +236,7 @@ public static class BackupScheduleServiceCollectionExtensions
     {
         services.AddOptions<BackupOptions>().BindConfiguration(BackupOptions.SectionName);
         services.TryAddSingleton<BackupScheduler>();
+        services.Replace(ServiceDescriptor.Singleton<IScheduledBackups>(sp => sp.GetRequiredService<BackupScheduler>()));
         services.AddHostedService(sp => sp.GetRequiredService<BackupScheduler>());
         return services;
     }

@@ -13,14 +13,14 @@ public sealed record DemoRoom(string NameEn, string NamePt, string Icon, string 
 public sealed record DemoPlacement(string ExternalId, string? EndpointKey, string FloorKey, double XCm, double YCm);
 
 /// <summary>
-/// The demo home: two floors (Ground/Térreo, Upper/Superior) with eight rooms, the Simulated connector's <c>demo</c> preset
-/// (20 devices) placed on them — two cameras and the porch light outside every room — six favorites, and Portuguese names
-/// for a pt-BR home. Used by <c>--seed-demo</c>, the setup's "Load demo home" and screenshots (which only ever show it).
+/// The demo home: two floors (Ground floor/Térreo, Upper floor/1º andar) with eight rooms, the Simulated connector's
+/// <c>demo</c> preset (20 devices) placed on them — two cameras and the porch light outside every room — six favorites,
+/// everything named in the home's language (the connector names its devices in it). Used by <c>--seed-demo</c>, the
+/// setup's "Load demo home" and screenshots (which only ever show it).
 /// </summary>
 public static class DemoHome
 {
     public const string ConnectorKey = "simulated";
-    public const string IntegrationConfigJson = """{"preset":"demo","seed":42,"simulateReauth":false}""";
     public const string IntegrationNameEn = "Demo home";
     public const string IntegrationNamePt = "Casa de demonstração";
     public const string Ground = "ground";
@@ -49,7 +49,7 @@ public static class DemoHome
         new DemoFloor(
             Upper,
             "Upper floor",
-            "Superior",
+            "1º andar",
             1,
             1600,
             1200,
@@ -102,39 +102,12 @@ public static class DemoHome
         ("light-1", "main"), ("ac-1", "main"), ("lock-1", "main"), ("gate-1", "main"), ("tv-1", "main"), ("plug-1", "main"),
     ];
 
-    /// <summary>Device names for a pt-BR home (the Simulated connector names them in English).</summary>
-    public static IReadOnlyDictionary<string, string> PortugueseDeviceNames { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
-    {
-        ["light-1"] = "Luz da sala",
-        ["plug-1"] = "Tomada da cafeteira",
-        ["ac-1"] = "Ar-condicionado do quarto",
-        ["contact-1"] = "Sensor da porta",
-        ["lock-1"] = "Fechadura da porta",
-        ["light-2"] = "Abajur do quarto",
-        ["washer-1"] = "Máquina de lavar",
-        ["tv-1"] = "TV da sala",
-        ["motion-1"] = "Sensor de presença do corredor",
-        ["switch3-1"] = "Interruptor da sala",
-        ["nvr-1"] = "Gravador",
-        ["cam-1"] = "Câmera do portão",
-        ["cam-2"] = "Câmera da garagem",
-        ["cam-3"] = "Câmera do quintal",
-        ["cam-4"] = "Câmera da varanda",
-        ["gate-1"] = "Portão",
-        ["blinds-1"] = "Persiana da sala",
-        ["tank-1"] = "Caixa d'água",
-        ["climate-1"] = "Sensor do banheiro",
-        ["plug-2"] = "Tomada da geladeira",
-    };
-
-    /// <summary>Endpoint names for a pt-BR home: (external device id, endpoint key) → name.</summary>
-    public static IReadOnlyDictionary<(string ExternalId, string EndpointKey), string> PortugueseEndpointNames { get; } =
-        new Dictionary<(string, string), string>
-        {
-            [("switch3-1", "l1")] = "Teto",
-            [("switch3-1", "l2")] = "Arandelas",
-            [("switch3-1", "l3")] = "Varanda",
-        };
+    /// <summary>
+    /// The Simulated integration's config: the <c>demo</c> preset with its devices (and the rooms they suggest) named in
+    /// <paramref name="language"/> (<c>pt-BR</c> or <c>en</c>).
+    /// </summary>
+    public static string IntegrationConfigJson(string language) =>
+        $$"""{"preset":"demo","language":"{{(language == "pt-BR" ? "pt-BR" : "en")}}","seed":42,"simulateReauth":false}""";
 
     private static PointCm P(double x, double y) => new(x, y);
 

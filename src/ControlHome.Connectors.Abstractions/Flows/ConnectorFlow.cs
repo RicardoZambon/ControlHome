@@ -26,7 +26,14 @@ public interface IConnectorFlow : IAsyncDisposable
 
 /// <summary>What a flow can use while it runs.</summary>
 /// <param name="Existing">The integration being re-authorized or extended; <c>null</c> during setup.</param>
-public sealed record FlowContext(TimeProvider Time, ILogger Logger, IntegrationInstance? Existing);
+public sealed record FlowContext(TimeProvider Time, ILogger Logger, IntegrationInstance? Existing)
+{
+    /// <summary>
+    /// The home's language (<c>pt-BR</c> or <c>en</c>), for what the flow suggests in it: the integration's name, or the
+    /// names of the devices a virtual connector makes up. Texts shown to the user stay <see cref="LocalizedText"/>.
+    /// </summary>
+    public string Language { get; init; } = "en";
+}
 
 /// <summary>One step of a connector flow (JSON discriminator <c>type</c>).</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]

@@ -2,6 +2,7 @@ using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Common;
 using ControlHome.Application.Devices;
+using ControlHome.Application.Homes;
 using ControlHome.Application.Integrations;
 using ControlHome.Application.Realtime;
 using ControlHome.Application.Runtime;
@@ -53,6 +54,7 @@ public sealed class IntegrationServiceRuntimeModeTests
             new AppRuntimeClock(TimeProvider.System),
             Substitute.For<ICurrentActor>(),
             Substitute.For<IAuditLog>(),
+            Substitute.For<IHomeLanguage>(),
             new KnownSecrets(),
             TimeProvider.System,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<IntegrationFlowService>.Instance);

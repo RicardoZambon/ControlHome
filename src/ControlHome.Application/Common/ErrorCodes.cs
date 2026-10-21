@@ -137,6 +137,10 @@ public static class ErrorCodes
     public const string BackupPassphraseRequired = "backup.passphrase_required";
     public const string BackupPassphraseIncorrect = "backup.passphrase_incorrect";
 
+    // Automatic backups: a name that is not a kept backup; writing one failed (the data folder, the disk)
+    public const string BackupNotFound = "backup.not_found";
+    public const string BackupWriteFailed = "backup.write_failed";
+
     // History and energy
     public const string AttributesNotFound = "attributes.not_found";
     public const string HistoryInvalidRange = "history.invalid_range";

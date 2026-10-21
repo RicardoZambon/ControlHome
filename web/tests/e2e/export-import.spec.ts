@@ -4,6 +4,7 @@ import {
   SIMULATED,
   completeSetup,
   createFloor,
+  dismissToasts,
   expect,
   listDevices,
   listPlacements,
@@ -63,10 +64,25 @@ test('a backup with its credentials is restored into a new, empty home', async (
 
   await page.goto('/settings/backup')
   await expect(page.getByRole('heading', { level: 1, name: t('settings.backup.title') })).toBeVisible()
-  // This home has floors and devices: nothing can be restored into it.
+  // This home has floors and devices: nothing can be restored into it, so the card only says how restoring works.
   await expect(page.locator('[data-slot="backup-not-empty"]')).toBeVisible()
-  await expect(page.locator('[data-slot="backup-restore"]')).toBeDisabled()
+  await expect(page.locator('[data-slot="backup-restore"]')).toHaveCount(0)
+  await expect(page.locator('[data-slot="backup-file"]')).toHaveCount(0)
   await gates.check('backup page')
+
+  // The automatic backups (the server's data folder outlives the app's reset: earlier runs may have left some): one
+  // more written now, listed to download.
+  const scheduled = page.locator('[data-slot="backup-scheduled"]')
+  await expect(scheduled).toHaveAttribute('data-loaded', 'true')
+  const files = scheduled.locator('[data-slot="backup-files"] li')
+  const before = await files.count()
+  await page.locator('[data-slot="backup-now"]').click()
+  await expect(files).toHaveCount(Math.min(before + 1, 7))
+  await expect(scheduled.locator('[data-slot="backup-last"]')).toBeVisible()
+  const kept = page.waitForEvent('download')
+  await files.first().getByRole('button').click()
+  expect((await kept).suggestedFilename()).toMatch(/^controlhome-backup-\d{8}-\d{6}\.zip$/)
+  await dismissToasts(page)
 
   // With the credentials: the passphrase is checked before anything is sent.
   const exportForm = page.locator('[data-slot="backup-export"]')
@@ -95,10 +111,14 @@ test('a backup with its credentials is restored into a new, empty home', async (
   await expect(page.locator('[data-slot="backup-import"]')).toBeVisible()
   await expect(page.locator('[data-slot="backup-not-empty"]')).toHaveCount(0)
   await page.locator('[data-slot="backup-file"]').setInputFiles(file)
-  await page
+  // No passphrase asked before it turns out to be needed: the backup holds credentials, so the server asks for it.
+  const passphraseField = page
     .locator('[data-slot="backup-import"]')
     .getByLabel(t('settings.backup.import.passphrase'), { exact: true })
-    .fill(PASSPHRASE)
+  await expect(passphraseField).toHaveCount(0)
+  await page.locator('[data-slot="backup-restore"]').click()
+  await expect(page.getByRole('alert')).toContainText(t('errors.backup.passphrase_required'))
+  await passphraseField.fill(PASSPHRASE)
   await page.locator('[data-slot="backup-restore"]').click()
 
   const result = page.locator('[data-slot="backup-result"]')

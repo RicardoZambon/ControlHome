@@ -21,6 +21,24 @@ export function attributeLabel(key: string, t: Translate, te: HasTranslation, ca
   return te(`device.attributes.${key}`) ? t(`device.attributes.${key}`) : humanize(key)
 }
 
+/**
+ * What a device is, in a word ("Light", "Outlet", "Camera"): its class (`devices.classes.<class>`), else what its first
+ * control does. Empty when neither says anything.
+ */
+export function deviceKindLabel(
+  device: {
+    deviceClass: string | null
+    endpoints: readonly { capabilities: readonly { capabilityId: string }[] }[]
+  },
+  t: Translate,
+  te: HasTranslation,
+): string {
+  if (device.deviceClass && te(`devices.classes.${device.deviceClass}`))
+    return t(`devices.classes.${device.deviceClass}`)
+  const capability = device.endpoints[0]?.capabilities[0]?.capabilityId
+  return capability ? capabilityLabel(capability, t, te) : ''
+}
+
 /** Translated label of a command (`device.commands.<name>`), else the name humanized. */
 export function commandLabel(name: string, t: Translate, te: HasTranslation): string {
   return te(`device.commands.${name}`) ? t(`device.commands.${name}`) : humanize(name)
@@ -32,7 +50,10 @@ export function valueLabel(attributeKey: string, value: string, t: Translate, te
   return te(key) ? t(key) : humanize(value)
 }
 
-/** Fraction digits that suit a unit: temperatures to a tenth ("22 °C", "22,5 °C"), percentages and watt-hours whole. */
+/**
+ * Fraction digits that suit a unit: temperatures to a tenth ("22 °C", "22,5 °C"), percentages whole, watt-hours whole
+ * from 10 Wh and finer below.
+ */
 function digitsFor(unit: string | null | undefined, value: number): { min: number; max: number } {
   switch (unit) {
     case '°C':
@@ -43,8 +64,11 @@ function digitsFor(unit: string | null | undefined, value: number): { min: numbe
     case 'min':
     case 'K':
     case 'ms':
-    case 'Wh':
       return { min: 0, max: 0 }
+    case 'Wh':
+      // A device that just started has used "0.4 Wh", not "0 Wh".
+      if (Math.abs(value) >= 10) return { min: 0, max: 0 }
+      return Math.abs(value) >= 1 ? { min: 0, max: 1 } : { min: 0, max: 2 }
     case 'W':
     case 'µg/m³':
       return Math.abs(value) < 10 ? { min: 0, max: 1 } : { min: 0, max: 0 }

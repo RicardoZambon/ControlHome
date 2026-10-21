@@ -1,9 +1,16 @@
 {
   "eyebrow": "Configurações",
+  "home": {
+    "nav": "Dados da casa",
+    "title": "Dados da casa",
+    "description": "O nome da casa, onde ela fica, o idioma e o preço da energia por trás dos custos.",
+    "save": "Salvar alterações",
+    "saved": "Dados da casa salvos."
+  },
   "backup": {
     "nav": "Backup",
     "title": "Backup",
-    "description": "Guarde uma cópia da configuração da sua casa e traga-a de volta em um servidor novo.",
+    "description": "Guarde uma cópia da configuração da casa para restaurá-la em um novo servidor.",
     "export": {
       "title": "Baixar um backup",
       "description": "Andares com as plantas, cômodos, integrações, dispositivos, os lugares deles nas plantas e as contas (sem senhas).",
@@ -26,7 +33,7 @@
     "import": {
       "title": "Restaurar um backup",
       "description": "Traz um backup para uma casa nova e vazia: tudo volta como foi salvo.",
-      "notEmpty": "Esta casa já tem andares, integrações ou dispositivos. Um backup só pode ser restaurado em uma casa vazia.",
+      "notEmpty": "A restauração só funciona numa instalação nova: configure o novo servidor e restaure o backup nele.",
       "drop": "Solte aqui um arquivo de backup (.zip)",
       "choose": "Escolher arquivo",
       "another": "Escolher outro arquivo",
@@ -47,25 +54,33 @@
       "secretsBack": "As credenciais das integrações também voltaram; elas estão iniciando agora.",
       "secretsMissing": "O backup não tinha credenciais: entre de novo em cada integração pela página dela.",
       "usersNote": "Nenhuma conta foi adicionada | A conta restaurada ainda não tem senha: defina uma em Usuários. | As {n} contas restauradas ainda não têm senha: defina uma para cada em Usuários.",
-      "openHome": "Abrir a casa"
+      "openHome": "Abrir a casa",
+      "hasCredentials": "Ele inclui credenciais"
     },
     "daily": {
-      "title": "Um backup por dia",
-      "description": "O ControlHome também salva sozinho um backup por dia na pasta backups dos dados dele, mantendo os sete últimos. Eles não incluem credenciais; copie-os para um lugar seguro de vez em quando."
+      "title": "Backups automáticos",
+      "description": "O servidor grava um backup sem credenciais todo dia e guarda os últimos {keep}.",
+      "now": "Fazer backup agora",
+      "written": "Backup gravado.",
+      "failed": "O último backup automático falhou ({time}). Verifique se o servidor tem espaço livre e faça o backup agora.",
+      "last": "Último backup automático: {time} · {count} guardados",
+      "none": "Ainda não há backup automático. O primeiro é gravado em até um dia.",
+      "download": "Baixar o backup de {time}",
+      "downloadShort": "Baixar",
+      "noCredentials": "Eles não incluem credenciais; copie-os para um lugar seguro de vez em quando."
     }
   },
   "history": {
-    "nav": "Histórico",
-    "title": "Histórico",
-    "description": "Por quanto tempo o ControlHome guarda o que seus dispositivos fizeram. Mais tempo significa bancos de dados maiores; médias por hora e energia ficam sempre.",
+    "nav": "Retenção de dados",
+    "title": "Retenção de dados",
+    "description": "Por quanto tempo o ControlHome guarda o que seus dispositivos fizeram. Guardar mais significa um banco de dados maior.",
     "tiers": {
-      "heading": "Como uma leitura envelhece",
+      "heading": "Ciclo de vida dos dados",
       "raw": "Cada mudança",
       "short": "Médias de 5 minutos",
       "hourly": "Médias por hora e energia"
     },
     "forever": "Para sempre",
-    "foreverNote": "Médias por hora e energia por hora ficam para sempre, assim gráficos longos e totais de energia nunca perdem o passado.",
     "fields": {
       "stateLogDays": {
         "label": "Cada mudança",
@@ -88,6 +103,9 @@
     "daysUnit": "dias",
     "limits": "de {min} a {max}",
     "range": "Use um número inteiro de dias de {min} a {max}.",
-    "saved": "Configurações de histórico salvas."
+    "saved": "Configurações de histórico salvas.",
+    "problems": {
+      "shortBelowRaw": "Guarde as médias de 5 minutos pelo menos tanto quanto cada mudança ({days})."
+    }
   }
 }

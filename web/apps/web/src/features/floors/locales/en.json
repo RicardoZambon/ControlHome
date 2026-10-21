@@ -59,6 +59,8 @@
     "noRoomsShort": "No rooms on this floor yet.",
     "drawRooms": "Draw rooms",
     "deviceCount": "No devices | 1 device | {n} devices",
+    "activeOf": "No devices | {active} of 1 on | {active} of {total} on",
+    "outside": "Outside the rooms",
     "noDevicesAdmin": "No devices on this floor yet.",
     "placeDevices": "Place devices"
   },
@@ -275,7 +277,7 @@
       "allPlaced": "Every device is on a plan.",
       "noneHere": "Nothing on this floor yet.",
       "elsewhere": "No devices on other floors | 1 more device is on another floor | {n} more devices are on other floors",
-      "summary": "{placed} here · {unplaced} to place",
+      "summary": "No devices | 1 device | {n} devices",
       "saveFailed": "Couldn't save the device's place."
     }
   }

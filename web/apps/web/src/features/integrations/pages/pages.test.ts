@@ -52,6 +52,7 @@ const SIMULATED: ConnectorDto = {
       schema: { type: 'enum', values: ['basic', 'demo'] },
       required: true,
       secret: false,
+      advanced: false,
       help: null,
     },
     {
@@ -60,6 +61,7 @@ const SIMULATED: ConnectorDto = {
       schema: { type: 'number', min: 0, integer: true },
       required: false,
       secret: false,
+      advanced: false,
       help: null,
     },
   ],
@@ -286,16 +288,18 @@ describe('integration setup', () => {
     wrapper.unmount()
   })
 
-  it('signs an integration in again and goes back to it', async () => {
+  it('signs an integration in again (or changes its settings) and goes back to it', async () => {
     signedIn('Admin', 'en')
     api.startIntegrationReauthFlow.mockResolvedValue(ok(FORM))
     const { wrapper, router } = await open('/integrations/int-1/reauth')
     expect(api.startIntegrationReauthFlow).toHaveBeenCalledWith({ path: { id: 'int-1' } })
     expect(wrapper.find('h1').text()).toBe('Simulated home')
+    // A simulated hub has no sign-in: the page says what it does instead.
+    expect(wrapper.find('header .eyebrow').text()).toBe('Change settings')
     api.continueIntegrationFlow.mockResolvedValueOnce(ok(step('done', { integrationId: 'int-1' })))
     await wrapper.get('form[data-slot="schema-form"]').trigger('submit')
     await vi.waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/integrations/int-1'))
-    expect(document.body.textContent).toContain('Simulated home is signed in again.')
+    expect(document.body.textContent).toContain('Simulated home is updated.')
     wrapper.unmount()
   })
 

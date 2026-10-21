@@ -71,7 +71,7 @@ public sealed class SimulatedRuntime : IConnectorRuntime, ICameraSnapshotSource
                 return;
             }
 
-            await context.SyncInventoryAsync([.. _home.Devices.Select(d => d.Describe())], cancellationToken).ConfigureAwait(false);
+            await context.SyncInventoryAsync([.. _home.Devices.Select(d => d.Describe(Settings.Language))], cancellationToken).ConfigureAwait(false);
 
             lock (_lock)
             {

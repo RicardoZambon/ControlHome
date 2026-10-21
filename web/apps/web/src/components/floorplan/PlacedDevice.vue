@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { cn } from '@controlhome/ui'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useEndpointSummary } from '../../composables/useEndpointSummary'
+import { asNumber } from '../../lib/stateValue'
 import { standsOpen } from '../devices/deviceState'
 import { deviceIcon } from '../devices/deviceIcons'
 import { isLightEndpoint } from '../devices/lightColor'
 import { iconToneOf } from '../devices/tone'
-import { MARKER_RADIUS_PX, MARKER_TONES, combineSummaries } from './markerTone'
+import {
+  MARKER_HIT_RADIUS_PX,
+  MARKER_RADIUS_PX,
+  MARKER_TONES,
+  combineSummaries,
+  markerRadiusPx,
+} from './markerTone'
 import type { PlanMarker } from './placements'
 
 /**
@@ -48,6 +56,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{ activate: [] }>()
 
+const { locale } = useI18n()
 const { readerOf, summaryOf } = useEndpointSummary()
 
 const summary = computed(() =>
@@ -77,13 +86,32 @@ const iconTone = computed(
     ].icon,
 )
 
+// The marker follows the zoom (small on a phone's whole-floor view, full size zoomed in); its tap target does not.
 const radius = computed(() =>
-  props.compact ? MARKER_RADIUS_PX.compact : props.coarse ? MARKER_RADIUS_PX.coarse : MARKER_RADIUS_PX.fine,
+  props.compact ? MARKER_RADIUS_PX.compact : markerRadiusPx(props.scale, props.coarse),
 )
+/** How far the marker is from its full size (1 = full), for what is drawn around it. */
+const size = computed(() => radius.value / (props.coarse ? MARKER_RADIUS_PX.coarse : MARKER_RADIUS_PX.fine))
 const px = (value: number) => value / props.scale
 const x = computed(() => props.at?.x ?? props.marker.placement.xCm)
 const y = computed(() => props.at?.y ?? props.marker.placement.yCm)
-const iconPx = computed(() => (props.coarse ? 18 : 16))
+const iconPx = computed(() => Math.round((props.coarse ? 18 : 16) * size.value))
+
+/** A sensor's or a meter's reading beside it ("23.5°", "428 W"), once the plan is zoomed in enough to read it. */
+const reading = computed(() => {
+  if (props.compact || radius.value < 12 || summary.value.tone === 'offline') return null
+  const endpoint = props.marker.endpoint ?? props.marker.endpoints[0]
+  if (!endpoint) return null
+  const read = readerOf(endpoint)
+  const number = new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 })
+  const temperature =
+    asNumber(read('temperature', 'temperature')) ?? asNumber(read('thermostat', 'currentTemperature'))
+  if (temperature !== undefined) return `${number.format(temperature)}°`
+  const power = asNumber(read('power', 'power'))
+  if (power !== undefined && power > 0)
+    return `${new Intl.NumberFormat(locale.value).format(Math.round(power))} W`
+  return null
+})
 const label = computed(() =>
   summary.value.label ? `${props.marker.name}, ${summary.value.label}` : props.marker.name,
 )
@@ -124,10 +152,16 @@ const offline = computed(() => summary.value.tone === 'offline')
     </template>
 
     <template v-else>
+      <!-- The tap target: a finger's size whatever the marker's drawn size -->
+      <circle
+        :r="px(Math.max(radius, MARKER_HIT_RADIUS_PX))"
+        class="fill-transparent"
+        data-slot="marker-hit"
+      />
       <!-- On or running: a soft halo -->
       <circle
         v-if="summary.active || summary.tone === 'danger'"
-        :r="px(radius + 7)"
+        :r="px(radius + 7 * size)"
         :class="cn(tone.halo, 'motion-safe:animate-pulse')"
         data-slot="marker-halo"
       />
@@ -153,8 +187,8 @@ const offline = computed(() => summary.value.tone === 'offline')
             dragging ? 'drop-shadow-lg' : 'drop-shadow-sm',
           )
         "
-        :stroke-width="px(2.5)"
-        :stroke-dasharray="tone.dashed ? `${px(3.5)} ${px(2.5)}` : undefined"
+        :stroke-width="px(radius < 12 ? 2 : 2.5)"
+        :stroke-dasharray="tone.dashed ? `${px(3.5 * size)} ${px(2.5 * size)}` : undefined"
         data-slot="marker-ring"
       />
       <component
@@ -166,6 +200,20 @@ const offline = computed(() => summary.value.tone === 'offline')
         :class="cn('pointer-events-none', iconTone, offline && 'opacity-70')"
         aria-hidden="true"
       />
+      <!-- A sensor's or meter's reading beside it -->
+      <text
+        v-if="reading"
+        :x="px(radius + 4)"
+        :y="px(radius * 0.55)"
+        :font-size="px(10.5)"
+        paint-order="stroke"
+        :stroke-width="px(3.5)"
+        stroke-linejoin="round"
+        class="pointer-events-none fill-foreground stroke-card font-sans font-medium tabular-nums"
+        data-slot="marker-reading"
+      >
+        {{ reading }}
+      </text>
       <!-- The name, on hover, focus or selection -->
       <text
         :y="px(radius + 15)"

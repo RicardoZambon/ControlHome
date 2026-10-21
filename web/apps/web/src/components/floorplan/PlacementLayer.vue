@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import PlacedDevice from './PlacedDevice.vue'
 import type { Point } from './geometry'
-import type { PlanMarker } from './placements'
+import { markerRadiusPx } from './markerTone'
+import type { MarkerCluster, PlanMarker } from './placements'
 
 /**
  * The devices on a floor plan (inside `FloorPlanCanvas`'s overlay slot).
@@ -25,15 +27,32 @@ const props = withDefaults(
     toCm?: (clientX: number, clientY: number) => Point
     widthCm?: number
     heightCm?: number
+    /**
+     * View mode: the markers grouped as drawn at this zoom (`clusterMarkers`); a group of several is one bubble with
+     * their count (`expand` zooms in on it).
+     */
+    clusters?: readonly MarkerCluster<PlanMarker>[]
   }>(),
-  { mode: 'view', selectedId: null, coarse: false, muted: false },
+  { mode: 'view', selectedId: null, coarse: false, muted: false, clusters: undefined },
 )
 
 const emit = defineEmits<{
   activate: [marker: PlanMarker]
   select: [marker: PlanMarker]
   move: [marker: PlanMarker, point: Point]
+  expand: [cluster: MarkerCluster<PlanMarker>]
 }>()
+
+const { t } = useI18n()
+const clusterRadius = computed(() => markerRadiusPx(props.scale, props.coarse) + 2)
+/** What is drawn one by one: every marker, or (grouped view) the groups of one. */
+const singles = computed(() =>
+  props.clusters
+    ? props.clusters.filter((cluster) => cluster.members.length === 1).map((cluster) => cluster.members[0]!)
+    : props.markers,
+)
+const groups = computed(() => (props.clusters ?? []).filter((cluster) => cluster.members.length > 1))
+const px = (value: number) => value / props.scale
 
 interface Drag {
   id: number
@@ -102,8 +121,46 @@ function onActivate(marker: PlanMarker): void {
 
 <template>
   <g data-slot="placement-layer" :class="muted || mode === 'preview' ? 'pointer-events-none' : undefined">
+    <!-- Devices too close to tell apart at this zoom: one bubble with their count; it zooms in on them -->
+    <g
+      v-for="group in groups"
+      :key="`c${group.members[0]!.placement.id}`"
+      :transform="`translate(${group.center.x} ${group.center.y})`"
+      role="button"
+      tabindex="0"
+      :aria-label="
+        t('floorplan.devices.group', {
+          count: group.members.length,
+          names: group.members.map((member) => member.name).join(', '),
+        })
+      "
+      class="group/cluster cursor-pointer outline-none"
+      data-slot="placed-cluster"
+      :data-count="group.members.length"
+      @keydown.enter.prevent="emit('expand', group)"
+      @keydown.space.prevent="emit('expand', group)"
+    >
+      <title>{{ group.members.map((member) => member.name).join(', ') }}</title>
+      <circle :r="px(Math.max(clusterRadius, 22))" class="fill-transparent" />
+      <circle
+        :r="px(clusterRadius + 4)"
+        fill="none"
+        stroke-width="2"
+        vector-effect="non-scaling-stroke"
+        class="stroke-ring opacity-0 transition-opacity group-focus-visible/cluster:opacity-100"
+      />
+      <circle :r="px(clusterRadius)" class="fill-primary stroke-card drop-shadow-sm" :stroke-width="px(2)" />
+      <text
+        text-anchor="middle"
+        dominant-baseline="central"
+        :font-size="px(clusterRadius * 0.95)"
+        class="pointer-events-none fill-primary-foreground font-sans font-semibold tabular-nums"
+      >
+        {{ group.members.length }}
+      </text>
+    </g>
     <PlacedDevice
-      v-for="marker in markers"
+      v-for="marker in singles"
       :key="marker.placement.id"
       :marker="marker"
       :scale="scale"

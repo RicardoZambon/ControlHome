@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   capitalize,
   dayPartOf,
+  formatClock,
   formatRelative,
   formatTimeZoneName,
   hourIn,
@@ -42,6 +43,27 @@ describe('formatRelative', () => {
   it('uses the given text under a minute', () => {
     expect(formatRelative('2026-10-12T11:59:40Z', now, 'pt-BR', 'Agora mesmo')).toBe('Agora mesmo')
     expect(formatRelative('2026-10-12T09:00:00Z', now, 'en', 'Just now')).toBe('3 hours ago')
+  })
+
+  it('never points into the future: a time ahead of now (clocks apart) is just now', () => {
+    expect(formatRelative('2026-10-12T16:00:00Z', now, 'en', 'Just now')).toBe('Just now')
+    expect(formatRelative('2026-10-12T19:00:00Z', now, 'pt-BR')).toBe('agora')
+  })
+})
+
+describe('formatClock', () => {
+  const now = new Date('2026-10-12T12:00:00Z')
+
+  it('is the time of day today, and the date with it on other days (in the home time zone)', () => {
+    expect(formatClock('2026-10-12T09:40:00Z', now, 'pt-BR', 'America/Sao_Paulo')).toBe('06:40')
+    expect(formatClock('2026-10-11T09:40:00Z', now, 'pt-BR', 'America/Sao_Paulo')).toMatch(
+      /^11 de out\.?,? 06:40$/,
+    )
+    expect(formatClock('2026-10-12T09:40:00Z', now, 'en', 'America/Sao_Paulo')).toBe('06:40 AM')
+  })
+
+  it('takes the browser zone for an unknown id', () => {
+    expect(() => formatClock('2026-10-12T09:40:00Z', now, 'en', 'Not/AZone')).not.toThrow()
   })
 })
 

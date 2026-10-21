@@ -12,11 +12,15 @@
   "loadFailed": "Não foi possível carregar o resumo da casa.",
   "planTeaser": "A planta da sua casa vai ficar aqui",
   "planTeaserDetail": "Desenhe seus andares e cômodos para ver sua casa de relance.",
-  "planBanner": "Desenhe a planta da sua casa em Andares.",
   "plan": {
+    "heading": "Plantas",
     "open": "Abrir planta",
     "draw": "Desenhar um andar",
-    "openFloors": "Abrir Andares"
+    "openFloors": "Abrir Andares",
+    "switchFloor": "Mostrar um andar",
+    "legendOn": "Ligado",
+    "legendOff": "Desligado",
+    "legendOffline": "Offline"
   },
   "glance": {
     "heading": "De relance",
@@ -26,12 +30,19 @@
     "active": "Ligados agora",
     "activeHint": "De nenhum dispositivo | De 1 dispositivo | De {total} dispositivos",
     "offline": "Offline",
-    "offlineHint": "Veja abaixo",
-    "allReachable": "Tudo ao alcance",
+    "offlineHint": "Ver quais",
+    "allReachable": "Todos online",
     "integrations": "Integrações",
     "noIntegrations": "Nenhuma conectada ainda",
     "allConnected": "Todas funcionando",
     "attention": "Nenhuma precisa de você | 1 precisa de atenção | {n} precisam de atenção"
+  },
+  "attention": {
+    "heading": "Precisa de atenção",
+    "backupFailed": "O último backup automático falhou. Abra Backup para ver os backups guardados e tentar de novo."
+  },
+  "nudge": {
+    "price": "Informe o preço da energia para ver quanto seus dispositivos custam"
   },
   "start": {
     "heading": "Primeiros passos",
@@ -60,24 +71,12 @@
     "noDevices": "Ainda sem dispositivos",
     "temperature": "Temperatura",
     "power": "Potência",
+    "offline": "{n} offline",
     "empty": "Os cômodos aparecem aqui quando um admin desenhar os andares.",
     "emptyAdmin": "Desenhe seus andares e cômodos para ver cada cômodo aqui."
   },
   "offline": {
     "heading": "Dispositivos offline",
-    "none": "Todos os dispositivos estão ao alcance."
-  },
-  "integrations": {
-    "heading": "Integrações"
-  },
-  "details": {
-    "heading": "Dados da casa",
-    "timeZone": "Fuso horário",
-    "location": "Localização",
-    "language": "Idioma",
-    "currency": "Moeda",
-    "price": "Preço da energia",
-    "perKwh": "{price} por kWh",
-    "loadFailed": "Não foi possível carregar os dados da casa."
+    "since": "Offline desde {time}"
   }
 }

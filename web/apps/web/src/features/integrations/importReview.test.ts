@@ -27,6 +27,30 @@ describe('suggestRoom', () => {
     expect(suggestRoom('Luz do escritorio', ROOMS)).toBe(4)
     expect(suggestRoom('LIVING-ROOM TV', ROOMS)).toBe(1)
   })
+
+  it('knows a room by its name in the other language (a vendor app in English, a home in Portuguese)', () => {
+    const portuguese = [
+      { id: 11, name: 'Sala' },
+      { id: 12, name: 'Cozinha' },
+      { id: 13, name: 'Quarto' },
+      { id: 14, name: 'Lavanderia' },
+      { id: 15, name: 'Suíte' },
+      { id: 16, name: 'Sala de jantar' },
+      { id: 17, name: 'Banheiro' },
+    ]
+    expect(suggestRoom('Living room light', portuguese)).toBe(11)
+    expect(suggestRoom('Coffee maker plug in the kitchen', portuguese)).toBe(12)
+    expect(suggestRoom('Bedroom air conditioner', portuguese)).toBe(13)
+    expect(suggestRoom('Laundry washer', portuguese)).toBe(14)
+    expect(suggestRoom('Bathroom sensor', portuguese)).toBe(17)
+    expect(suggestRoom('Dining room lamp', portuguese)).toBe(16)
+    // And the other way round.
+    expect(suggestRoom('Luz da sala', ROOMS)).toBe(1)
+    expect(suggestRoom('Ar-condicionado do quarto', ROOMS)).toBe(2)
+    // A room's own name always wins over a translation.
+    expect(suggestRoom('Lâmpada da sala de jantar', portuguese)).toBe(16)
+    expect(suggestRoom('Front door lock', portuguese)).toBeNull()
+  })
 })
 
 describe('roomSuggestion', () => {

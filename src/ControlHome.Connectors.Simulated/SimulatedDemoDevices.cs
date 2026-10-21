@@ -335,7 +335,7 @@ internal sealed class SimulatedMotionSensor : SimulatedDevice
         _reportedBatteryPct = _batteryPct;
     }
 
-    public override string Name => "Hallway motion sensor";
+    public override string Name => "Office motion sensor";
 
     public override string DeviceClass => DeviceClasses.Sensor;
 

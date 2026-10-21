@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { DeviceSummaryDto, EndpointDto } from '@controlhome/api-client'
 import { Badge, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@controlhome/ui'
-import { useNow } from '@vueuse/core'
+
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { attributeLabel, capabilityLabel, formatStateValue } from '../../../components/devices/format'
 import { capitalize, formatDateTime, formatRelative } from '../../../lib/format'
+import { useServerNow } from '../../../lib/serverClock'
 import { endpointName, useDevicesStore } from '../../../stores/devices'
 import { useRealtimeStore } from '../../../stores/realtime'
 
@@ -24,7 +25,7 @@ const props = defineProps<{
 const { t, te, locale } = useI18n()
 const devices = useDevicesStore()
 const realtime = useRealtimeStore()
-const now = useNow({ interval: 30_000 })
+const now = useServerNow(30_000)
 
 const rows = computed(() =>
   props.endpoints.flatMap((endpoint) =>

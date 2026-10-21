@@ -302,12 +302,11 @@ const selectedSummary = computed(() => {
   const size = sizeOf(room.polygon)
   return `${formatArea(roomAreaM2(room.polygon), locale.value)} · ${formatDimensions(size.width, size.height, locale.value)}`
 })
-const devicesSummary = computed(() =>
-  t('floors.editor.devices.summary', {
-    placed: placements.markers.value.length,
-    unplaced: placements.groups.value.length,
-  }),
-)
+/** The bottom bar's short line: how many devices are on this floor ("18 devices"); the sheet has the rest. */
+const devicesSummary = computed(() => {
+  const count = new Set(placements.markers.value.map((marker) => marker.device.id)).size
+  return t('floors.editor.devices.summary', { n: count }, count)
+})
 const floorSummary = computed(() => {
   const rooms = state.rooms.value
   const count = t('floors.roomCount', rooms.length)
@@ -810,9 +809,15 @@ useEventListener(window, 'blur', () => (spaceDown.value = false))
             <span class="sr-only">{{ t('floors.editor.openPanel') }}</span>
             <ChevronUp class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
-          <Button v-if="devicesMode" variant="outline" class="shrink-0" @click="sheetOpen = true">
+          <Button
+            v-if="devicesMode"
+            variant="outline"
+            class="shrink-0"
+            :aria-label="t('floors.editor.devices.placeShort')"
+            @click="sheetOpen = true"
+          >
             <MapPin />
-            {{ t('floors.editor.devices.placeShort') }}
+            {{ t('floors.editor.devices.place') }}
           </Button>
           <Button v-else-if="!selected" variant="outline" class="shrink-0" @click="state.setTool('draw')">
             <Pentagon />

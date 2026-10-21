@@ -87,8 +87,27 @@ export const MARKER_TONES: Record<Tone, MarkerToneClasses> = {
   },
 }
 
-/** Marker radius in screen pixels: on the plan, on touch screens, and on dashboard previews. */
-export const MARKER_RADIUS_PX = { fine: 15, coarse: 18, compact: 6 } as const
+/**
+ * Marker radius in screen pixels: the largest on the plan (mouse, touch), the smallest a zoomed-out plan draws, and
+ * dashboard previews.
+ */
+export const MARKER_RADIUS_PX = { fine: 15, coarse: 18, min: 9, compact: 6 } as const
+
+/** How big a marker is on the floor itself (cm): it grows and shrinks with the plan, within the sizes above. */
+export const MARKER_RADIUS_CM = 28
+
+/**
+ * A marker's radius at a zoom (`scale` px per cm): its size on the floor, never smaller than a dot that still shows its
+ * state nor larger than the full marker. A phone's whole-floor view gets small markers that leave the room names free;
+ * zoomed in they grow back. (The tap target stays a finger's size: `MARKER_HIT_RADIUS_PX`.)
+ */
+export function markerRadiusPx(scale: number, coarse: boolean): number {
+  const max = coarse ? MARKER_RADIUS_PX.coarse : MARKER_RADIUS_PX.fine
+  return Math.min(max, Math.max(MARKER_RADIUS_PX.min, MARKER_RADIUS_CM * scale))
+}
+
+/** The tap target around a marker's centre, whatever its drawn size (a 44 px circle). */
+export const MARKER_HIT_RADIUS_PX = 22
 
 /** How far around a marker (screen px) a tap still opens it. */
 export const MARKER_HIT_SLOP_PX = 6

@@ -32,6 +32,11 @@ const props = defineProps<{
   /** Starts the flow. */
   start: () => Promise<FlowStepDto>
   connector?: ConnectorDto
+  /**
+   * The line above each step's title. A page that shows its own steps (Connect → Review devices) names the one this
+   * flow is ("Connect"), so the two never count differently; otherwise the flow's own "Step 2".
+   */
+  eyebrow?: string
 }>()
 
 const emit = defineEmits<{
@@ -75,7 +80,8 @@ watch(
 )
 
 function optionLabel(field: SchemaFieldDefinition, value: string): string {
-  const key = `integrations.flow.options.${field.key}.${value}`
+  // Option values may not be message keys as they are ("pt-BR"): letters and digits only.
+  const key = `integrations.flow.options.${field.key}.${value.replace(/[^\p{L}\p{N}]/gu, '')}`
   return te(key) ? t(key) : humanize(value)
 }
 
@@ -168,7 +174,7 @@ const abortMessage = computed(
 
     <template v-else>
       <header v-if="type !== 'done' && type !== 'abort'" class="grid gap-2">
-        <p class="eyebrow">{{ t('integrations.flow.step', { n: flow.count.value }) }}</p>
+        <p class="eyebrow">{{ eyebrow ?? t('integrations.flow.step', { n: flow.count.value }) }}</p>
         <h2 class="font-serif text-2xl leading-tight font-medium tracking-tight text-balance sm:text-3xl">
           {{ title || connectorName }}
         </h2>

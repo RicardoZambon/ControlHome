@@ -74,6 +74,30 @@ export function energyEndpoints(endpoints: readonly EndpointDto[]): EndpointDto[
   )
 }
 
+const ZERO_BASED_UNITS = new Set(['W', 'kW', 'Wh', 'kWh', '%'])
+
+/** Amounts (watts, energy, percentages) are charted from zero; other readings (temperatures) fit their values. */
+export function zeroBasedUnit(unit: string | null | undefined): boolean {
+  return unit !== null && unit !== undefined && ZERO_BASED_UNITS.has(unit)
+}
+
+/** The fill of an on/off timeline's "on" stretches: what being on means for the capability. */
+export function timelineClass(capabilityId: string): string {
+  switch (capabilityId) {
+    case 'contact':
+      return 'bg-state-warn'
+    case 'smoke':
+    case 'waterLeak':
+      return 'bg-state-danger'
+    case 'motion':
+    case 'occupancy':
+    case 'presence':
+      return 'bg-state-info'
+    default:
+      return 'bg-state-on'
+  }
+}
+
 /** The design token a chart of this attribute is drawn in. */
 export function chartToken(capabilityId: string, attributeKey: string): string {
   if (capabilityId === 'power' || capabilityId === 'energy') return 'state-energy'

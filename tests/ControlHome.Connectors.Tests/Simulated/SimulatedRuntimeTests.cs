@@ -331,8 +331,12 @@ public sealed class SimulatedRuntimeTests
 
         descriptor.Key.ShouldBe("simulated");
         descriptor.Category.ShouldBe(ConnectorCategory.Virtual);
-        descriptor.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "seed", "simulateReauth"]);
-        descriptor.ConfigFields.ShouldAllBe(f => !f.Secret);
+        descriptor.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "language", "seed", "simulateReauth"]);
+        descriptor.ConfigFields.ShouldAllBe(f => !f.Secret && !f.Required);
+        descriptor.ConfigFields.Where(f => f.Advanced).Select(f => f.Key).ShouldBe(["language", "seed", "simulateReauth"]);
+        var presetHelp = descriptor.ConfigFields[0].Help.ShouldNotBeNull();
+        presetHelp.En.ShouldNotContain("basic:", Case.Sensitive, "option keys are not prose");
+        presetHelp.En.ShouldContain("20 devices", Case.Sensitive, "the count comes from the demo home itself");
         (descriptor.Features.PushInventory, descriptor.Features.SetupFlow, descriptor.Features.Reauth).ShouldBe((true, true, true));
         new SimulatedConnectorFactory().CreateSetupFlow().ShouldBeOfType<SimulatedSetupFlow>();
     }

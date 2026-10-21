@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backupFileName, looksLikeBackup, passphraseProblem } from './backup'
+import { backupFileName, formatBytes, looksLikeBackup, passphraseProblem } from './backup'
 
 const NOW = new Date('2026-10-21T12:00:00Z')
 
@@ -27,6 +27,15 @@ describe('backupFileName', () => {
     expect(backupFileName(null, NOW)).toBe('controlhome-backup-2026-10-21.zip')
     expect(backupFileName('attachment; filename="../../etc/x.zip"', NOW)).toBe('....etcx.zip')
     expect(backupFileName('attachment', NOW)).toBe('controlhome-backup-2026-10-21.zip')
+  })
+})
+
+describe('formatBytes', () => {
+  it('says kB under a megabyte and MB above, in the user language', () => {
+    expect(formatBytes(820_400, 'en')).toBe('820 kB')
+    expect(formatBytes(1_430_000, 'en')).toBe('1.4 MB')
+    expect(formatBytes(1_430_000, 'pt-BR')).toBe('1,4 MB')
+    expect(formatBytes(12, 'en')).toBe('1 kB')
   })
 })
 

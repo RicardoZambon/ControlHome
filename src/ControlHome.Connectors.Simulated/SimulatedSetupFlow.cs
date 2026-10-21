@@ -33,9 +33,10 @@ internal sealed class SimulatedSetupFlow(int defaultSeed) : IConnectorFlow
     {
         ArgumentNullException.ThrowIfNull(context);
         _context = context;
+        // A new home's devices are named in the home's language; an existing one keeps the language its devices have.
         var values = context.Existing is { } existing
             ? Normalize(SimulatedSettings.Parse(existing.Config, defaultSeed) with { SimulateReauth = false })
-            : Normalize(new SimulatedSettings(SimulatedSettings.BasicPreset, defaultSeed));
+            : Normalize(new SimulatedSettings(SimulatedSettings.BasicPreset, defaultSeed, Language: LanguageOf(context)));
         return Task.FromResult<FlowStep>(Form(values, new Dictionary<string, LocalizedText>()));
     }
 
@@ -70,7 +71,18 @@ internal sealed class SimulatedSetupFlow(int defaultSeed) : IConnectorFlow
             return Form(input.ValueKind == JsonValueKind.Object ? input : null, errors);
         }
 
-        _config = Normalize(SimulatedSettings.Parse(input, defaultSeed));
+        var settings = SimulatedSettings.Parse(input, defaultSeed);
+        if (input.ValueKind != JsonValueKind.Object || !input.TryGetProperty(SimulatedSettings.LanguageField, out _))
+        {
+            settings = settings with
+            {
+                Language = context.Existing is { } existing
+                    ? SimulatedSettings.Parse(existing.Config, defaultSeed).Language
+                    : LanguageOf(context),
+            };
+        }
+
+        _config = Normalize(settings);
         _pairingStarted = context.Time.GetUtcNow();
         return Pairing(PairingTimeout);
     }
@@ -96,7 +108,10 @@ internal sealed class SimulatedSetupFlow(int defaultSeed) : IConnectorFlow
         }
 
         var preset = config.GetProperty(SimulatedSettings.PresetField).GetString();
-        var name = context.Existing?.Name ?? (preset == SimulatedSettings.DemoPreset ? "Demo home" : "Simulated home");
+        var suggested = preset == SimulatedSettings.DemoPreset
+            ? new LocalizedText("Demo home", "Casa de demonstração")
+            : new LocalizedText("Simulated home", "Casa simulada");
+        var name = context.Existing?.Name ?? suggested.For(LanguageOf(context));
         return new DoneStep(name, config)
         {
             Secrets = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -106,13 +121,16 @@ internal sealed class SimulatedSetupFlow(int defaultSeed) : IConnectorFlow
         };
     }
 
+    private static string LanguageOf(FlowContext context) =>
+        SimulatedNames.Languages.Contains(context.Language, StringComparer.Ordinal) ? context.Language : SimulatedNames.English;
+
     private static FormStep Form(JsonElement? values, IReadOnlyDictionary<string, LocalizedText> errors) =>
         new(
             SettingsStep,
-            new LocalizedText("Simulated home", "Casa simulada"),
+            new LocalizedText("Choose what to simulate", "Escolha o que simular"),
             new LocalizedText(
-                "Pick the simulated devices. The demo preset is the full demo home.",
-                "Escolha os dispositivos simulados. O conjunto demo é a casa de demonstração completa."),
+                "The devices behave like real ones and show up in your home like any integration's. Remove the integration to remove them.",
+                "Os dispositivos se comportam como os de verdade e aparecem na sua casa como os de qualquer integração. Remova a integração para removê-los."),
             SimulatedConnectorDescriptor.Instance.ConfigFields)
         {
             Values = values,
@@ -134,6 +152,7 @@ internal sealed class SimulatedSetupFlow(int defaultSeed) : IConnectorFlow
     private static JsonElement Normalize(SimulatedSettings settings) => JsonSerializer.SerializeToElement(new JsonObject
     {
         [SimulatedSettings.PresetField] = settings.Preset,
+        [SimulatedSettings.LanguageField] = settings.Language,
         [SimulatedSettings.SeedField] = settings.Seed,
         [SimulatedSettings.SimulateReauthField] = settings.SimulateReauth,
     });

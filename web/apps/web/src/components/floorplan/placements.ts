@@ -1,5 +1,5 @@
 import type { DeviceSummaryDto, EndpointDto, PlacementDto } from '@controlhome/api-client'
-import { endpointName } from '../../stores/devices'
+import { endpointName, fullEndpointName } from '../../stores/devices'
 import type { Point } from './geometry'
 
 /**
@@ -65,7 +65,7 @@ export function planMarkers(
         device: entry.device,
         endpoint: entry.endpoint,
         endpoints: [entry.endpoint],
-        name: endpointName(entry.device, entry.endpoint),
+        name: fullEndpointName(entry.device, entry.endpoint),
       })
     } else if (placement.deviceId) {
       const device = devicesById.get(placement.deviceId)
@@ -80,6 +80,48 @@ export function planMarkers(
     }
   }
   return markers
+}
+
+/** Markers of one room close enough to overlap on screen, drawn as one bubble with their count. */
+export interface MarkerCluster<T> {
+  /** The members' mean position (cm). */
+  center: Point
+  members: T[]
+}
+
+/**
+ * The markers as they are drawn at a zoom (`scale` px per cm, markers `radiusPx` big): those of the same room whose
+ * circles would overlap (closer than two radii and a gap) are grouped — tapping the group zooms in until they part.
+ * Order is kept (by each group's first member).
+ */
+export function clusterMarkers<T extends { placement: Pick<PlacementDto, 'xCm' | 'yCm' | 'roomId'> }>(
+  markers: readonly T[],
+  scale: number,
+  radiusPx: number,
+): MarkerCluster<T>[] {
+  const reach = (2 * radiusPx + 4) / Math.max(scale, 1e-6)
+  const clusters: (MarkerCluster<T> & { roomId: number | null })[] = []
+  for (const marker of markers) {
+    const { xCm: x, yCm: y, roomId } = marker.placement
+    const near = clusters.find(
+      (cluster) =>
+        cluster.roomId === roomId &&
+        cluster.members.some(
+          (member) => Math.hypot(member.placement.xCm - x, member.placement.yCm - y) < reach,
+        ),
+    )
+    if (near) {
+      near.members.push(marker)
+      const count = near.members.length
+      near.center = {
+        x: near.members.reduce((sum, member) => sum + member.placement.xCm, 0) / count,
+        y: near.members.reduce((sum, member) => sum + member.placement.yCm, 0) / count,
+      }
+    } else {
+      clusters.push({ center: { x, y }, members: [marker], roomId })
+    }
+  }
+  return clusters.map(({ center, members }) => ({ center, members }))
 }
 
 /**

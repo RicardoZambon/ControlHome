@@ -4000,6 +4000,160 @@
           }
         }
       }
+    },
+    "/api/backup/scheduled": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "The automatic backups: the schedule, whether the last attempt failed, and the files kept.",
+        "description": "The server writes a backup without credentials to its data folder on a schedule (daily, keeping seven by default). LastFailedAtUtc is set while the last attempt failed and none succeeded since.",
+        "operationId": "listScheduledBackups",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledBackupsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Writes an automatic backup now (whatever the schedule) and answers with it.",
+        "description": "Older backups beyond the number kept are deleted. 503 backup.write_failed when the data folder cannot be written.",
+        "operationId": "runScheduledBackup",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledBackupDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backup/scheduled/{name}": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Downloads one automatic backup (zip) by its name.",
+        "description": "Only the names listed by GET /api/backup/scheduled; any other name is 404 backup.not_found.",
+        "operationId": "getScheduledBackup",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5429,7 +5583,8 @@
           "schema",
           "required",
           "secret",
-          "help"
+          "help",
+          "advanced"
         ],
         "type": "object",
         "properties": {
@@ -5460,6 +5615,10 @@
                 "$ref": "#/components/schemas/LocalizedTextDto"
               }
             ]
+          },
+          "advanced": {
+            "type": "boolean",
+            "description": "Rarely changed: shown folded away under \"Advanced\", after the other fields."
           }
         },
         "description": "A form field."
@@ -6592,6 +6751,70 @@
           }
         },
         "description": "Replaces the floor's rooms atomically (Admin): listed rooms with an `id` are updated, rooms without one are\ncreated, rooms not listed are deleted; the list order becomes the display order."
+      },
+      "ScheduledBackupDto": {
+        "required": [
+          "name",
+          "writtenAtUtc",
+          "sizeBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "writtenAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "One automatic backup (a zip without credentials): download it with `GET /api/backup/scheduled/{name}`."
+      },
+      "ScheduledBackupsDto": {
+        "required": [
+          "enabled",
+          "intervalHours",
+          "keep",
+          "lastFailedAtUtc",
+          "files"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Backups are written on a schedule (off: only \"back up now\" writes one)."
+          },
+          "intervalHours": {
+            "type": "number",
+            "description": "How often one is written (24: every day).",
+            "format": "double"
+          },
+          "keep": {
+            "type": "integer",
+            "description": "How many are kept; older ones are deleted.",
+            "format": "int32"
+          },
+          "lastFailedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the last attempt failed, if it did and none succeeded since (show a warning).",
+            "format": "date-time"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledBackupDto"
+            },
+            "description": "The backups kept, newest first."
+          }
+        },
+        "description": "The automatic backups (`GET /api/backup/scheduled`, Admin): the schedule, how it went, the files kept."
       },
       "SetFavoriteRequest": {
         "required": [

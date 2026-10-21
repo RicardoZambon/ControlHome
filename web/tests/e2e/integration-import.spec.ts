@@ -12,7 +12,7 @@ import {
   waitForLive,
   type SeededFloor,
 } from './fixtures'
-import { t } from './i18n'
+import { t, tr } from './i18n'
 
 // Task 1.3-B: an integration is added through its connector's setup flow (the Simulated hub: a settings form, then
 // "press the button on the hub", which presses itself after 2 s), its devices are reviewed (kept or hidden, each in a
@@ -105,6 +105,64 @@ test('an admin adds the simulated home through its setup flow and reviews its de
   await gates.check('integration page')
 })
 
+test('a Portuguese home gets the simulated devices named in Portuguese, in the same suggested rooms', async ({
+  page,
+  request,
+}) => {
+  // Start over: a home in Portuguese, its rooms named in Portuguese.
+  await resetApp(request)
+  await completeSetup(page.request, { locale: 'pt-BR' })
+  const sala = { name: 'Sala', icon: 'sofa', colorToken: 'room-1' }
+  await createFloor(page.request, 'Térreo', [
+    {
+      ...sala,
+      polygon: [
+        { x: 100, y: 100 },
+        { x: 1000, y: 100 },
+        { x: 1000, y: 750 },
+        { x: 100, y: 750 },
+      ],
+    },
+    {
+      name: 'Cozinha',
+      icon: 'cooking-pot',
+      colorToken: 'room-2',
+      polygon: [
+        { x: 1000, y: 100 },
+        { x: 1900, y: 100 },
+        { x: 1900, y: 900 },
+        { x: 1000, y: 900 },
+      ],
+    },
+    {
+      name: 'Quarto',
+      icon: 'bed-double',
+      colorToken: 'room-3',
+      polygon: [
+        { x: 100, y: 750 },
+        { x: 1000, y: 750 },
+        { x: 1000, y: 1400 },
+        { x: 100, y: 1400 },
+      ],
+    },
+  ])
+
+  await page.goto('/integrations/add/simulated')
+  await expect(wizardAt(page, 'form')).toBeVisible()
+  await wizardAt(page, 'form')
+    .getByRole('button', { name: tr('pt-BR', 'common.continue') })
+    .click()
+  await expect(page.locator('[data-slot="review-list"] > li')).toHaveCount(5, { timeout: 30_000 })
+
+  // The same rooms as in English: the light in the living room, the plug in the kitchen, the AC in the bedroom.
+  const room = (name: string) =>
+    page.getByRole('combobox', { name: tr('pt-BR', 'integrations.review.room', { name }) })
+  await expect(room('Luz da sala')).toContainText('Sala')
+  await expect(room('Tomada da cafeteira')).toContainText('Cozinha')
+  await expect(room('Ar-condicionado do quarto')).toContainText('Quarto')
+  await expect(room('Fechadura da porta')).toContainText(tr('pt-BR', 'device.noRoom'))
+})
+
 test('the integration page turns it off and on, signs it in again and removes it', async ({
   page,
   gates,
@@ -131,9 +189,10 @@ test('the integration page turns it off and on, signs it in again and removes it
   await expect(enabled).toHaveAttribute('aria-checked', 'true')
   await dismissToasts(page)
 
-  // Sign in again: the same flow, filled with its settings; the devices are kept.
+  // Its settings again (a simulated hub has no sign-in): the same flow, filled with its settings; the devices are kept.
+  await expect(page.getByRole('link', { name: t('integrations.detail.reauth') })).toHaveCount(0)
   await page
-    .getByRole('link', { name: t('integrations.detail.reauth') })
+    .getByRole('link', { name: t('integrations.detail.reconfigure') })
     .first()
     .click()
   await expect(wizardAt(page, 'form')).toBeVisible()

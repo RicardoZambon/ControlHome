@@ -5,7 +5,13 @@ import { History } from '@lucide/vue'
 import { useIntervalFn } from '@vueuse/core'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { HISTORY_RANGES, isHistoryRange, type HistoryRange } from '../../../components/charts/chartOptions'
+import {
+  HISTORY_RANGES,
+  historyWindow,
+  isHistoryRange,
+  type HistoryRange,
+} from '../../../components/charts/chartOptions'
+import { serverNow } from '../../../lib/serverClock'
 import { endpointName, useDevicesStore } from '../../../stores/devices'
 import { energyEndpoints, recordedAttributes } from '../history'
 import AttributeHistoryCard from './AttributeHistoryCard.vue'
@@ -13,7 +19,8 @@ import EnergyHistoryCard from './EnergyHistoryCard.vue'
 
 /**
  * The device page's History tab: a range (24 h, 7 days, 30 days), the energy it used (bars) when it has a meter or power
- * readings, and a chart for every recorded attribute. Refreshed every minute while open.
+ * readings, and a card for every recorded attribute. Every card covers the same window — the range up to the server's
+ * now — so cards side by side line up; it moves on every minute while the tab is open.
  */
 const props = defineProps<{ device: DeviceDetailDto }>()
 const range = defineModel<HistoryRange>('range', { default: '24h' })
@@ -21,8 +28,10 @@ const range = defineModel<HistoryRange>('range', { default: '24h' })
 const { t } = useI18n()
 const devices = useDevicesStore()
 
-const refresh = ref(0)
-useIntervalFn(() => (refresh.value += 1), 60_000)
+/** The window's end: the server's now when the tab opened, then every minute. */
+const end = ref(serverNow())
+useIntervalFn(() => (end.value = serverNow()), 60_000)
+const chartWindow = computed(() => historyWindow(range.value, end.value))
 
 const multiple = computed(() => props.device.endpoints.length > 1)
 const attributes = computed(() =>
@@ -31,7 +40,9 @@ const attributes = computed(() =>
 const energy = computed(() => energyEndpoints(props.device.endpoints))
 
 function setRange(value: unknown): void {
-  if (isHistoryRange(value)) range.value = value
+  if (!isHistoryRange(value)) return
+  end.value = serverNow()
+  range.value = value
 }
 </script>
 
@@ -58,7 +69,7 @@ function setRange(value: unknown): void {
       </ToggleGroup>
     </div>
 
-    <EnergyHistoryCard v-if="energy.length > 0" :endpoints="energy" :range="range" :refresh="refresh" />
+    <EnergyHistoryCard v-if="energy.length > 0" :endpoints="energy" :range="range" :window="chartWindow" />
 
     <div v-if="attributes.length > 0" class="grid items-start gap-4 lg:grid-cols-2">
       <AttributeHistoryCard
@@ -66,7 +77,7 @@ function setRange(value: unknown): void {
         :key="entry.attribute.attributeId"
         :entry="entry"
         :range="range"
-        :refresh="refresh"
+        :window="chartWindow"
         :endpoint-name="multiple ? endpointName(device, entry.endpoint) : undefined"
       />
     </div>

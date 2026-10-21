@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DashboardRoomDto } from '@controlhome/api-client'
 import { cn } from '@controlhome/ui'
-import { Thermometer, Zap } from '@lucide/vue'
+import { Thermometer, WifiOff, Zap } from '@lucide/vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatMeasurement } from '../../../components/devices/format'
@@ -18,6 +18,8 @@ const props = defineProps<{
   live: RoomLive
   /** Show the floor's name (the home has several). */
   showFloor?: boolean
+  /** How many of its devices are offline (a chip says so). */
+  offline?: number
 }>()
 
 const { t, locale } = useI18n()
@@ -53,6 +55,14 @@ const power = computed(() =>
         <span class="truncate font-serif text-lg leading-snug font-medium tracking-tight">{{
           room.name
         }}</span>
+      </span>
+      <span
+        v-if="offline"
+        class="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-state-offline/70 px-2 py-0.5 text-xs font-medium text-state-offline"
+        data-slot="room-offline"
+      >
+        <WifiOff class="size-3" aria-hidden="true" />
+        {{ t('dashboard.rooms.offline', { n: offline }) }}
       </span>
     </div>
 

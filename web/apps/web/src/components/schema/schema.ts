@@ -25,6 +25,8 @@ export interface SchemaFieldDefinition {
   constraint?: ValueConstraint
   /** Shown but not editable. */
   readonly?: boolean
+  /** Rarely changed: folded away under "Advanced", after the other fields. */
+  advanced?: boolean
 }
 
 /** Why a value does not fit (the server's `ValueErrorKind`, snake_case like its error codes). */
@@ -269,6 +271,7 @@ export function fieldsFromFieldSchemas(
     schema: field.schema,
     required: field.required,
     secret: field.secret,
+    advanced: field.advanced,
     help: field.help ? localized(field.help, locale) : undefined,
   }))
 }

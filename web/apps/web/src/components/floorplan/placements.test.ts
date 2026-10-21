@@ -1,7 +1,9 @@
 import type { DeviceSummaryDto, PlacementDto } from '@controlhome/api-client'
 import { describe, expect, it } from 'vitest'
 import { basicHome } from '../../test/devices'
+import { MARKER_RADIUS_PX, markerRadiusPx } from './markerTone'
 import {
+  clusterMarkers,
   hitMarker,
   matchesSearch,
   normalizeText,
@@ -68,6 +70,46 @@ describe('planMarkers', () => {
     // A device placed whole stands for its visible endpoints.
     expect(markers[1]!.endpoint).toBeNull()
     expect(markers[1]!.endpoints.map((endpoint) => endpoint.key)).toEqual(['l1', 'l2'])
+  })
+
+  it('names a control of a device with several by both ("Wall switch · Ceiling")', () => {
+    const device = wallSwitch()
+    device.endpoints = device.endpoints.map((endpoint) =>
+      endpoint.key === 'l1' ? { ...endpoint, name: 'Ceiling' } : endpoint,
+    )
+    const [marker] = planMarkers([placement(1, { endpointId: 'e-switch-l1' })], [device])
+    expect(marker!.name).toBe('Wall switch · Ceiling')
+  })
+})
+
+describe('clusterMarkers', () => {
+  const at = (id: number, x: number, y: number, roomId: number | null = 1) => ({
+    placement: { ...placement(id, { endpointId: `e${id}` }, x, y), roomId },
+  })
+
+  it('groups the markers of a room that would overlap on screen, one by one otherwise', () => {
+    const markers = [at(1, 100, 100), at(2, 160, 100), at(3, 600, 100), at(4, 120, 110, 2)]
+    // 0.2 px per cm: markers 60 cm apart are 12 px apart, closer than two 9 px markers.
+    const clusters = clusterMarkers(markers, 0.2, 9)
+    expect(clusters.map((cluster) => cluster.members.map((member) => member.placement.id))).toEqual([
+      [1, 2],
+      [3],
+      [4],
+    ])
+    expect(clusters[0]!.center).toEqual({ x: 130, y: 100 })
+    // Zoomed in, they part.
+    expect(clusterMarkers(markers, 1, 9)).toHaveLength(4)
+  })
+})
+
+describe('markerRadiusPx', () => {
+  it('follows the zoom between a small dot and the full marker', () => {
+    expect(markerRadiusPx(1, false)).toBe(MARKER_RADIUS_PX.fine)
+    expect(markerRadiusPx(1, true)).toBe(MARKER_RADIUS_PX.coarse)
+    expect(markerRadiusPx(0.1, false)).toBe(MARKER_RADIUS_PX.min)
+    const between = markerRadiusPx(0.45, false)
+    expect(between).toBeGreaterThan(MARKER_RADIUS_PX.min)
+    expect(between).toBeLessThan(MARKER_RADIUS_PX.fine)
   })
 })
 

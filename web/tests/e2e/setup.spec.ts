@@ -103,16 +103,19 @@ test('the demo home loads with the setup: floors, rooms and devices on the plan'
   await gates.check('setup: review with the demo home')
   await page.getByRole('button', { name: t('setup.review.finish') }).click()
 
-  // The dashboard: the first floor with its devices on it, every room, the favorites, the integration's health.
+  // The dashboard: the first floor with its devices on it (phones: a row per floor), every room, the favorites, the
+  // integration's health.
   await expect(page).toHaveURL(/\/$/)
   const plan = page.locator('[data-slot="dashboard-plan"]')
-  await expect(plan).toBeVisible()
+  if ((page.viewportSize()?.width ?? 1440) < 640)
+    await expect(page.locator('[data-slot="dashboard-floor-row"]')).toHaveCount(2)
+  else await expect(plan).toBeVisible()
   await expect.poll(() => plan.locator('[data-slot="placed-device"]').count()).toBeGreaterThan(0)
   await expect(page.locator('[data-slot="room-card"]')).toHaveCount(8)
   await expect(
     page.locator('[data-slot="dashboard-favorites"] [data-slot="device-tile"]').first(),
   ).toBeVisible()
-  await expect(page.locator('[data-slot="integration-chip"]')).toHaveCount(1)
+  await expect(page.locator('[data-stat="integrations"] [data-slot="stat-value"]')).toHaveText('1')
   // A full home: no first steps.
   await expect(page.locator('[data-slot="dashboard-start"]')).toHaveCount(0)
   await gates.check('dashboard with the demo home')

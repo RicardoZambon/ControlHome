@@ -47,6 +47,26 @@ describe('live aggregates', () => {
       powerW: 5,
     })
   })
+
+  it('leaves out what offline devices last said: their power, their temperature, being on', () => {
+    const read = reader({
+      1: bool(true),
+      3: str('running'),
+      4: num(5),
+      5: num(428),
+      11: num(21),
+      12: num(30),
+    })
+    // The washer (attributes 3, 5 and 12 here) stopped answering.
+    expect(roomLive(ROOM, read, new Set([3, 5, 6, 12]))).toEqual({
+      activeDeviceCount: 1,
+      temperatureC: 21,
+      powerW: 5,
+    })
+    // Only offline readings: nothing to show (not the server's figure, which still has them).
+    expect(liveSum([5], read, 428, new Set([5]))).toBeNull()
+    expect(liveActive([ROOM.activityAttributes[2]!], read, 1, new Set([3]))).toBe(0)
+  })
 })
 
 describe('formatPower', () => {

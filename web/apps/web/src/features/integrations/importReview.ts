@@ -13,8 +13,28 @@ function words(text: string): string {
 }
 
 /**
+ * Rooms as people name them in English and in Portuguese (lower case, without accents): a device a vendor app named
+ * "Bedroom air conditioner" goes to a home's "Quarto", "Luz da sala" to its "Living room".
+ */
+const ROOM_SYNONYMS: readonly (readonly string[])[] = [
+  ['living room', 'living', 'lounge', 'sala', 'sala de estar'],
+  ['dining room', 'sala de jantar'],
+  ['kitchen', 'cozinha'],
+  ['bedroom', 'quarto', 'dormitorio'],
+  ['master bedroom', 'suite', 'quarto principal'],
+  ['bathroom', 'toilet', 'wc', 'banheiro', 'lavabo'],
+  ['laundry', 'laundry room', 'lavanderia', 'area de servico'],
+  ['office', 'study', 'escritorio'],
+  ['garage', 'garagem'],
+  ['entrance', 'entryway', 'hall', 'hallway', 'entrada', 'hall de entrada', 'corredor'],
+  ['backyard', 'garden', 'yard', 'quintal', 'jardim'],
+  ['porch', 'balcony', 'varanda', 'sacada'],
+]
+
+/**
  * The room a device most likely is in: a room whose whole name appears in the device's name (by words, without case
- * or accents); the longest such name wins ("Master bedroom" over "Bedroom"), the first room on a tie. `null` if none.
+ * or accents); the longest such name wins ("Master bedroom" over "Bedroom"), the first room on a tie. Failing that, a
+ * room known by the same name in the other language ("Quarto" for "Bedroom air conditioner"). `null` if none.
  */
 export function suggestRoom(
   deviceName: string,
@@ -26,6 +46,18 @@ export function suggestRoom(
     const roomWords = words(room.name).trim()
     if (!roomWords || !name.includes(` ${roomWords} `)) continue
     if (!best || roomWords.length > best.length) best = { id: room.id, length: roomWords.length }
+  }
+  if (best) return best.id
+
+  for (const room of rooms) {
+    const roomWords = words(room.name).trim()
+    for (const group of ROOM_SYNONYMS) {
+      if (!group.includes(roomWords)) continue
+      for (const term of group) {
+        if (term === roomWords || !name.includes(` ${term} `)) continue
+        if (!best || term.length > best.length) best = { id: room.id, length: term.length }
+      }
+    }
   }
   return best?.id ?? null
 }

@@ -242,7 +242,7 @@ const jsonText = computed(() =>
       >
         <SelectTrigger
           :id="id"
-          class="w-full"
+          class="w-full min-w-0"
           :aria-invalid="error ? 'true' : undefined"
           :aria-describedby="describedBy"
         >

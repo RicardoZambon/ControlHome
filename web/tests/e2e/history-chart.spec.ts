@@ -3,6 +3,7 @@ import {
   SIMULATED,
   advanceClock,
   attributeIdOf,
+  chartsWiderThanTheirCard,
   completeSetup,
   createSimulatedHome,
   expect,
@@ -76,6 +77,15 @@ test('a device page charts its recorded history and the energy it used', async (
   await expect.poll(async () => Number(await bars.getAttribute('data-buckets'))).toBeGreaterThanOrEqual(1)
   await expect(page.locator('[data-slot="energy-total"]')).not.toHaveText('—')
   await gates.check('history, last 24 hours')
+
+  // Charts follow their card: drawn wide (one card per row), then narrower (two side by side on a desktop, or a
+  // phone's width), each still fits its card.
+  await expect.poll(() => chartsWiderThanTheirCard(page)).toEqual([])
+  const viewport = page.viewportSize()!
+  await page.setViewportSize({ width: 900, height: viewport.height })
+  await expect.poll(() => chartsWiderThanTheirCard(page)).toEqual([])
+  await page.setViewportSize(viewport)
+  await expect.poll(() => chartsWiderThanTheirCard(page)).toEqual([])
 
   // A week: kept in the address, and charted again.
   await page

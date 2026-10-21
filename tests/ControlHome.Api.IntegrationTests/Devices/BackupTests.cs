@@ -275,6 +275,50 @@ public sealed class BackupTests(DevicesApiFactory factory) : DevicesTestBase(fac
         kept.Select(k => k.WrittenAtUtc).ShouldBeInOrder(SortDirection.Descending);
     }
 
+    [Fact]
+    public async Task Admins_see_the_automatic_backups_download_them_and_back_up_now()
+    {
+        var (admin, member, _) = await SignInAllAsync();
+        await CreateIntegrationAsync(admin);
+        var scheduler = Factory.Services.GetRequiredService<BackupScheduler>();
+        foreach (var old in scheduler.Existing())
+        {
+            File.Delete(old.Path);
+        }
+
+        using (var byMember = await member.GetAsync("/api/backup/scheduled", Ct))
+        {
+            await byMember.ShouldBeProblemAsync(HttpStatusCode.Forbidden, "auth.forbidden");
+        }
+
+        var empty = (await admin.GetFromJsonAsync<ScheduledBackupsDto>("/api/backup/scheduled", Ct))!;
+        (empty.Files.Count, empty.Keep, empty.IntervalHours, empty.LastFailedAtUtc).ShouldBe((0, 7, 24d, (DateTimeOffset?)null));
+
+        using var now = await admin.PostAsync("/api/backup/scheduled", null, Ct);
+        await now.ShouldHaveStatusAsync(HttpStatusCode.OK);
+        var written = (await now.Content.ReadFromJsonAsync<ScheduledBackupDto>(Ct))!;
+        written.Name.ShouldStartWith(BackupScheduler.FilePrefix);
+        written.SizeBytes.ShouldBeGreaterThan(0);
+
+        var listed = (await admin.GetFromJsonAsync<ScheduledBackupsDto>("/api/backup/scheduled", Ct))!;
+        listed.Files.ShouldHaveSingleItem().ShouldBe(written);
+
+        using var download = await admin.GetAsync($"/api/backup/scheduled/{written.Name}", Ct);
+        await download.ShouldHaveStatusAsync(HttpStatusCode.OK);
+        download.Content.Headers.ContentType!.MediaType.ShouldBe("application/zip");
+        Entries(await download.Content.ReadAsByteArrayAsync(Ct)).Keys.ShouldContain("manifest.json");
+
+        // Only the kept backups, by their exact names: never another file of the data folder.
+        foreach (var name in new[] { "controlhome-backup-20200101-030000.zip", "..%2Fsetup.json", "controlhome-backup-x.zip" })
+        {
+            using var missing = await admin.GetAsync($"/api/backup/scheduled/{name}", Ct);
+            await missing.ShouldBeProblemAsync(HttpStatusCode.NotFound, "backup.not_found");
+        }
+
+        using var memberDownload = await member.GetAsync($"/api/backup/scheduled/{written.Name}", Ct);
+        await memberDownload.ShouldBeProblemAsync(HttpStatusCode.Forbidden, "auth.forbidden");
+    }
+
     /// <summary>The demo home's placements (22) plus none for the canary.</summary>
     private const int DemoPlacementCount = 22;
 

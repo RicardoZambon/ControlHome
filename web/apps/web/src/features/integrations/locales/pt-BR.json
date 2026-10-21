@@ -46,9 +46,8 @@
   "setup": {
     "title": "Configurar uma integração",
     "eyebrow": "Nova integração",
-    "reauthEyebrow": "Entrar de novo",
     "reauthTitle": "Entrar de novo",
-    "reauthDone": "{name} entrou de novo. Os dispositivos continuam como estavam.",
+    "reauthDone": "{name} foi atualizada. Os dispositivos continuam como estavam.",
     "notFound": "Esta integração não está disponível",
     "progress": "Andamento da configuração",
     "stepConnect": "Conectar",
@@ -62,7 +61,7 @@
     "openPage": "Abrir {host}",
     "unsafeUrl": "A página desta etapa não tem um endereço seguro (https), por isso não é mostrada.",
     "finishedThere": "Já concluí por lá",
-    "waiting": "Aguardando o dispositivo",
+    "waiting": "Aguardando o hub…",
     "secondsLeft": "faltam {s} s",
     "timeLeft": "Tempo restante",
     "retrying": "A conexão com o servidor caiu por um instante; tentando de novo…",
@@ -73,8 +72,12 @@
     "back": "Voltar",
     "options": {
       "preset": {
-        "basic": "Básico: cinco dispositivos",
-        "demo": "Casa de demonstração: cerca de vinte dispositivos"
+        "basic": "Básico — uma luz, uma tomada, um ar-condicionado, um sensor de porta e uma fechadura",
+        "demo": "Casa de demonstração — todo tipo de dispositivo simulado"
+      },
+      "language": {
+        "en": "English",
+        "ptBR": "Português (Brasil)"
       }
     }
   },
@@ -82,18 +85,20 @@
     "eyebrow": "Revisar dispositivos",
     "title": "Nenhum dispositivo encontrado | 1 dispositivo encontrado | {count} dispositivos encontrados",
     "waitingTitle": "Procurando dispositivos…",
-    "description": "Mantenha os que você quer ver e coloque cada um no seu cômodo. Os cômodos são sugeridos pela integração ou pelos nomes; dá para mudar tudo depois.",
+    "description": "Mantenha os que você quer ver e coloque cada um no seu cômodo. Dá para mudar tudo depois.",
     "waiting": "Os dispositivos chegam alguns instantes depois que a integração começa.",
     "none": "Nenhum dispositivo apareceu ainda. Eles podem demorar; vão surgindo na sua lista de dispositivos.",
     "keep": "Manter {name}",
-    "kept": "Aparece na sua casa",
+    "keepAll": "Manter todos os dispositivos",
+    "keptCount": "{kept} de {total} mantidos",
     "hidden": "Oculto dos painéis e listas",
     "room": "Cômodo de {name}",
     "suggested": "Sugerido pelo nome",
     "suggestedByIntegration": "Sugerido pela integração",
+    "legend": "Cômodo sugerido pela integração ou pelo nome do dispositivo",
     "noRooms": "Desenhe seus andares e cômodos para colocar os dispositivos neles.",
-    "stillArriving": "Ainda podem chegar mais dispositivos…",
-    "skip": "Pular",
+    "stillArriving": "Ainda procurando dispositivos… nenhum por enquanto | Ainda procurando dispositivos… 1 encontrado até agora | Ainda procurando dispositivos… {count} encontrados até agora",
+    "skip": "Manter como vieram",
     "finish": "Concluir",
     "saved": "Pronto: nenhum dispositivo mantido. | Pronto: 1 dispositivo está pronto. | Pronto: {count} dispositivos estão prontos."
   },
@@ -101,17 +106,19 @@
     "title": "Integração",
     "notFound": "Integração não encontrada",
     "reauth": "Entrar de novo",
+    "reconfigure": "Alterar configurações",
     "needsReauthTitle": "Esta integração precisa que você entre de novo",
     "needsReauth": "Os dispositivos são mantidos; eles voltam assim que ela entrar de novo.",
     "statusTitle": "Situação",
-    "devices": "Dispositivos",
+    "devices": "Dispositivos · {count}",
+    "noRoom": "Fora dos cômodos",
     "openGrid": "Abrir em Dispositivos",
     "orphaned": "Nenhum dispositivo órfão | 1 dispositivo não é mais informado por esta integração. | {n} dispositivos não são mais informados por esta integração.",
     "noDevices": "Ainda não há dispositivos. Eles aparecem aqui conforme a integração os encontra.",
     "noDevicesOff": "Nenhum dispositivo. Ligue a integração para encontrá-los.",
     "settings": "Configurações da integração",
     "enabled": "Ligada",
-    "enabledHelp": "Desligada, ela para de falar com os dispositivos; eles continuam, com o histórico.",
+    "enabledHelp": "Desligue para pausá-la: ela para de falar com os dispositivos. Eles e o histórico são mantidos.",
     "enabledToast": "{name} está ligada.",
     "disabledToast": "{name} está desligada.",
     "remove": "Remover integração"
