@@ -45,8 +45,13 @@ public sealed class DevicePipelineTests(DevicesApiFactory factory) : DevicesTest
             "the integration reports Ok");
         var listed = (await viewer.GetFromJsonAsync<IntegrationDto[]>("/api/integrations", Ct))!.Single();
         listed.DeviceCount.ShouldBe(5);
-        Factory.Realtime.Messages.ShouldContain(m => m.Name == HomeHubMessages.DevicesChanged);
-        Factory.Realtime.Deltas.ShouldContain(d => d.Delta.AttributeId == on.AttributeId);
+        // Both go through the realtime batcher, so they can arrive after the REST reads above.
+        await RecordingRealtimePublisher.WaitUntilAsync(
+            () => Factory.Realtime.Messages.Any(m => m.Name == HomeHubMessages.DevicesChanged),
+            "DevicesChanged is pushed");
+        await RecordingRealtimePublisher.WaitUntilAsync(
+            () => Factory.Realtime.Deltas.Any(d => d.Delta.AttributeId == on.AttributeId),
+            "the light's state is pushed");
         await RecordingRealtimePublisher.WaitUntilAsync(
             () => Factory.Realtime.IntegrationStatuses.Any(s => s.Id == integration.Id && s.Status == "Ok"),
             "IntegrationStatusChanged(Ok) is pushed");

@@ -1,0 +1,32 @@
+version: "3.7"
+
+services:
+  server:
+    # Pinned by digest: see "Releasing a new version" in deploy/umbrel/README.md of the ControlHome repository.
+    image: ghcr.io/ricardozambon/controlhome:0.1.0@sha256:6d65547d4a66e44e8b417d7f82d60f95eaf4f0fc861b40eaefcfbc2e9daf66e0
+    # Host networking, like Umbrel's Home Assistant app: device discovery, Wake-on-LAN and device push events need the
+    # LAN. No app_proxy: the app has its own sign-in and listens on the manifest's port on every host interface.
+    network_mode: host
+    user: "1000:1000"
+    environment:
+      ASPNETCORE_HTTP_PORTS: 8711
+      # The first-run setup code is Umbrel's app password for this app (deterministicPassword in umbrel-app.yml).
+      Setup__Code: ${APP_PASSWORD}
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: on-failure
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "dotnet", "/app/ControlHome.Api.dll", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 5s
+      retries: 3
