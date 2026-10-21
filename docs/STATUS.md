@@ -19,10 +19,13 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-21 — Milestone 1.5 merged (PR #19): Umbrel community store template (`deploy/umbrel/`), Dockerfile NuGet layer fix, VersionPrefix 0.2.0.
 
 ## In progress (2026-10-21)
-- Running `wwpkfzdcm` (run wf_1bee2b70-67a, same script p2a-vendor-connectors-wf_ea0b675b-d0e.js, edited): one finish + adversarial review agent per connector, starting from the first run's commits (stopped for the usage limit): LG ThinQ ef14c87 (worktree wf_ea0b675b-d0e-1), DahuaHttp + go2rtc 9c8ed59 (wf_ea0b675b-d0e-2), SmartThings d4bcbbb (wf_ea0b675b-d0e-3). Next: merge the three result branches into `milestone/2-vendor-connectors`, add the catalogue Experimental flag, then UI + E2E (second workflow). Weekly limit was 86% at the 17:50 UTC reset: stop new workflows at 92% until the weekly reset (2026-10-26 05:00 UTC).
+- **PAUSED 2026-10-21 ~18:42 UTC: weekly usage limit at 92% (my own stop, to avoid paid extra usage); weekly reset 2026-10-26 05:00 UTC.** A one-shot session job resumes at ~05:05 UTC on 2026-10-26; if the session has ended, resume by hand from here.
+  - Phase 2 wave A connectors, implemented and committed, pushed as `wip/p2-lgthinq` (ef14c87), `wip/p2-dahuahttp` (9c8ed59), `wip/p2-smartthings` (d4bcbbb); base c4a0238 (= main after #17, before #19).
+  - Their finish + adversarial review run `wwpkfzdcm` (wf_1bee2b70-67a) was stopped mid-review. Its UNCOMMITTED, UNVERIFIED fixes are in worktrees wf_1bee2b70-67a-1 (LG, 19 files, +839/-149), wf_1bee2b70-67a-2 (Dahua, 13 files incl. new Protocol/DigestChallenge.cs, +849/-128) and wf_1bee2b70-67a-3 (SmartThings, 15 files, +634/-84); copies as patches in the session scratchpad p2a-review-wip/track-{1,2,3}.patch.
+  - Resume: edit workflows/scripts/p2a-vendor-connectors-wf_ea0b675b-d0e.js so each finish + review agent first salvages the changes in its track's review worktree read-only (git -C <worktree> diff and untracked files), keeps what is correct, then continues the review, runs the full suite and commits. Launch it fresh (no completed agents to reuse).
 - 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans.
 - Next phases: Phase 2 (docs/plans/phase-2-vendor-connectors.md: LG ThinQ, DahuaHttp + go2rtc, SmartThings), Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
-- Usage guard: session cron every 10 min, pause at ≥ 90% of the 5-hour limit (TaskStop running tasks, one-shot resume after reset); no new workflows at ≥ 92% weekly.
+- Usage guard: session cron every 10 min, pause at ≥ 90% of the 5-hour limit or ≥ 92% of the weekly limit (TaskStop running tasks, record in STATUS, one-shot resume after the reset).
 - Host notes: default node is now v22 — prepend C:/Users/samur/AppData/Local/nvm/v24.21.0 to PATH for web commands.
 
 ## Decisions taken (defaults chosen without the user)
