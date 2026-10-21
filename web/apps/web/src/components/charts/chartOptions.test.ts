@@ -8,6 +8,7 @@ import {
   enumCategories,
   escapeHtml,
   extendToEnd,
+  fitWindow,
   historyOption,
   isHistoryRange,
   rangeQuery,
@@ -65,6 +66,19 @@ describe('ranges', () => {
   it('stretches the window to the newest point', () => {
     expect(timeWindow('24h', NOW)).toEqual({ min: NOW - 24 * HOUR, max: NOW })
     expect(timeWindow('24h', NOW, NOW + 2 * HOUR)).toEqual({ min: NOW - 22 * HOUR, max: NOW + 2 * HOUR })
+  })
+
+  it('narrows the window to a history that starts within it, so a recent one is not a sliver', () => {
+    const day = { min: NOW - 24 * HOUR, max: NOW }
+    // History from before the window (or none): the whole window.
+    expect(fitWindow(day, NOW - 30 * HOUR)).toEqual(day)
+    expect(fitWindow(day, undefined)).toEqual(day)
+    // Five hours of history: from a little before its first point.
+    expect(fitWindow(day, NOW - 5 * HOUR)).toEqual({ min: NOW - 5.5 * HOUR, max: NOW })
+    // Two minutes: at least ten minutes are shown.
+    expect(fitWindow(day, NOW - 2 * 60_000)).toEqual({ min: NOW - 10 * 60_000, max: NOW })
+    // Never wider than the window.
+    expect(fitWindow(day, NOW - 23.9 * HOUR)).toEqual(day)
   })
 })
 

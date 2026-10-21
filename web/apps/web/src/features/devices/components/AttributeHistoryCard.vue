@@ -6,6 +6,7 @@ import { computed, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import HistoryChart from '../../../components/charts/HistoryChart.vue'
 import {
+  fitWindow,
   rangeQuery,
   rawTailFrom,
   timeWindow,
@@ -123,7 +124,14 @@ const newest = computed(() => {
   const last = points[points.length - 1]
   return last ? Date.parse(last.t) : undefined
 })
-const chartWindow = computed(() => timeWindow(props.range, fetchedAt.value, newest.value))
+const oldest = computed(() => {
+  const first = series.value?.points[0]
+  return first ? Date.parse(first.t) : undefined
+})
+// A history that starts inside the range (a device added recently) fills the chart instead of being a sliver.
+const chartWindow = computed(() =>
+  fitWindow(timeWindow(props.range, fetchedAt.value, newest.value), oldest.value),
+)
 const enumValues = computed(() =>
   props.entry.definition.schema.type === 'enum' ? props.entry.definition.schema.values : undefined,
 )

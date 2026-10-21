@@ -43,6 +43,24 @@ export function timeWindow(range: HistoryRange, now: number, newest?: number): {
   return { min: max - RANGE_MS[range], max }
 }
 
+/** The narrowest window `fitWindow` shows. */
+const MIN_FIT_MS = 10 * 60_000
+
+/**
+ * The window narrowed to a history that starts inside it (a device added an hour ago has nothing before): from a
+ * little before the first point, at least ten minutes wide, never wider than the window. Otherwise the whole window —
+ * a recent history would be a sliver at its right edge.
+ */
+export function fitWindow(
+  window: { min: number; max: number },
+  oldest: number | undefined,
+): { min: number; max: number } {
+  if (oldest === undefined || oldest <= window.min) return window
+  const span = window.max - oldest
+  const min = Math.min(oldest - span * 0.1, window.max - MIN_FIT_MS)
+  return { min: Math.max(window.min, min), max: window.max }
+}
+
 /** What kind of value a series carries, which decides how it is drawn. */
 export type SeriesKind = 'number' | 'bool' | 'enum'
 
