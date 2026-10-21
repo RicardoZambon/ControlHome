@@ -111,4 +111,10 @@ public static class ErrorCodes
     // still deciding whether it runs them
     public const string RuntimeStandby = "runtime.standby";
     public const string RuntimeStarting = "runtime.starting";
+
+    // History and energy
+    public const string AttributesNotFound = "attributes.not_found";
+    public const string HistoryInvalidRange = "history.invalid_range";
+    public const string HistoryRangeTooLarge = "history.range_too_large";
+    public const string HistoryInvalidResolution = "history.invalid_resolution";
 }

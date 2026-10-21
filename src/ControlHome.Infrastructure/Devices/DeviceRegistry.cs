@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Runtime;
 using ControlHome.Domain.Capabilities;
@@ -194,21 +193,7 @@ public sealed class DeviceRegistry
     public static CapabilityDefinition? DefinitionOf(EndpointCapability capability)
     {
         ArgumentNullException.ThrowIfNull(capability);
-        if (!string.Equals(capability.CapabilityId, CapabilityIds.Generic, StringComparison.Ordinal))
-        {
-            return CapabilityCatalog.Find(capability.CapabilityId);
-        }
-
-        try
-        {
-            return string.IsNullOrWhiteSpace(capability.GenericDefinitionJson)
-                ? null
-                : CapabilityJson.Deserialize<CapabilityDefinition>(capability.GenericDefinitionJson);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        return EndpointCapability.ResolveDefinition(capability.CapabilityId, capability.GenericDefinitionJson);
     }
 }
 

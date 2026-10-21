@@ -1,9 +1,11 @@
+using System.Text.Json;
 using System.Threading.Channels;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Realtime;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Devices;
+using ControlHome.Domain.History;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -154,7 +156,10 @@ public sealed partial class StateProcessor : IAsyncDisposable
                 0,
                 StateValue.String(report.Event),
                 report.OccurredAtUtc ?? _clock.Time.GetUtcNow(),
-                default));
+                default)
+            {
+                EventPayload = EventPayloadJson(report.Data),
+            });
     }
 
     /// <summary>Queues a device's availability (the latest per device wins).</summary>
@@ -382,7 +387,15 @@ public sealed partial class StateProcessor : IAsyncDisposable
                         current.ObservedAtUtc,
                         current.LastChangedAtUtc));
                     var changed = result.Outcome == StateApplyOutcome.Changed;
-                    if (changed && (isEvent || attribute.Definition?.Recorded == true))
+                    if (changed && isEvent)
+                    {
+                        _writeBehind.EnqueueHistory(new PendingHistoryRow(attribute.AttributeId, change.ObservedAtUtc, change.Value)
+                        {
+                            IsEvent = true,
+                            EventPayload = change.EventPayload,
+                        });
+                    }
+                    else if (changed && attribute.Definition?.Recorded == true)
                     {
                         _writeBehind.EnqueueHistory(new PendingHistoryRow(attribute.AttributeId, change.ObservedAtUtc, change.Value));
                     }
@@ -552,11 +565,33 @@ public sealed partial class StateProcessor : IAsyncDisposable
     /// <summary>An address the inventory did not resolve: dropped until <see cref="Until"/>; <see cref="Failures"/> failed lookups in a row.</summary>
     private readonly record struct UnknownAddress(DateTimeOffset Until, int Failures);
 
+    /// <summary>
+    /// An event's details as JSON text for <c>DeviceEvent.Payload</c> (SQL Server's <c>json</c> type holds objects and
+    /// arrays: a scalar is wrapped as <c>{"value": …}</c>); <c>null</c> when absent or longer than
+    /// <see cref="DeviceEvent.MaxPayloadLength"/>.
+    /// </summary>
+    private static string? EventPayloadJson(JsonElement? data)
+    {
+        if (data is not { } element || element.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        var json = element.ValueKind is JsonValueKind.Object or JsonValueKind.Array
+            ? element.GetRawText()
+            : "{\"value\":" + element.GetRawText() + "}";
+        return json.Length <= DeviceEvent.MaxPayloadLength ? json : null;
+    }
+
     private sealed record PendingChange(
         ChangeKind Kind,
         AttributeAddress Address,
         int AttributeId,
         StateValue Value,
         DateTimeOffset ObservedAtUtc,
-        Availability Availability);
+        Availability Availability)
+    {
+        /// <summary>An event's details (JSON text), if any.</summary>
+        public string? EventPayload { get; init; }
+    }
 }

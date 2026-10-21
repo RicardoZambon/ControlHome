@@ -222,6 +222,14 @@
     "runtime": {
       "standby": "Esta instância do ControlHome é uma reserva somente leitura. Faça a alteração na instância que controla seus dispositivos.",
       "starting": "O ControlHome ainda está iniciando o controle dos dispositivos. Tente novamente em instantes."
+    },
+    "attributes": {
+      "not_found": "Essa medição não existe mais. Recarregue a página."
+    },
+    "history": {
+      "invalid_range": "O início do período precisa ser antes do fim.",
+      "range_too_large": "Escolha um período de até um ano.",
+      "invalid_resolution": "Essa resolução do histórico não existe. Use automática, bruta, 5 min ou 1 h."
     }
   }
 }

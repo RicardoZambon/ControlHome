@@ -4,6 +4,7 @@ using System.Net;
 using ControlHome.Application.Realtime;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Infrastructure.Devices;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -28,8 +29,11 @@ public sealed class BurstTests(DevicesApiFactory factory) : DevicesTestBase(fact
     {
         var (admin, member, _) = await SignInAllAsync();
         var processor = Factory.Services.GetRequiredService<StateProcessor>();
+        var writeBehind = Factory.Services.GetRequiredService<StateWriteBehind>();
         var receivedBefore = processor.Received;
         var droppedBefore = processor.Dropped;
+        var historyBefore = writeBehind.HistoryEnqueued;
+        var droppedHistoryBefore = writeBehind.DroppedHistory;
         await CreateIntegrationAsync(
             admin,
             BurstConnectorFactory.Key,
@@ -73,6 +77,14 @@ public sealed class BurstTests(DevicesApiFactory factory) : DevicesTestBase(fact
         var dropped = processor.Dropped - droppedBefore;
         var p95 = Percentile(endToEnd, 0.95);
 
+        // History: the burst's values are recorded, so the write-behind appended them to StateLog flush after flush. Every
+        // row queued before the last flush is stored (a straggling report may add one more meanwhile).
+        var historyRows = writeBehind.HistoryEnqueued - historyBefore;
+        (await writeBehind.FlushAsync(Ct)).ShouldBeTrue();
+        var deviceAttributes = device.Endpoints.SelectMany(e => e.Capabilities).SelectMany(c => c.Attributes).Select(a => a.AttributeId).ToList();
+        var stored = await QueryDbAsync(db => db.StateLog.LongCountAsync(s => deviceAttributes.Contains(s.AttributeId), Ct));
+        var historyRowsNow = writeBehind.HistoryEnqueued - historyBefore;
+
         // The UI side: the deltas reach clients batched (one StateChanged per publish window), never one message per report.
         var stateMessages = Factory.Realtime.Messages
             .Where(m => m.Name == HomeHubMessages.StateChanged && m.At >= burstStart && m.At <= burstEnd)
@@ -86,7 +98,8 @@ public sealed class BurstTests(DevicesApiFactory factory) : DevicesTestBase(fact
             $"BURST: {Factory.Spy.BurstReports} reports sent, {reportsAccepted} accepted ({processor.Coalesced} coalesced in total, {dropped} dropped); " +
             $"{stateMessages.Count} StateChanged messages in {burstSeconds:0.0} s (largest {stateMessages.Select(m => m.Count).DefaultIfEmpty().Max()} deltas); " +
             $"{endToEnd.Count} commands during the burst: command → client delta p50 {Percentile(endToEnd, 0.5):0.0} ms, " +
-            $"p95 {p95:0.0} ms, max {endToEnd.Max():0.0} ms; POST → 202 p95 {Percentile(accepted, 0.95):0.0} ms");
+            $"p95 {p95:0.0} ms, max {endToEnd.Max():0.0} ms; POST → 202 p95 {Percentile(accepted, 0.95):0.0} ms; " +
+            $"{historyRows} history rows queued, {stored} in StateLog, {writeBehind.DroppedHistory - droppedHistoryBefore} dropped");
         TestContext.Current.TestOutputHelper?.WriteLine(report);
         Console.WriteLine(report);
 
@@ -96,6 +109,11 @@ public sealed class BurstTests(DevicesApiFactory factory) : DevicesTestBase(fact
         stateMessages.ShouldAllBe(m => m.Count <= Attributes + 1 && m.Select(d => d.AttributeId).Distinct().Count() == m.Count, report);
         endToEnd.Count.ShouldBeGreaterThanOrEqualTo(20, report);
         p95.ShouldBeLessThan(500, report);
+
+        // Every history row reached StateLog and none was dropped.
+        historyRows.ShouldBeGreaterThan(Attributes, report);
+        stored.ShouldBeInRange(historyRows, historyRowsNow, report);
+        (writeBehind.DroppedHistory - droppedHistoryBefore).ShouldBe(0, report);
     }
 
     private static double Percentile(List<double> values, double percentile)

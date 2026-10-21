@@ -4,6 +4,7 @@ using ControlHome.Application.Realtime;
 using ControlHome.Application.Runtime;
 using ControlHome.Application.Security;
 using ControlHome.Connectors.Abstractions;
+using ControlHome.Infrastructure.History;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,7 @@ public static class DeviceRuntimeServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(sp => new RuntimeClock(sp.GetRequiredService<TimeProvider>()));
+        services.Replace(ServiceDescriptor.Singleton<IRuntimeClock>(sp => sp.GetRequiredService<RuntimeClock>()));
         services.TryAddSingleton<KnownSecrets>();
         services.TryAddSingleton<ConnectorCatalog>();
         services.TryAddSingleton<IRealtimePublisher>(NullRealtimePublisher.Instance);
@@ -59,13 +61,15 @@ public static class DeviceRuntimeServiceCollectionExtensions
         services.Replace(ServiceDescriptor.Singleton<IDeviceStatusReader, RuntimeDeviceStatusReader>());
         services.TryAddSingleton<RuntimeLease>();
         services.TryAddSingleton<DeviceRuntime>();
+        services.AddHistoryRuntime();
         return services;
     }
 
-    /// <summary>Runs the device runtime with the host (not during build-time OpenAPI generation).</summary>
+    /// <summary>Runs the device runtime and its history maintenance with the host (not during build-time OpenAPI generation).</summary>
     public static IServiceCollection AddDeviceRuntimeHost(this IServiceCollection services)
     {
         services.AddHostedService<DeviceRuntimeHost>();
+        services.AddHistoryMaintenanceHost();
         return services;
     }
 

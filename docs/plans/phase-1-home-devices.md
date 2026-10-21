@@ -293,7 +293,8 @@ pages/DeviceDetailPage.vue}`, `features/profile` (safety PIN section), `componen
   from watermark); EnergyHourly from energy counters, else integrated power (trapezoid, `Estimated=1`); retention purge job
   (`DELETE TOP (5000)` loops below min(retention, watermark)); settings `GET/PUT /api/settings/retention` (Admin).
 - `GET /api/attributes/{id}/history?from&to&resolution=auto|raw|5m|1h` → `HistorySeriesDto(int AttributeId, string Resolution,
-  IReadOnlyList<HistoryPointDto> Points)`; `GET /api/energy/hourly?from&to&endpointId?`.
+  string? Unit, IReadOnlyList<HistoryPointDto> Points)` with `HistoryPointDto(DateTimeOffset T, double? V, double? Min,
+  double? Max, string? S)`; `GET /api/energy/hourly?from&to&endpointId?` → `EnergyHourlyDto[]`.
 - Tests with FakeTimeProvider: time-weighted mean correctness, counter reset, watermark catch-up after downtime, idempotency,
   purge respects watermark.
 

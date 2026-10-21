@@ -2658,6 +2658,300 @@
           }
         }
       }
+    },
+    "/api/attributes/{id}/history": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "An attribute's history over a range, oldest point first (at most 5 000 points).",
+        "description": "resolution=auto (default) serves raw changes for ranges up to 6 h, 5-minute statistics up to 7 days and hourly statistics beyond (the finest that fits in 5 000 points); attributes without statistics (states such as on/off or modes) always get raw changes. Raw series start with the value in effect at `from`. Statistics trail real time by the rollup (about a minute after a bucket ends). 400 history.invalid_resolution, history.invalid_range (from not before to) or history.range_too_large (over 366 days); 404 attributes.not_found.",
+        "operationId": "getAttributeHistory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start (inclusive, ISO 8601); default `to` minus 24 h.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End (exclusive, ISO 8601); default now.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "description": "auto (default), raw, 5m or 1h.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistorySeriesDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/energy/hourly": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Energy used per endpoint and hour, by hour then endpoint.",
+        "description": "Hours overlapping [from, to) (default: the last 24 h). Each endpoint has one source: its energy meter (counter) or, without one, its power readings integrated (integratedPower, estimated). 400 history.invalid_range or history.range_too_large; 404 endpoints.not_found.",
+        "operationId": "listEnergyHourly",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start (ISO 8601); default `to` minus 24 h.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End (exclusive, ISO 8601); default now.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endpointId",
+            "in": "query",
+            "description": "One endpoint only.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EnergyHourlyDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings/retention": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "How long history is kept (the defaults until saved).",
+        "operationId": "getRetentionSettings",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetentionSettingsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Changes how long history is kept; the hourly retention job applies it.",
+        "description": "Days: stateLogDays, shortTermStatsDays and deviceEventDays 1–365, auditLogDays 30–3650 (400 validation.failed otherwise). Hourly statistics and hourly energy are kept forever; nothing a rollup still needs is purged.",
+        "operationId": "updateRetentionSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRetentionSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetentionSettingsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3695,6 +3989,39 @@
         },
         "description": "A controllable part of a device (commands address endpoints)."
       },
+      "EnergyHourlyDto": {
+        "required": [
+          "endpointId",
+          "hourStartUtc",
+          "wh",
+          "source",
+          "estimated"
+        ],
+        "type": "object",
+        "properties": {
+          "endpointId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hourStartUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "wh": {
+            "type": "number",
+            "format": "double"
+          },
+          "source": {
+            "type": "string",
+            "description": "`counter` (its energy meter) or `integratedPower` (power readings integrated: an estimate)."
+          },
+          "estimated": {
+            "type": "boolean",
+            "description": "Integrated from power readings rather than measured by a meter."
+          }
+        },
+        "description": "The energy one endpoint used in one hour."
+      },
       "FieldSchemaDto": {
         "required": [
           "key",
@@ -3862,6 +4189,88 @@
           }
         },
         "description": "A floor in the floor list."
+      },
+      "HistoryPointDto": {
+        "required": [
+          "t",
+          "v",
+          "min",
+          "max",
+          "s"
+        ],
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "string",
+            "description": "Raw: when the value was observed (the first point may sit at the range's start, carrying the value in effect then).\nStatistics: the bucket's start.",
+            "format": "date-time"
+          },
+          "v": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "Raw: the number (booleans as 1/0), or `null` for a string or unknown value. Measurements: the time-weighted mean.\nCounters: the increase in the bucket (for energy, Wh used).",
+            "format": "double"
+          },
+          "min": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "Measurements (5m/1h): the lowest value in the bucket.",
+            "format": "double"
+          },
+          "max": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "Measurements (5m/1h): the highest value in the bucket.",
+            "format": "double"
+          },
+          "s": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Raw: a string value (enum states such as `heat`)."
+          }
+        },
+        "description": "One point of a history series."
+      },
+      "HistorySeriesDto": {
+        "required": [
+          "attributeId",
+          "resolution",
+          "unit",
+          "points"
+        ],
+        "type": "object",
+        "properties": {
+          "attributeId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resolution": {
+            "type": "string",
+            "description": "The resolution served: `raw`, `5m` or `1h`."
+          },
+          "unit": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The attribute's canonical unit (`W`, `Wh`, `°C`, `%`, …), if it has one."
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoryPointDto"
+            }
+          }
+        },
+        "description": "An attribute's history over a range, oldest point first (at most 5 000 points: the most recent ones)."
       },
       "HomeDto": {
         "required": [
@@ -4320,6 +4729,38 @@
           }
         },
         "description": "Consumes a one-time reset token printed by the `reset-admin` command."
+      },
+      "RetentionSettingsDto": {
+        "required": [
+          "stateLogDays",
+          "shortTermStatsDays",
+          "deviceEventDays",
+          "auditLogDays"
+        ],
+        "type": "object",
+        "properties": {
+          "stateLogDays": {
+            "type": "integer",
+            "description": "Raw history (every change), used for ranges up to 6 h.",
+            "format": "int32"
+          },
+          "shortTermStatsDays": {
+            "type": "integer",
+            "description": "5-minute statistics, used for ranges up to 7 days.",
+            "format": "int32"
+          },
+          "deviceEventDays": {
+            "type": "integer",
+            "description": "Momentary events (button presses, doorbell rings).",
+            "format": "int32"
+          },
+          "auditLogDays": {
+            "type": "integer",
+            "description": "The audit log.",
+            "format": "int32"
+          }
+        },
+        "description": "How long history is kept (hourly statistics and hourly energy are kept forever)."
       },
       "RoomDto": {
         "required": [
@@ -4871,6 +5312,34 @@
           }
         }
       },
+      "UpdateRetentionSettingsRequest": {
+        "required": [
+          "stateLogDays",
+          "shortTermStatsDays",
+          "deviceEventDays",
+          "auditLogDays"
+        ],
+        "type": "object",
+        "properties": {
+          "stateLogDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "shortTermStatsDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deviceEventDays": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "auditLogDays": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "Changes how long history is kept (Admin)."
+      },
       "UpdateUserRequest": {
         "required": [
           "displayName",
@@ -5162,6 +5631,12 @@
     },
     {
       "name": "System"
+    },
+    {
+      "name": "History"
+    },
+    {
+      "name": "Settings"
     }
   ]
 }

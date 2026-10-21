@@ -1,20 +1,53 @@
 using System.Data;
 using System.Text.Json;
 using ControlHome.Domain.Devices;
+using ControlHome.Domain.History;
 using ControlHome.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient.Server;
 
 namespace ControlHome.Infrastructure.Devices;
 
 /// <summary>
 /// Writes write-behind batches to SQL Server in one transaction: current values with one <c>MERGE</c> into
 /// <c>ch.AttributeState</c> (rows for attributes deleted meanwhile are skipped; an older observation never overwrites a newer
-/// one) and device availability / last-seen with one <c>UPDATE</c> (an orphaned device keeps the Unknown it was given when it
-/// was orphaned: a buffered or late availability never overwrites it). History rows are accepted and discarded until the
-/// <c>StateLog</c> table exists (milestone 1.4-A appends them there).
+/// one), device availability / last-seen with one <c>UPDATE</c> (an orphaned device keeps the Unknown it was given when it
+/// was orphaned: a buffered or late availability never overwrites it), and history appended to <c>ch.StateLog</c> (changes
+/// of recorded attributes) and <c>ch.DeviceEvent</c> (momentary events) — one set-based <c>INSERT</c> each from a
+/// table-valued parameter (types <c>ch.StateLogRow</c> / <c>ch.DeviceEventRow</c>), skipping attributes deleted meanwhile.
 /// </summary>
 public sealed class SqlStateStore(IDatabaseConnectionProvider connections, TimeProvider timeProvider) : IStateStore
 {
+    private const string InsertStateLog = """
+        INSERT INTO [ch].[StateLog] (AttributeId, TsUtc, Num, Str)
+        SELECT r.AttributeId, r.TsUtc, r.Num, r.Str
+        FROM @rows AS r
+        WHERE EXISTS (SELECT 1 FROM [ch].[DeviceAttributes] AS a WHERE a.Id = r.AttributeId);
+        """;
+
+    private const string InsertDeviceEvents = """
+        INSERT INTO [ch].[DeviceEvent] (AttributeId, TsUtc, EventType, Payload)
+        SELECT r.AttributeId, r.TsUtc, r.EventType, CAST(r.Payload AS json)
+        FROM @rows AS r
+        WHERE EXISTS (SELECT 1 FROM [ch].[DeviceAttributes] AS a WHERE a.Id = r.AttributeId);
+        """;
+
+    private static readonly SqlMetaData[] _stateLogRow =
+    [
+        new("AttributeId", SqlDbType.Int),
+        new("TsUtc", SqlDbType.DateTime2, 0, 3),
+        new("Num", SqlDbType.Float),
+        new("Str", SqlDbType.NVarChar, StateLogEntry.MaxStringLength),
+    ];
+
+    private static readonly SqlMetaData[] _deviceEventRow =
+    [
+        new("AttributeId", SqlDbType.Int),
+        new("TsUtc", SqlDbType.DateTime2, 0, 3),
+        new("EventType", SqlDbType.NVarChar, DeviceEvent.MaxEventTypeLength),
+        new("Payload", SqlDbType.NVarChar, SqlMetaData.Max),
+    ];
+
     private const string MergeStates = """
         MERGE [ch].[AttributeState] WITH (HOLDLOCK) AS t
         USING (
@@ -54,7 +87,7 @@ public sealed class SqlStateStore(IDatabaseConnectionProvider connections, TimeP
     public async Task WriteAsync(StateWriteBatch batch, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(batch);
-        if (batch.States.Count == 0 && batch.Devices.Count == 0)
+        if (batch.States.Count == 0 && batch.Devices.Count == 0 && batch.History.Count == 0)
         {
             return;
         }
@@ -80,7 +113,86 @@ public sealed class SqlStateStore(IDatabaseConnectionProvider connections, TimeP
             await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        var stateRows = batch.History.Where(h => !h.IsEvent).ToList();
+        if (stateRows.Count > 0)
+        {
+            await InsertRowsAsync(connection, transaction, InsertStateLog, "[ch].[StateLogRow]", StateLogRecords(stateRows), cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var eventRows = batch.History.Where(h => h.IsEvent).ToList();
+        if (eventRows.Count > 0)
+        {
+            await InsertRowsAsync(connection, transaction, InsertDeviceEvents, "[ch].[DeviceEventRow]", DeviceEventRecords(eventRows), cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task InsertRowsAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        string sql,
+        string typeName,
+        IEnumerable<SqlDataRecord> rows,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.Add(new SqlParameter("@rows", SqlDbType.Structured) { TypeName = typeName, Value = rows });
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static IEnumerable<SqlDataRecord> StateLogRecords(IEnumerable<PendingHistoryRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            var (num, str) = StateLogEntry.Encode(row.Value);
+            var record = new SqlDataRecord(_stateLogRow);
+            record.SetInt32(0, row.AttributeId);
+            record.SetDateTime(1, row.TsUtc.UtcDateTime);
+            if (num is { } n)
+            {
+                record.SetDouble(2, n);
+            }
+            else
+            {
+                record.SetDBNull(2);
+            }
+
+            if (str is not null)
+            {
+                record.SetString(3, str);
+            }
+            else
+            {
+                record.SetDBNull(3);
+            }
+
+            yield return record;
+        }
+    }
+
+    private static IEnumerable<SqlDataRecord> DeviceEventRecords(IEnumerable<PendingHistoryRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            var record = new SqlDataRecord(_deviceEventRow);
+            record.SetInt32(0, row.AttributeId);
+            record.SetDateTime(1, row.TsUtc.UtcDateTime);
+            var name = row.Value.S ?? string.Empty;
+            record.SetString(2, name.Length <= DeviceEvent.MaxEventTypeLength ? name : name[..DeviceEvent.MaxEventTypeLength]);
+            if (row.EventPayload is { } payload)
+            {
+                record.SetString(3, payload);
+            }
+            else
+            {
+                record.SetDBNull(3);
+            }
+
+            yield return record;
+        }
     }
 
     private static string StatesJson(IReadOnlyList<PendingAttributeState> states)

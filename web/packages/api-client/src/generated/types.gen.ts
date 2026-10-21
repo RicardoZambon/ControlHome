@@ -482,6 +482,23 @@ export type EndpointDto = {
 };
 
 /**
+ * The energy one endpoint used in one hour.
+ */
+export type EnergyHourlyDto = {
+    endpointId: string;
+    hourStartUtc: string;
+    wh: number;
+    /**
+     * `counter` (its energy meter) or `integratedPower` (power readings integrated: an estimate).
+     */
+    source: string;
+    /**
+     * Integrated from power readings rather than measured by a meter.
+     */
+    estimated: boolean;
+};
+
+/**
  * A form field.
  */
 export type FieldSchemaDto = {
@@ -558,6 +575,50 @@ export type FloorSummaryDto = {
     name: string;
     level: number;
     roomCount: number;
+};
+
+/**
+ * One point of a history series.
+ */
+export type HistoryPointDto = {
+    /**
+     * Raw: when the value was observed (the first point may sit at the range's start, carrying the value in effect then).
+     * Statistics: the bucket's start.
+     */
+    t: string;
+    /**
+     * Raw: the number (booleans as 1/0), or `null` for a string or unknown value. Measurements: the time-weighted mean.
+     * Counters: the increase in the bucket (for energy, Wh used).
+     */
+    v: null | number;
+    /**
+     * Measurements (5m/1h): the lowest value in the bucket.
+     */
+    min: null | number;
+    /**
+     * Measurements (5m/1h): the highest value in the bucket.
+     */
+    max: null | number;
+    /**
+     * Raw: a string value (enum states such as `heat`).
+     */
+    s: null | string;
+};
+
+/**
+ * An attribute's history over a range, oldest point first (at most 5 000 points: the most recent ones).
+ */
+export type HistorySeriesDto = {
+    attributeId: number;
+    /**
+     * The resolution served: `raw`, `5m` or `1h`.
+     */
+    resolution: string;
+    /**
+     * The attribute's canonical unit (`W`, `Wh`, `°C`, `%`, …), if it has one.
+     */
+    unit: null | string;
+    points: Array<HistoryPointDto>;
 };
 
 /**
@@ -760,6 +821,28 @@ export type ResetPasswordWithTokenRequest = {
     userName: string;
     token: string;
     newPassword: string;
+};
+
+/**
+ * How long history is kept (hourly statistics and hourly energy are kept forever).
+ */
+export type RetentionSettingsDto = {
+    /**
+     * Raw history (every change), used for ranges up to 6 h.
+     */
+    stateLogDays: number;
+    /**
+     * 5-minute statistics, used for ranges up to 7 days.
+     */
+    shortTermStatsDays: number;
+    /**
+     * Momentary events (button presses, doorbell rings).
+     */
+    deviceEventDays: number;
+    /**
+     * The audit log.
+     */
+    auditLogDays: number;
 };
 
 /**
@@ -1057,6 +1140,16 @@ export type UpdateProfileRequest = {
     displayName: string;
     locale: string;
     theme: string;
+};
+
+/**
+ * Changes how long history is kept (Admin).
+ */
+export type UpdateRetentionSettingsRequest = {
+    stateLogDays: number;
+    shortTermStatsDays: number;
+    deviceEventDays: number;
+    auditLogDays: number;
 };
 
 export type UpdateUserRequest = {
@@ -2678,3 +2771,167 @@ export type GetSystemStatusResponses = {
 };
 
 export type GetSystemStatusResponse = GetSystemStatusResponses[keyof GetSystemStatusResponses];
+
+export type GetAttributeHistoryData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: {
+        /**
+         * Start (inclusive, ISO 8601); default `to` minus 24 h.
+         */
+        from?: string;
+        /**
+         * End (exclusive, ISO 8601); default now.
+         */
+        to?: string;
+        /**
+         * auto (default), raw, 5m or 1h.
+         */
+        resolution?: string;
+    };
+    url: '/api/attributes/{id}/history';
+};
+
+export type GetAttributeHistoryErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type GetAttributeHistoryError = GetAttributeHistoryErrors[keyof GetAttributeHistoryErrors];
+
+export type GetAttributeHistoryResponses = {
+    /**
+     * OK
+     */
+    200: HistorySeriesDto;
+};
+
+export type GetAttributeHistoryResponse = GetAttributeHistoryResponses[keyof GetAttributeHistoryResponses];
+
+export type ListEnergyHourlyData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Start (ISO 8601); default `to` minus 24 h.
+         */
+        from?: string;
+        /**
+         * End (exclusive, ISO 8601); default now.
+         */
+        to?: string;
+        /**
+         * One endpoint only.
+         */
+        endpointId?: string;
+    };
+    url: '/api/energy/hourly';
+};
+
+export type ListEnergyHourlyErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+};
+
+export type ListEnergyHourlyError = ListEnergyHourlyErrors[keyof ListEnergyHourlyErrors];
+
+export type ListEnergyHourlyResponses = {
+    /**
+     * OK
+     */
+    200: Array<EnergyHourlyDto>;
+};
+
+export type ListEnergyHourlyResponse = ListEnergyHourlyResponses[keyof ListEnergyHourlyResponses];
+
+export type GetRetentionSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/settings/retention';
+};
+
+export type GetRetentionSettingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type GetRetentionSettingsError = GetRetentionSettingsErrors[keyof GetRetentionSettingsErrors];
+
+export type GetRetentionSettingsResponses = {
+    /**
+     * OK
+     */
+    200: RetentionSettingsDto;
+};
+
+export type GetRetentionSettingsResponse = GetRetentionSettingsResponses[keyof GetRetentionSettingsResponses];
+
+export type UpdateRetentionSettingsData = {
+    body: UpdateRetentionSettingsRequest;
+    path?: never;
+    query?: never;
+    url: '/api/settings/retention';
+};
+
+export type UpdateRetentionSettingsErrors = {
+    /**
+     * Bad Request
+     */
+    400: HttpValidationProblemDetails;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+};
+
+export type UpdateRetentionSettingsError = UpdateRetentionSettingsErrors[keyof UpdateRetentionSettingsErrors];
+
+export type UpdateRetentionSettingsResponses = {
+    /**
+     * OK
+     */
+    200: RetentionSettingsDto;
+};
+
+export type UpdateRetentionSettingsResponse = UpdateRetentionSettingsResponses[keyof UpdateRetentionSettingsResponses];

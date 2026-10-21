@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using ControlHome.Api.IntegrationTests.History;
 using ControlHome.Api.Realtime;
 using ControlHome.Application.Realtime;
 using ControlHome.Application.Runtime;
@@ -61,6 +62,10 @@ public class DevicesApiFactory(SqlServerFixture sql) : ControlHomeApiFactory(sql
         settings["DeviceRuntime:LeaseCheckInterval"] = "00:00:02";
         settings["DeviceRuntime:LeaseRetryInterval"] = "00:00:01";
         settings["DeviceRuntime:RestartInitialDelay"] = "00:00:00.200";
+
+        // History tests run the rollups and the retention job themselves (deterministically).
+        settings["History:MaintenanceEnabled"] = "false";
+        settings["History:ShortTermBatch"] = "1.00:00:00";
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -73,6 +78,8 @@ public class DevicesApiFactory(SqlServerFixture sql) : ControlHomeApiFactory(sql
             services.AddConnector<CanaryConnectorFactory>();
             services.AddConnector<BurstConnectorFactory>();
             services.AddConnector<GadgetsConnectorFactory>();
+            services.AddSingleton<PowerOnlySpy>();
+            services.AddConnector<PowerOnlyConnectorFactory>();
             services.AddSingleton<RecordingRealtimePublisher>();
             services.Replace(ServiceDescriptor.Singleton<IRealtimePublisher>(sp => sp.GetRequiredService<RecordingRealtimePublisher>()));
             services.AddSingleton<LogCapture>();

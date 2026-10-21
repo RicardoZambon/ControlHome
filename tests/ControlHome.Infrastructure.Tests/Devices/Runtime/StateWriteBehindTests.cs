@@ -135,6 +135,27 @@ public sealed class StateWriteBehindTests
     }
 
     [Fact]
+    public async Task The_oldest_state_history_waiting_or_being_written_is_known_so_rollups_wait_for_it()
+    {
+        await using var pipeline = new PipelineHarness();
+        var writeBehind = pipeline.WriteBehind;
+        writeBehind.OldestPendingHistoryUtc.ShouldBeNull();
+        writeBehind.EnqueueHistory(new PendingHistoryRow(1, T0.AddSeconds(5), StateValue.Number(1)));
+        writeBehind.EnqueueHistory(new PendingHistoryRow(2, T0, StateValue.Number(2)));
+        writeBehind.EnqueueHistory(new PendingHistoryRow(3, T0.AddSeconds(-9), StateValue.String("single")) { IsEvent = true }); // not rolled up
+
+        writeBehind.OldestPendingHistoryUtc.ShouldBe(T0);
+
+        DateTimeOffset? whileWriting = null;
+        pipeline.Store.DuringWrite = () => whileWriting = writeBehind.OldestPendingHistoryUtc;
+        (await writeBehind.FlushAsync(Ct)).ShouldBeTrue();
+
+        whileWriting.ShouldBe(T0);
+        writeBehind.OldestPendingHistoryUtc.ShouldBeNull();
+        writeBehind.HistoryEnqueued.ShouldBe(3);
+    }
+
+    [Fact]
     public async Task The_loop_flushes_every_interval()
     {
         await using var pipeline = new PipelineHarness(o => o.FlushInterval = TimeSpan.FromSeconds(5));

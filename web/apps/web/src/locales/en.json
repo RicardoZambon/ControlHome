@@ -222,6 +222,14 @@
     "runtime": {
       "standby": "This ControlHome instance is a read-only standby. Make the change on the instance that runs your devices.",
       "starting": "ControlHome is still starting its device runtime. Try again in a moment."
+    },
+    "attributes": {
+      "not_found": "That reading no longer exists. Reload the page."
+    },
+    "history": {
+      "invalid_range": "The start of the period must be before its end.",
+      "range_too_large": "Pick a period of at most a year.",
+      "invalid_resolution": "That history resolution doesn't exist. Use auto, raw, 5 min or 1 h."
     }
   }
 }

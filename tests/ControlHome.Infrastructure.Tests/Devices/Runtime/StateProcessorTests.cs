@@ -1,3 +1,4 @@
+using System.Text.Json;
 using ControlHome.Application.Realtime;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
@@ -267,6 +268,29 @@ public sealed class StateProcessorTests
 
         pipeline.WriteBehind.PendingStates.ShouldBe(2);
         pipeline.WriteBehind.PendingHistory.ShouldBe(2); // an unchanged value adds no history
+    }
+
+    [Fact]
+    public async Task Momentary_events_queue_event_rows_with_their_payload()
+    {
+        await using var pipeline = new PipelineHarness();
+        using var data = JsonDocument.Parse("""{"count":2}""");
+        pipeline.Processor.ReportEvent(
+            pipeline.IntegrationId,
+            new EventReport(DeviceExternalId, Endpoint.MainKey, CapabilityIds.Switch, "on", "double", data.RootElement, T0));
+        pipeline.Processor.ReportEvent(
+            pipeline.IntegrationId,
+            new EventReport(DeviceExternalId, Endpoint.MainKey, CapabilityIds.Switch, "on", "single", null, T0.AddSeconds(1)));
+        pipeline.Processor.ReportState(pipeline.IntegrationId, pipeline.Report(CapabilityIds.Power, "power", StateValue.Number(60)));
+        await pipeline.SettleAsync();
+
+        (await pipeline.WriteBehind.FlushAsync(TestContext.Current.CancellationToken)).ShouldBeTrue();
+
+        var history = pipeline.Store.Batches.ShouldHaveSingleItem().History;
+        var events = history.Where(h => h.IsEvent).ToList();
+        events.Select(e => (e.AttributeId, e.Value.S, e.EventPayload)).ShouldBe(
+            [(OnAttribute, "double", """{"count":2}"""), (OnAttribute, "single", null)]);
+        history.Where(h => !h.IsEvent).ShouldHaveSingleItem().AttributeId.ShouldBe(PowerAttribute);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using ControlHome.Application.Identity;
 using ControlHome.Domain.Auditing;
 using ControlHome.Domain.Devices;
 using ControlHome.Domain.Files;
+using ControlHome.Domain.History;
 using ControlHome.Domain.Homes;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
@@ -43,6 +44,22 @@ public sealed class ControlHomeDbContext(DbContextOptions<ControlHomeDbContext> 
     public DbSet<DeviceAttribute> DeviceAttributes => Set<DeviceAttribute>();
 
     public DbSet<AttributeState> AttributeStates => Set<AttributeState>();
+
+    public DbSet<StateLogEntry> StateLog => Set<StateLogEntry>();
+
+    public DbSet<DeviceEvent> DeviceEvents => Set<DeviceEvent>();
+
+    public DbSet<ShortTermStatistic> ShortTermStatistics => Set<ShortTermStatistic>();
+
+    public DbSet<HourlyStatistic> HourlyStatistics => Set<HourlyStatistic>();
+
+    public DbSet<RollupProgress> RollupProgress => Set<RollupProgress>();
+
+    public DbSet<EnergyHourly> EnergyHourly => Set<EnergyHourly>();
+
+    public DbSet<EnergySourceSelection> EnergySourceSelections => Set<EnergySourceSelection>();
+
+    public DbSet<RetentionSettings> RetentionSettings => Set<RetentionSettings>();
 
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

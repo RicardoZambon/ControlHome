@@ -63,6 +63,10 @@ public sealed class EndpointContractTests(NoDatabaseApiFactory factory) : IClass
         { "POST", "/api/endpoints/{id:guid}/commands", "sendCommand", AuthorizationPolicies.Member, null },
         { "GET", "/api/state", "getState", AuthorizationPolicies.Viewer, null },
         { "GET", "/api/system/status", "getSystemStatus", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/attributes/{id:int}/history", "getAttributeHistory", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/energy/hourly", "listEnergyHourly", AuthorizationPolicies.Viewer, null },
+        { "GET", "/api/settings/retention", "getRetentionSettings", AuthorizationPolicies.Admin, null },
+        { "PUT", "/api/settings/retention", "updateRetentionSettings", AuthorizationPolicies.Admin, null },
     };
 
     [Fact]
