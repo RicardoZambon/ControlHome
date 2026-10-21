@@ -36,6 +36,7 @@ internal sealed class HistoryHarness : IAsyncDisposable
         Store = new SqlStateStore(connections, Time);
         Rollup = new HistoryRollup(scopes, connections, new RuntimeClock(Time), Pending, Options, NullLogger<HistoryRollup>.Instance);
         var clock = new RuntimeClock(Time);
+        EnergyWindows = new VendorEnergyWriter(scopes, connections, clock, Rollup, Options, NullLogger<VendorEnergyWriter>.Instance);
         Purge = new RetentionPurge(
             scopes,
             [
@@ -59,6 +60,9 @@ internal sealed class HistoryHarness : IAsyncDisposable
     public SqlStateStore Store { get; }
 
     public HistoryRollup Rollup { get; }
+
+    /// <summary>Vendor energy windows (the host side of <c>IConnectorContext.ReportEnergyWindowsAsync</c>).</summary>
+    public VendorEnergyWriter EnergyWindows { get; }
 
     public RetentionPurge Purge { get; }
 

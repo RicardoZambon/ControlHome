@@ -77,6 +77,9 @@ internal sealed class FlakyInventoryContext(RecordingContext inner, int failures
             ? Task.FromException(new InvalidOperationException("The database is unavailable."))
             : inner.SyncInventoryAsync(devices, cancellationToken);
 
+    public Task ReportEnergyWindowsAsync(IReadOnlyList<EnergyWindowReport> windows, CancellationToken cancellationToken) =>
+        inner.ReportEnergyWindowsAsync(windows, cancellationToken);
+
     public void SetStatus(IntegrationStatus status, string? message) => inner.SetStatus(status, message);
 }
 

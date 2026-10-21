@@ -16,6 +16,7 @@ internal sealed class RecordingContext(TimeProvider time, ILogger? logger = null
     private readonly List<string> _removed = [];
     private readonly List<IReadOnlyList<string>> _syncs = [];
     private readonly List<(IntegrationStatus Status, string? Message)> _statuses = [];
+    private readonly List<IReadOnlyList<EnergyWindowReport>> _energyReports = [];
 
     public Guid IntegrationId { get; } = Guid.CreateVersion7();
 
@@ -37,6 +38,12 @@ internal sealed class RecordingContext(TimeProvider time, ILogger? logger = null
     public IReadOnlyList<IReadOnlyList<string>> Syncs => Snapshot(_syncs);
 
     public IReadOnlyList<(IntegrationStatus Status, string? Message)> Statuses => Snapshot(_statuses);
+
+    /// <summary>Each <see cref="ReportEnergyWindowsAsync"/> call's windows, in order.</summary>
+    public IReadOnlyList<IReadOnlyList<EnergyWindowReport>> EnergyReports => Snapshot(_energyReports);
+
+    /// <summary>Fails the next energy report (a database outage); the windows are not recorded.</summary>
+    public bool FailNextEnergyReport { get; set; }
 
     public void ReportState(StateReport report) => Add(_states, report);
 
@@ -66,6 +73,18 @@ internal sealed class RecordingContext(TimeProvider time, ILogger? logger = null
             _syncs.Add([.. devices.Select(d => d.ExternalId)]);
         }
 
+        return Task.CompletedTask;
+    }
+
+    public Task ReportEnergyWindowsAsync(IReadOnlyList<EnergyWindowReport> windows, CancellationToken cancellationToken)
+    {
+        if (FailNextEnergyReport)
+        {
+            FailNextEnergyReport = false;
+            return Task.FromException(new InvalidOperationException("The database is unavailable."));
+        }
+
+        Add(_energyReports, [.. windows]);
         return Task.CompletedTask;
     }
 

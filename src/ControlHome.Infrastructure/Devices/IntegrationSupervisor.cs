@@ -43,7 +43,8 @@ public sealed partial class IntegrationSupervisor(
     TimeProvider timeProvider,
     KnownSecrets knownSecrets,
     IOptions<DeviceRuntimeOptions> options,
-    ILoggerFactory loggerFactory) : ICommandDispatcher, IIntegrationRuntimeControl, ICameraSnapshotProvider, IAsyncDisposable
+    ILoggerFactory loggerFactory,
+    IEnergyWindowSink? energyWindows = null) : ICommandDispatcher, IIntegrationRuntimeControl, ICameraSnapshotProvider, IAsyncDisposable
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger<IntegrationSupervisor>();
     private readonly ConcurrentDictionary<Guid, RunningIntegration> _running = new();
@@ -388,7 +389,7 @@ public sealed partial class IntegrationSupervisor(
 
         // Exceptions a connector logs are redacted too (the Serilog redactor only rewrites property values).
         var logger = new RedactingLogger(loggerFactory.CreateLogger($"ControlHome.Connectors.{factory.Descriptor.Key}"), knownSecrets);
-        var context = new ConnectorContext(id, clock.Time, logger, processor, inventory, (s, m) => SetStatus(running, s, m));
+        var context = new ConnectorContext(id, clock.Time, logger, processor, inventory, (s, m) => SetStatus(running, s, m), energyWindows);
 
         // Fenced the moment a stop is requested, not when RunAsync returns: a runtime that ignores cancellation may keep
         // running for a while, but nothing it reports, upserts or saves is accepted any more.

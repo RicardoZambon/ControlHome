@@ -101,6 +101,19 @@ internal static class HistorySql
             DELETE;
         """;
 
+    /// <summary>Upserts the given hours only (vendor energy windows): other hours of the endpoints are left as they are.</summary>
+    private const string UpsertEnergy = """
+        MERGE [ch].[EnergyHourly] WITH (HOLDLOCK) AS t
+        USING (
+            SELECT e AS EndpointId, h AS HourStartUtc, wh AS Wh, src AS Source, est AS Estimated
+            FROM OPENJSON(@rows) WITH (e uniqueidentifier '$.e', h datetime2(0) '$.h', wh float '$.wh', src varchar(16) '$.src', est bit '$.est')) AS s
+        ON t.EndpointId = s.EndpointId AND t.HourStartUtc = s.HourStartUtc
+        WHEN MATCHED THEN
+            UPDATE SET Wh = s.Wh, Source = s.Source, Estimated = s.Estimated
+        WHEN NOT MATCHED BY TARGET THEN
+            INSERT (EndpointId, HourStartUtc, Wh, Source, Estimated) VALUES (s.EndpointId, s.HourStartUtc, s.Wh, s.Source, s.Estimated);
+        """;
+
     private const string SetWatermark = """
         UPDATE [ch].[RollupProgress] SET WatermarkUtc = @watermark, UpdatedAtUtc = @now WHERE Name = @name;
         IF @@ROWCOUNT = 0
@@ -293,6 +306,24 @@ internal static class HistorySql
         command.Parameters.Add(new SqlParameter("@rows", SqlDbType.NVarChar, -1) { Value = EnergyJson(rows) });
         command.Parameters.Add(Time("@start", start));
         command.Parameters.Add(Time("@end", end));
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Inserts or replaces exactly the <c>EnergyHourly</c> rows in <paramref name="rows"/> (no other row changes).</summary>
+    public static async Task UpsertEnergyAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        IReadOnlyCollection<EnergyRow> rows,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        await using var command = Command(connection, transaction, UpsertEnergy, timeout);
+        command.Parameters.Add(new SqlParameter("@rows", SqlDbType.NVarChar, -1) { Value = EnergyJson(rows) });
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
