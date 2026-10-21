@@ -277,7 +277,7 @@ describe('useCommand', () => {
     expect(safety.prompt).toEqual(prompt)
     // Never predicted (at-most-once): the lock still shows locked, and the control waits — for the PIN, not for the
     // lock (nothing has happened yet).
-    expect(realtime.valueOf(14)).toEqual({ kind: 'string', b: null, n: null, s: 'locked', j: null })
+    expect(realtime.valueOf(14)).toEqual({ kind: 'string', s: 'locked' })
     expect(realtime.isPending('e-lock', 'lock')).toBe(true)
     expect(sender.pendingCommand('lock')).toMatchObject({ command: 'unlock', awaitingPin: true })
 
@@ -333,7 +333,7 @@ describe('predictState', () => {
     attributes: keys.map((key, index) => ({
       attributeId: index + 1,
       key,
-      value: { kind: 'null', b: null, n: null, s: null, j: null },
+      value: { kind: 'null' },
       observedAtUtc: null,
       lastChangedAtUtc: null,
       restored: false,

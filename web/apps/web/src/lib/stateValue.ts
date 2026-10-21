@@ -5,22 +5,22 @@ import type { StateValue } from '@controlhome/api-client'
  * leaves out the members it does not set, so every reader here accepts a partial value.
  */
 
-export const NULL_STATE: StateValue = Object.freeze({ kind: 'null', b: null, n: null, s: null, j: null })
+export const NULL_STATE: StateValue = Object.freeze({ kind: 'null' })
 
 export function boolState(value: boolean): StateValue {
-  return { kind: 'bool', b: value, n: null, s: null, j: null }
+  return { kind: 'bool', b: value }
 }
 
 export function numberState(value: number): StateValue {
-  return { kind: 'number', b: null, n: value, s: null, j: null }
+  return { kind: 'number', n: value }
 }
 
 export function stringState(value: string): StateValue {
-  return { kind: 'string', b: null, n: null, s: value, j: null }
+  return { kind: 'string', s: value }
 }
 
 export function jsonState(value: unknown): StateValue {
-  return { kind: 'json', b: null, n: null, s: null, j: value }
+  return { kind: 'json', j: value }
 }
 
 /** A plain JS value (a command argument, a form value) as a StateValue. */

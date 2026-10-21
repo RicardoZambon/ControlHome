@@ -121,15 +121,14 @@ interface OptimisticValue {
 
 const FINAL_STATUSES = new Set(['confirmed', 'failed', 'timed_out', 'superseded'])
 
-/** A StateValue with every member present (the server leaves out the ones it does not set). */
+/** A StateValue in its wire shape: `kind` plus only the member that is set (null members are dropped). */
 export function normalizeState(value: Partial<StateValue> | null | undefined): StateValue {
-  return {
-    kind: value?.kind ?? 'null',
-    b: value?.b ?? null,
-    n: value?.n ?? null,
-    s: value?.s ?? null,
-    j: value?.j ?? null,
-  }
+  const state: StateValue = { kind: value?.kind ?? 'null' }
+  if (value?.b != null) state.b = value.b
+  if (value?.n != null) state.n = value.n
+  if (value?.s != null) state.s = value.s
+  if (value?.j != null) state.j = value.j
+  return state
 }
 
 function isOlder(candidate: string | null | undefined, current: string | null | undefined): boolean {

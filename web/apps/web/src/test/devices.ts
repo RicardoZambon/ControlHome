@@ -147,9 +147,9 @@ export const CATALOGUE: CapabilityDto[] = [
   },
 ]
 
-export const bool = (value: boolean): StateValue => ({ kind: 'bool', b: value, n: null, s: null, j: null })
-export const num = (value: number): StateValue => ({ kind: 'number', b: null, n: value, s: null, j: null })
-export const str = (value: string): StateValue => ({ kind: 'string', b: null, n: null, s: value, j: null })
+export const bool = (value: boolean): StateValue => ({ kind: 'bool', b: value })
+export const num = (value: number): StateValue => ({ kind: 'number', n: value })
+export const str = (value: string): StateValue => ({ kind: 'string', s: value })
 
 export const OBSERVED = '2026-10-12T10:00:00Z'
 
