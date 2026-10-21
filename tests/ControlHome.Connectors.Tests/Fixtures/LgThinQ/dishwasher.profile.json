@@ -1,0 +1,26 @@
+{
+  "notification": {
+    "push": ["DISHWASHING_IS_COMPLETE", "ERROR_DURING_WASHING"]
+  },
+  "property": {
+    "runState": {
+      "currentState": { "mode": ["r"], "type": "enum", "value": { "r": ["POWER_OFF", "INITIAL", "RUNNING", "PAUSE", "RINSING", "DRYING", "END", "ERROR", "RESERVED"] } }
+    },
+    "operation": {
+      "dishWasherOperationMode": { "mode": ["w"], "type": "enum", "value": { "w": ["START", "STOP"] } }
+    },
+    "remoteControlEnable": {
+      "remoteControlEnabled": { "mode": ["r"], "type": "boolean", "value": { "r": [false, true] } }
+    },
+    "doorStatus": {
+      "doorState": { "mode": ["r"], "type": "enum", "value": { "r": ["OPEN", "CLOSE"] } }
+    },
+    "timer": {
+      "remainHour": { "mode": ["r"], "type": "range", "value": { "r": { "min": 0, "max": 24, "step": 1 } } },
+      "remainMinute": { "mode": ["r"], "type": "range", "value": { "r": { "min": 0, "max": 59, "step": 1 } } }
+    },
+    "dishWashingCourse": {
+      "currentDishWashingCourse": { "mode": ["r"], "type": "enum", "value": { "r": ["AUTO", "HEAVY", "DELICATE", "ECO"] } }
+    }
+  }
+}

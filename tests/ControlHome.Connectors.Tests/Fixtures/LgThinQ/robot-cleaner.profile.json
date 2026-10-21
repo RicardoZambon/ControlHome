@@ -1,0 +1,17 @@
+{
+  "property": {
+    "runState": {
+      "currentState": { "mode": ["r"], "type": "enum", "value": { "r": ["SLEEP", "STANDBY", "CLEANING", "PAUSE", "HOMING", "CHARGING", "ERROR"] } }
+    },
+    "robotCleanerJobMode": {
+      "currentJobMode": { "mode": ["r"], "type": "enum", "value": { "r": ["ZIGZAG", "EDGE", "SPOT"] } }
+    },
+    "operation": {
+      "cleanOperationMode": { "mode": ["w"], "type": "enum", "value": { "w": ["START", "PAUSE", "HOMING"] } }
+    },
+    "battery": {
+      "level": { "mode": ["r"], "type": "enum", "value": { "r": ["LOW", "MID", "HIGH"] } },
+      "percent": { "mode": ["r"], "type": "number" }
+    }
+  }
+}

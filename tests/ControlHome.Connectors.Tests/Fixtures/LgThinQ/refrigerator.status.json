@@ -1,0 +1,10 @@
+{
+  "doorStatus": [{ "locationName": "MAIN", "doorState": "CLOSE" }],
+  "temperatureInUnits": [
+    { "locationName": "FRIDGE", "targetTemperatureC": 3, "targetTemperatureF": 37, "unit": "C" },
+    { "locationName": "FREEZER", "targetTemperatureC": -18, "targetTemperatureF": 0, "unit": "C" }
+  ],
+  "powerSave": { "powerSaveEnabled": false },
+  "refrigeration": { "expressMode": false, "rapidFreeze": true },
+  "waterFilterInfo": { "usedTime": 3, "unit": "MONTH" }
+}

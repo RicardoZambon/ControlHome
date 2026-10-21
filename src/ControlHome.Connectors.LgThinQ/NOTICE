@@ -1,0 +1,34 @@
+ControlHome LG ThinQ connector
+Copyright (c) the ControlHome authors
+
+This connector is a C# port of parts of the official LG ThinQ Connect SDKs:
+
+  pythinqconnect (https://github.com/thinq-connect/pythinqconnect)
+    SPDX-FileCopyrightText: Copyright 2024 LG Electronics Inc.
+    SPDX-License-Identifier: Apache-2.0
+    Ported: the REST request headers and endpoints (thinq_api.py), the API error codes (ThinQAPIErrorCodes), the
+    country-to-region table (country.py), the MQTT client registration, CSR and certificate flow (mqtt_client.py),
+    the device profile model (devices/connect_device.py and the per-device profile maps), the energy usage queries,
+    and the public x-api-key constant of const.py (kept configurable).
+
+  jsthinqconnect (https://github.com/thinq-connect/jsthinqconnect)
+    SPDX-FileCopyrightText: Copyright 2025 LG Electronics Inc.
+    SPDX-License-Identifier: Apache-2.0
+    Used to cross-check the REST and MQTT behaviour (headers, client registration, route, certificate request).
+
+Both are licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0). The ported code
+was rewritten in C# and changed: the client certificate and key are persisted per integration instead of being issued
+on every start, the AWS root CA is bundled instead of downloaded, requests share a conservative token bucket, and
+profiles are mapped to ControlHome capabilities. No part of the SDKs is distributed in its original form.
+
+Test fixtures under tests/ControlHome.Connectors.Tests/Fixtures/LgThinQ are derived from the Home Assistant lg_thinq
+integration's test fixtures (https://github.com/home-assistant/core, Apache-2.0) or written synthetically after the
+SDK's profile maps; see SOURCE.md there.
+
+Bundled certificate: Mqtt/AmazonRootCA1.crt (PEM) is Amazon Trust Services' public root certificate "Amazon Root CA 1"
+(https://www.amazontrust.com/repository/), SHA-256 fingerprint
+8E:CD:E6:88:4F:3D:87:B1:12:5B:A3:1A:C3:FC:B1:3D:70:16:DE:7F:57:CC:90:4F:E1:CB:97:C6:AE:98:19:6E.
+
+"LG", "ThinQ" and "LG ThinQ" are trademarks of LG Electronics Inc. This project is not affiliated with or endorsed by
+LG Electronics. The ThinQ Connect personal access token API is intended for personal, non-commercial use; every
+household uses its own token.

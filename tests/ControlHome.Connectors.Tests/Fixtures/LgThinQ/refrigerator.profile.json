@@ -1,0 +1,38 @@
+{
+  "notification": {
+    "push": ["DOOR_IS_OPEN", "TIME_TO_CHANGE_WATER_FILTER"]
+  },
+  "property": {
+    "doorStatus": [
+      {
+        "locationName": "MAIN",
+        "doorState": { "mode": ["r"], "type": "enum", "value": { "r": ["OPEN", "CLOSE"] } }
+      }
+    ],
+    "temperatureInUnits": [
+      {
+        "locationName": "FRIDGE",
+        "targetTemperatureC": { "mode": ["r", "w"], "type": "range", "value": { "r": { "min": 1, "max": 7, "step": 1 }, "w": { "min": 1, "max": 7, "step": 1 } } },
+        "targetTemperatureF": { "mode": ["r", "w"], "type": "range", "value": { "r": { "min": 33, "max": 45, "step": 1 }, "w": { "min": 33, "max": 45, "step": 1 } } },
+        "unit": { "mode": ["r"], "type": "enum", "value": { "r": ["C", "F"] } }
+      },
+      {
+        "locationName": "FREEZER",
+        "targetTemperatureC": { "mode": ["r", "w"], "type": "range", "value": { "r": { "min": -24, "max": -14, "step": 1 }, "w": { "min": -24, "max": -14, "step": 1 } } },
+        "targetTemperatureF": { "mode": ["r", "w"], "type": "range", "value": { "r": { "min": -8, "max": 6, "step": 1 }, "w": { "min": -8, "max": 6, "step": 1 } } },
+        "unit": { "mode": ["r"], "type": "enum", "value": { "r": ["C", "F"] } }
+      }
+    ],
+    "powerSave": {
+      "powerSaveEnabled": { "mode": ["r", "w"], "type": "boolean", "value": { "r": [false, true], "w": [false, true] } }
+    },
+    "refrigeration": {
+      "expressMode": { "mode": ["r", "w"], "type": "boolean", "value": { "r": [false, true], "w": [false, true] } },
+      "rapidFreeze": { "mode": ["r", "w"], "type": "boolean", "value": { "r": [false, true], "w": [false, true] } }
+    },
+    "waterFilterInfo": {
+      "usedTime": { "mode": ["r"], "type": "number" },
+      "unit": { "mode": ["r"], "type": "enum", "value": { "r": ["MONTH"] } }
+    }
+  }
+}

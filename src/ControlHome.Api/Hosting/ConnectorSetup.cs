@@ -1,3 +1,4 @@
+using ControlHome.Connectors.LgThinQ;
 using ControlHome.Connectors.Mqtt;
 using ControlHome.Connectors.Simulated;
 using ControlHome.Infrastructure.Devices;
@@ -18,6 +19,9 @@ public static class ConnectorSetup
 
         // MQTT: Zigbee2MQTT, Home Assistant MQTT discovery and Tasmota over one broker connection per integration.
         services.AddConnector<MqttConnectorFactory>();
+
+        // LG ThinQ: appliances through the ThinQ Connect personal access token API (REST + outbound MQTT).
+        services.AddConnector<LgThinQConnectorFactory>();
 
         return services;
     }
