@@ -1,5 +1,6 @@
 using ControlHome.Api.Features.Audit;
 using ControlHome.Api.Features.Auth;
+using ControlHome.Api.Features.HomeBackup;
 using ControlHome.Api.Features.Capabilities;
 using ControlHome.Api.Features.Dashboard;
 using ControlHome.Api.Features.Demo;
@@ -22,6 +23,7 @@ using ControlHome.Api.Security;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Auth;
+using ControlHome.Application.HomeBackup;
 using ControlHome.Application.Dashboard;
 using ControlHome.Application.Demo;
 using ControlHome.Application.Devices;
@@ -35,6 +37,7 @@ using ControlHome.Application.Security;
 using ControlHome.Application.Setup;
 using ControlHome.Application.Users;
 using ControlHome.Infrastructure;
+using ControlHome.Infrastructure.HomeBackup;
 using ControlHome.Infrastructure.Devices;
 using ControlHome.Infrastructure.Security;
 using ControlHome.Infrastructure.Setup;
@@ -78,6 +81,7 @@ try
         builder.Services.AddControlHomeDataProtection();
         builder.Services.AddSetupCodeAnnouncer();
         builder.Services.AddDeviceRuntimeHost();
+        builder.Services.AddBackupSchedule();
     }
 
     if (builder.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
@@ -112,6 +116,7 @@ try
     builder.Services.AddHistory();
     builder.Services.AddDashboard();
     builder.Services.AddDemoHome();
+    builder.Services.AddBackup();
 
     var app = builder.Build();
 
@@ -153,6 +158,7 @@ try
     app.MapHistoryEndpoints();
     app.MapSettingsEndpoints();
     app.MapDashboardEndpoints();
+    app.MapBackupEndpoints();
     app.MapHomeHub();
     if (app.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
     {

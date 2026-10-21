@@ -130,6 +130,13 @@ public static class ErrorCodes
     // Demo home: loaded only into an empty home (no floors, integrations or devices)
     public const string DemoNotEmpty = "demo.not_empty";
 
+    // Backup export / import (imports only into an empty home)
+    public const string BackupNotEmpty = "backup.not_empty";
+    public const string BackupInvalid = "backup.invalid";
+    public const string BackupUnsupportedVersion = "backup.unsupported_version";
+    public const string BackupPassphraseRequired = "backup.passphrase_required";
+    public const string BackupPassphraseIncorrect = "backup.passphrase_incorrect";
+
     // History and energy
     public const string AttributesNotFound = "attributes.not_found";
     public const string HistoryInvalidRange = "history.invalid_range";

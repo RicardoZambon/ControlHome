@@ -26,6 +26,10 @@ public static class AuditActions
     /// <summary>The demo home was loaded (setup option, <c>--seed-demo</c>, test hook).</summary>
     public const string DemoLoaded = "demo.loaded";
 
+    /// <summary>An Admin downloaded a backup (whether it holds secrets; never the passphrase).</summary>
+    public const string BackupExported = "backup.exported";
+    public const string BackupImported = "backup.imported";
+
     /// <summary>An Admin changed how long history is kept.</summary>
     public const string RetentionSettingsUpdated = "settings.retention_updated";
 
