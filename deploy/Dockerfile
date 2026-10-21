@@ -46,6 +46,9 @@ RUN mkdir -p /rootfs/data
 # Restore from the project files only (layer reused until a project file or a package pin changes).
 COPY global.json nuget.config Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/ControlHome.Domain/ControlHome.Domain.csproj src/ControlHome.Domain/
+COPY src/ControlHome.Connectors.Abstractions/ControlHome.Connectors.Abstractions.csproj src/ControlHome.Connectors.Abstractions/
+COPY src/ControlHome.Connectors.Simulated/ControlHome.Connectors.Simulated.csproj src/ControlHome.Connectors.Simulated/
+COPY src/ControlHome.Connectors.Mqtt/ControlHome.Connectors.Mqtt.csproj src/ControlHome.Connectors.Mqtt/
 COPY src/ControlHome.Application/ControlHome.Application.csproj src/ControlHome.Application/
 COPY src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj src/ControlHome.Infrastructure/
 COPY src/ControlHome.Api/ControlHome.Api.csproj src/ControlHome.Api/

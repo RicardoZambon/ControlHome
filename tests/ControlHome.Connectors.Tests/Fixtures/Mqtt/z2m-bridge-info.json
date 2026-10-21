@@ -1,0 +1,15 @@
+{
+  "version": "2.14.2",
+  "commit": "0000000",
+  "coordinator": {
+    "ieee_address": "0x00124b0000c0ffee",
+    "type": "zStack3x0",
+    "meta": { "revision": 20240710 }
+  },
+  "network": { "channel": 15, "pan_id": 6754 },
+  "log_level": "info",
+  "permit_join": false,
+  "permit_join_end": null,
+  "restart_required": false,
+  "config": {}
+}

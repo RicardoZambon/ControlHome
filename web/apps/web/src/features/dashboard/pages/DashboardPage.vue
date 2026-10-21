@@ -9,7 +9,6 @@ import {
   Languages,
   Layers,
   MapPin,
-  PlugZap,
   RefreshCw,
   UserRound,
   UsersRound,
@@ -20,6 +19,7 @@ import { useNow } from '@vueuse/core'
 import { computed, onMounted, ref, shallowRef, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FloorPreview from '../../../components/floorplan/FloorPreview.vue'
+import DashboardDevices from '../components/DashboardDevices.vue'
 import { floorEyebrow, primaryFloor, totalAreaM2 } from '../../../components/floorplan/floors'
 import { formatArea } from '../../../components/floorplan/measure'
 import { dayPartOf, timeZoneDisplayName, timeZoneOffset } from '../../../lib/format'
@@ -169,13 +169,6 @@ const startCards = computed(() =>
 
 const comingNext = computed(() => [
   {
-    icon: PlugZap,
-    title: t('dashboard.next.devicesTitle'),
-    description: t('dashboard.next.devicesDescription'),
-    badge: t('dashboard.next.badge'),
-    tone: 'bg-room-1/15 text-foreground',
-  },
-  {
     icon: ChartLine,
     title: t('dashboard.next.energyTitle'),
     description: t('dashboard.next.energyDescription'),
@@ -274,6 +267,9 @@ const comingNext = computed(() => [
         </template>
       </div>
     </section>
+
+    <!-- Devices: what is on now and the favorites, controllable from here -->
+    <DashboardDevices />
 
     <div class="grid gap-10 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:gap-8">
       <div class="grid content-start gap-10">

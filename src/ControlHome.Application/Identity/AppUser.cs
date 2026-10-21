@@ -22,4 +22,10 @@ public sealed class AppUser : IdentityUser<Guid>
 
     /// <summary>Lockouts in a row without a successful login; drives the exponential lockout back-off.</summary>
     public int ConsecutiveLockouts { get; set; }
+
+    /// <summary>
+    /// The step-up PIN for safety-critical commands (unlock, open the gate, disarm), hashed with
+    /// <c>IPasswordHasher&lt;AppUser&gt;</c>; <c>null</c> until the user sets one. Never returned by the API.
+    /// </summary>
+    public string? SafetyPinHash { get; set; }
 }

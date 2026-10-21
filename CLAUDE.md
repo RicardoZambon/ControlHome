@@ -18,7 +18,8 @@ npm run gen:api                    # regenerate @controlhome/api-client from web
 
 ## Backend rules
 - Reference graph (enforced by `tests/ControlHome.Architecture.Tests`): `Domain` (no deps) ← `Application` ← `Infrastructure` ← `Api`.
-  Later: `Connectors.Abstractions` → Domain; `Connectors.<Vendor>` → Abstractions only; `Automation` → Domain only.
+  `Connectors.Abstractions` → Domain; `Connectors.<Vendor>` → Abstractions only (both enforced); later `Automation` → Domain only.
+  Connector runtimes use `IConnectorContext.Time` for every delay/timestamp; the Simulated connector is deterministic per seed.
 - No MediatR / AutoMapper / FluentAssertions / Moq. Plain services + DI. Map by hand.
 - DTOs are `record`s defined **once** in `ControlHome.Application/<Feature>/…Contracts.cs`. No duplicate DTOs in Api.
 - Application services use `IControlHomeDb` (DbSets + SaveChanges) directly — no per-aggregate repository/unit-of-work layers.

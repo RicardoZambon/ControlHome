@@ -6,7 +6,12 @@ const props = defineProps<SelectValueProps>()
 </script>
 
 <template>
-  <SelectValue data-slot="select-value" v-bind="props">
-    <slot />
+  <SelectValue v-slot="{ selectedLabel }" data-slot="select-value" v-bind="props">
+    <!-- A label wider than the trigger ends in "…" instead of being cut off mid-letter. -->
+    <slot>
+      <span class="min-w-0 truncate">{{
+        selectedLabel.length ? selectedLabel.join(', ') : props.placeholder
+      }}</span>
+    </slot>
   </SelectValue>
 </template>

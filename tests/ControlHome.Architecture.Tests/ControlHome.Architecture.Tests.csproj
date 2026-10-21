@@ -20,6 +20,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ControlHome.Domain\ControlHome.Domain.csproj" />
+    <ProjectReference Include="..\..\src\ControlHome.Connectors.Abstractions\ControlHome.Connectors.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\ControlHome.Connectors.Simulated\ControlHome.Connectors.Simulated.csproj" />
+    <ProjectReference Include="..\..\src\ControlHome.Connectors.Mqtt\ControlHome.Connectors.Mqtt.csproj" />
     <ProjectReference Include="..\..\src\ControlHome.Application\ControlHome.Application.csproj" />
     <ProjectReference Include="..\..\src\ControlHome.Infrastructure\ControlHome.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\ControlHome.Api\ControlHome.Api.csproj" />

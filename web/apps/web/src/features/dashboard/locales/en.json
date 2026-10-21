@@ -10,7 +10,13 @@
   "welcome": "{home} is set up and ready for what comes next.",
   "localTime": "Local time at home",
   "planTeaser": "Your floor plan will live here",
-  "planTeaserDetail": "Draw your floors and rooms; devices are coming soon.",
+  "planTeaserDetail": "Draw your floors and rooms to see your home at a glance.",
+  "devices": {
+    "heading": "Your devices",
+    "all": "All devices",
+    "active": "Nothing active right now | 1 device active | {count} devices active",
+    "noFavorites": "Mark devices as favorites with the star on their page to control them from here."
+  },
   "start": {
     "heading": "Make it yours",
     "floorsTitle": "Floors and rooms",
@@ -33,10 +39,7 @@
   },
   "next": {
     "heading": "Coming next",
-    "badge": "Next",
     "planned": "Planned",
-    "devicesTitle": "Devices and integrations",
-    "devicesDescription": "Connect your lights, plugs and sensors and control them live from any screen.",
     "energyTitle": "Energy and history",
     "energyDescription": "See what each device uses and what it costs at your electricity price."
   },

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Simulated connector (dev, demo, E2E). Like every connector it references Connectors.Abstractions only. -->
+  <PropertyGroup>
+    <RootNamespace>ControlHome.Connectors.Simulated</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ControlHome.Connectors.Abstractions\ControlHome.Connectors.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ControlHome.Connectors.Tests" />
+  </ItemGroup>
+
+</Project>

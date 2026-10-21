@@ -67,6 +67,8 @@ public sealed class TestingEndpointsInProductionTests(ProductionApiFactory facto
     [Theory]
     [InlineData("POST", "/api/_test/reset")]
     [InlineData("GET", "/api/_test/throw")]
+    [InlineData("POST", "/api/_test/clock")]
+    [InlineData("POST", "/api/_test/devices/1/state")]
     public async Task Testing_endpoints_return_404_in_production(string method, string path)
     {
         using var client = factory.CreateApiClient();

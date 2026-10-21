@@ -96,6 +96,28 @@
   --room-8: oklch(0.535 0.09 295);
   --room-8-foreground: oklch(0.985 0.005 295);
 
+  /*
+   * Light colors: what a color bulb shows, not interface colors (so they are the same in both themes). Twelve hues
+   * 30 degrees apart on the HSV wheel lights use (`--spectrum-<degrees>`), and three whites from warm to cool
+   * (`--kelvin-*`, about 2200 K, 4500 K and 7500 K). The color control blends neighbours for the values in between;
+   * `bg-spectrum` and `bg-kelvin` (index.css) are its slider tracks.
+   */
+  --spectrum-0: oklch(0.63 0.2 29);
+  --spectrum-30: oklch(0.72 0.16 55);
+  --spectrum-60: oklch(0.9 0.17 105);
+  --spectrum-90: oklch(0.86 0.19 130);
+  --spectrum-120: oklch(0.8 0.2 143);
+  --spectrum-150: oklch(0.82 0.17 158);
+  --spectrum-180: oklch(0.84 0.13 195);
+  --spectrum-210: oklch(0.67 0.15 248);
+  --spectrum-240: oklch(0.52 0.22 266);
+  --spectrum-270: oklch(0.55 0.22 295);
+  --spectrum-300: oklch(0.67 0.24 328);
+  --spectrum-330: oklch(0.64 0.2 5);
+  --kelvin-warm: oklch(0.79 0.13 62);
+  --kelvin-neutral: oklch(0.94 0.035 80);
+  --kelvin-cool: oklch(0.88 0.05 258);
+
   /* Effects (translucent): the modal scrim and the shadow colors behind Tailwind's shadow scales. */
   --overlay: oklch(0.22 0.025 250 / 0.6);
   --shadow-color-subtle: oklch(0.22 0.025 250 / 0.06);

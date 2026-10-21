@@ -24,6 +24,10 @@ public sealed class DatabaseReset(ControlHomeDbContext db)
             await db.Users.ExecuteDeleteAsync(ct);
             await db.Roles.ExecuteDeleteAsync(ct);
             await db.AuditLog.ExecuteDeleteAsync(ct);
+
+            // Devices (and everything below them) go with their integration; parent links and rooms do not cascade.
+            await db.Devices.Where(d => d.ParentDeviceId != null).ExecuteUpdateAsync(s => s.SetProperty(d => d.ParentDeviceId, (Guid?)null), ct);
+            await db.Integrations.ExecuteDeleteAsync(ct);
             await db.Rooms.ExecuteDeleteAsync(ct);
             await db.Floors.ExecuteDeleteAsync(ct);
             await db.StoredFiles.ExecuteDeleteAsync(ct);

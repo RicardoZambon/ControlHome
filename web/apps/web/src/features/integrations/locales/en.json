@@ -1,0 +1,39 @@
+{
+  "title": "Integrations",
+  "nav": "Integrations",
+  "eyebrow": "Settings",
+  "description": "Integrations bring your devices into ControlHome: a vendor's cloud, a hub, or a protocol on your network.",
+  "loadFailed": "The integrations couldn't be loaded.",
+  "listLabel": "Integrations",
+  "add": "Add integration",
+  "added": "Added {date}",
+  "deviceCount": "No devices | 1 device | {count} devices",
+  "actions": "Actions for {name}",
+  "comingSoon": "More integrations, with guided setup, arrive in the next update.",
+  "status": {
+    "Ok": "Connected",
+    "Connecting": "Connecting",
+    "Degraded": "Partly working",
+    "NeedsReauth": "Needs sign-in",
+    "PlanRequired": "Plan required",
+    "QuotaExceeded": "Quota reached",
+    "Error": "Error",
+    "Stopped": "Stopped"
+  },
+  "demo": {
+    "add": "Add simulated demo",
+    "option": "Simulated home (demo)",
+    "name": "Simulated home",
+    "added": "Simulated home added. Its devices appear in a moment."
+  },
+  "empty": {
+    "title": "Connect your first devices",
+    "description": "Guided setup for real integrations arrives in the next update. Meanwhile, the simulated home brings a dimmable light, a plug, an air conditioner, a door sensor and a smart lock to try every control."
+  },
+  "delete": {
+    "title": "Remove {name}?",
+    "description": "It has no devices. | Its device goes with it, including its history. | Its {count} devices go with it, including their history.",
+    "confirm": "Remove integration",
+    "done": "{name} removed."
+  }
+}

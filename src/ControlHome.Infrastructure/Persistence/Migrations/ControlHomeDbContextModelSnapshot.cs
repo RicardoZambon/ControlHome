@@ -89,6 +89,11 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<string>("SafetyPinHash")
+                        .HasMaxLength(512)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(512)");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -171,6 +176,271 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                     b.HasIndex("OccurredAtUtc");
 
                     b.ToTable("AuditLog", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.AttributeState", b =>
+                {
+                    b.Property<int>("AttributeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Json")
+                        .HasColumnType("json");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("tinyint");
+
+                    b.Property<DateTimeOffset>("LastChangedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<double?>("Num")
+                        .HasColumnType("float");
+
+                    b.Property<DateTimeOffset>("ObservedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Str")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("AttributeId");
+
+                    b.ToTable("AttributeState", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.Device", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Availability")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<string>("ConnectionsJson")
+                        .IsRequired()
+                        .HasColumnType("json");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DeviceClass")
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(32)");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Firmware")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<Guid>("IntegrationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsOrphaned")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("LastSeenAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Manufacturer")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<Guid?>("ParentDeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("RoomId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentDeviceId");
+
+                    b.HasIndex("RoomId");
+
+                    b.HasIndex("IntegrationId", "ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("Devices", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.DeviceAttribute", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("EndpointCapabilityId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EndpointCapabilityId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("DeviceAttributes", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.Endpoint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("Favorite")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("Hidden")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int?>("RoomId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomId");
+
+                    b.HasIndex("DeviceId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("Endpoints", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.EndpointCapability", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CapabilityId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("CapabilityVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ConstraintsJson")
+                        .HasColumnType("json");
+
+                    b.Property<Guid>("EndpointId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("GenericDefinitionJson")
+                        .HasColumnType("json");
+
+                    b.Property<bool>("Retired")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CapabilityId");
+
+                    b.HasIndex("EndpointId", "CapabilityId")
+                        .IsUnique();
+
+                    b.ToTable("EndpointCapabilities", "ch");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.Integration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("json");
+
+                    b.Property<string>("ConnectorKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("SecretsProtected")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(16)");
+
+                    b.Property<string>("StatusMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConnectorKey");
+
+                    b.ToTable("Integrations", "ch");
                 });
 
             modelBuilder.Entity("ControlHome.Domain.Files.StoredFile", b =>
@@ -543,6 +813,63 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                     b.ToTable("UserTokens", "auth");
                 });
 
+            modelBuilder.Entity("ControlHome.Domain.Devices.AttributeState", b =>
+                {
+                    b.HasOne("ControlHome.Domain.Devices.DeviceAttribute", null)
+                        .WithOne("State")
+                        .HasForeignKey("ControlHome.Domain.Devices.AttributeState", "AttributeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.Device", b =>
+                {
+                    b.HasOne("ControlHome.Domain.Devices.Integration", null)
+                        .WithMany("Devices")
+                        .HasForeignKey("IntegrationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ControlHome.Domain.Devices.Device", null)
+                        .WithMany()
+                        .HasForeignKey("ParentDeviceId");
+
+                    b.HasOne("ControlHome.Domain.Homes.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.DeviceAttribute", b =>
+                {
+                    b.HasOne("ControlHome.Domain.Devices.EndpointCapability", null)
+                        .WithMany("Attributes")
+                        .HasForeignKey("EndpointCapabilityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.Endpoint", b =>
+                {
+                    b.HasOne("ControlHome.Domain.Devices.Device", null)
+                        .WithMany("Endpoints")
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ControlHome.Domain.Homes.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.EndpointCapability", b =>
+                {
+                    b.HasOne("ControlHome.Domain.Devices.Endpoint", null)
+                        .WithMany("Capabilities")
+                        .HasForeignKey("EndpointId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ControlHome.Domain.Homes.Room", b =>
                 {
                     b.HasOne("ControlHome.Domain.Homes.Floor", null)
@@ -601,6 +928,31 @@ namespace ControlHome.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.Device", b =>
+                {
+                    b.Navigation("Endpoints");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.DeviceAttribute", b =>
+                {
+                    b.Navigation("State");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.Endpoint", b =>
+                {
+                    b.Navigation("Capabilities");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.EndpointCapability", b =>
+                {
+                    b.Navigation("Attributes");
+                });
+
+            modelBuilder.Entity("ControlHome.Domain.Devices.Integration", b =>
+                {
+                    b.Navigation("Devices");
                 });
 
             modelBuilder.Entity("ControlHome.Domain.Homes.Floor", b =>

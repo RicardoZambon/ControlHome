@@ -1,4 +1,5 @@
 using ControlHome.Domain.Auditing;
+using ControlHome.Domain.Devices;
 using ControlHome.Domain.Files;
 using ControlHome.Domain.Homes;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,19 @@ public interface IControlHomeDb
     DbSet<Room> Rooms { get; }
 
     DbSet<StoredFile> StoredFiles { get; }
+
+    DbSet<Integration> Integrations { get; }
+
+    DbSet<Device> Devices { get; }
+
+    DbSet<Endpoint> Endpoints { get; }
+
+    DbSet<EndpointCapability> EndpointCapabilities { get; }
+
+    /// <summary>Attributes; <see cref="DeviceAttribute.Id"/> is the <c>AttributeId</c>.</summary>
+    DbSet<DeviceAttribute> DeviceAttributes { get; }
+
+    DbSet<AttributeState> AttributeStates { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

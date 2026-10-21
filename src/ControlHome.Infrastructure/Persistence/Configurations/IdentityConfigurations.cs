@@ -17,6 +17,7 @@ internal sealed class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
         builder.Property(u => u.DisplayName).HasMaxLength(ValidationRules.DisplayNameMaxLength).IsRequired();
         builder.Property(u => u.Locale).HasMaxLength(16).IsRequired();
         builder.Property(u => u.Theme).HasMaxLength(16).IsRequired();
+        builder.Property(u => u.SafetyPinHash).HasMaxLength(512).IsUnicode(false);
     }
 }
 

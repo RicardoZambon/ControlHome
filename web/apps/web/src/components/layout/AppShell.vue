@@ -13,15 +13,19 @@ import {
 } from '@controlhome/ui'
 import { Menu, PanelLeft } from '@lucide/vue'
 import { useMediaQuery } from '@vueuse/core'
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { pageTrail, type TrailItem } from '../../composables/usePageTrail'
+import { useDevicesStore } from '../../stores/devices'
 import { useHomeStore } from '../../stores/home'
+import { useRealtimeStore } from '../../stores/realtime'
 import BrandMark from '../brand/BrandMark.vue'
+import SafetyPinDialog from '../safety/SafetyPinDialog.vue'
 import AppSidebar from './AppSidebar.vue'
 import AppTabBar from './AppTabBar.vue'
 import LanguageMenu from './LanguageMenu.vue'
+import RealtimeBanner from './RealtimeBanner.vue'
 import ThemeMenu from './ThemeMenu.vue'
 import UserMenu from './UserMenu.vue'
 
@@ -30,6 +34,9 @@ import UserMenu from './UserMenu.vue'
  * menu button, and the main pages are also a bottom tab bar (except on focused tasks, such as the floor-plan editor).
  * The top bar's breadcrumb is the home and the page: the route's title, or the trail the page set (`usePageTrail`);
  * phones show only its last step.
+ *
+ * While it is mounted (someone is signed in) the live connection runs, with its "reconnecting" banner and the safety
+ * PIN dialog; leaving it (sign-out, an ended session) closes the connection and forgets the devices and their state.
  */
 const { t } = useI18n()
 const route = useRoute()
@@ -40,7 +47,19 @@ const isPhone = useMediaQuery('(max-width: 768px)')
 const pageTitle = computed(() => (route.meta.titleKey ? t(route.meta.titleKey) : t('app.name')))
 const trail = computed<readonly TrailItem[]>(() => pageTrail.value ?? [{ label: pageTitle.value }])
 
-onMounted(() => void homeStore.load())
+const realtime = useRealtimeStore()
+const devices = useDevicesStore()
+
+onMounted(() => {
+  void homeStore.load()
+  void realtime.start()
+})
+
+onBeforeUnmount(() => {
+  void realtime.stop()
+  realtime.reset()
+  devices.reset()
+})
 </script>
 
 <template>
@@ -102,6 +121,7 @@ onMounted(() => void homeStore.load())
           <UserMenu />
         </div>
       </header>
+      <RealtimeBanner />
       <div
         id="main-content"
         tabindex="-1"
@@ -122,5 +142,6 @@ onMounted(() => void homeStore.load())
       </div>
     </SidebarInset>
     <AppTabBar v-if="!route.meta.focused" />
+    <SafetyPinDialog />
   </SidebarProvider>
 </template>
