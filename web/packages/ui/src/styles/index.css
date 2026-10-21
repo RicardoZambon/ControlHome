@@ -50,6 +50,11 @@
   background-image: linear-gradient(to right, var(--kelvin-warm), var(--kelvin-neutral), var(--kelvin-cool));
 }
 
+/* Thin diagonal lines in the border color: a stretch of time with nothing recorded (charts, timelines). */
+@utility bg-hatch {
+  background-image: repeating-linear-gradient(135deg, var(--color-border) 0 1px, transparent 1px 7px);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring;

@@ -57,7 +57,12 @@
     "noRooms": "Um administrador pode desenhar os cômodos deste andar.",
     "noRoomsAdmin": "Abra o editor para desenhar os cômodos deste andar.",
     "noRoomsShort": "Nenhum cômodo neste andar ainda.",
-    "drawRooms": "Desenhar cômodos"
+    "drawRooms": "Desenhar cômodos",
+    "deviceCount": "Nenhum dispositivo | 1 dispositivo | {n} dispositivos",
+    "activeOf": "Nenhum dispositivo | {active} de 1 ligado | {active} de {total} ligados",
+    "outside": "Fora dos cômodos",
+    "noDevicesAdmin": "Ainda não há dispositivos neste andar.",
+    "placeDevices": "Posicionar dispositivos"
   },
   "editor": {
     "title": "Editar planta",
@@ -128,7 +133,8 @@
     "tabs": {
       "rooms": "Cômodos",
       "floor": "Andar",
-      "background": "Imagem"
+      "background": "Imagem",
+      "devices": "Dispositivos"
     },
     "empty": {
       "title": "Desenhe o primeiro cômodo",
@@ -248,6 +254,31 @@
       "description": "Suas alterações nesta planta não foram salvas e serão perdidas.",
       "stay": "Continuar editando",
       "discard": "Descartar alterações"
+    },
+    "devices": {
+      "unplaced": "Fora da planta",
+      "onFloor": "Neste andar",
+      "hint": "Arraste um dispositivo pela alça até a planta, ou toque em Posicionar e depois no lugar.",
+      "planHint": "Arraste um dispositivo para movê-lo · toque para selecionar · arraste a planta para deslocar",
+      "tapToPlace": "Toque na planta onde fica “{name}”",
+      "place": "Posicionar",
+      "placeShort": "Posicionar dispositivo",
+      "placeNamed": "Posicionar {name} na planta",
+      "drag": "Arraste {name} até a planta",
+      "whole": "Dispositivo inteiro · nenhum controle | Dispositivo inteiro · 1 controle | Dispositivo inteiro · {count} controles",
+      "outside": "Fora dos cômodos",
+      "moveHint": "Arraste-o na planta para mudar de lugar; o cômodo acompanha a posição.",
+      "remove": "Tirar da planta",
+      "removeNamed": "Tirar {name} da planta",
+      "deselect": "Limpar a seleção",
+      "search": "Buscar dispositivos",
+      "none": "Ainda não há dispositivos.",
+      "addIntegration": "Adicionar uma integração",
+      "allPlaced": "Todos os dispositivos estão em uma planta.",
+      "noneHere": "Nada neste andar ainda.",
+      "elsewhere": "Nenhum dispositivo em outros andares | Mais 1 dispositivo está em outro andar | Mais {n} dispositivos estão em outros andares",
+      "summary": "Nenhum dispositivo | 1 dispositivo | {n} dispositivos",
+      "saveFailed": "Não foi possível salvar o lugar do dispositivo."
     }
   }
 }

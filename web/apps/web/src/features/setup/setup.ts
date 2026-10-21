@@ -56,6 +56,8 @@ export interface SetupDraft {
   database: DatabaseDraft
   admin: AdminDraft
   home: HomeDraft
+  /** Also load the demo home (two floors, eight rooms, about 20 simulated devices on the plans). */
+  loadDemoHome: boolean
 }
 
 export const DEFAULT_DATABASE_PORT = 1433
@@ -96,6 +98,7 @@ export function createDraft(locale: AppLocale, hostname = ''): SetupDraft {
       currency: DEFAULT_CURRENCY,
       pricePerKwh: '',
     },
+    loadDemoHome: false,
   }
 }
 
@@ -138,6 +141,7 @@ export function toRequest(draft: SetupDraft): CompleteSetupRequest {
       currency: draft.home.currency,
       pricePerKwh: number(draft.home.pricePerKwh),
     },
+    loadDemoHome: draft.loadDemoHome,
   }
 }
 

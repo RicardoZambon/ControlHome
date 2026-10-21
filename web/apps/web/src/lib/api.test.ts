@@ -2,6 +2,7 @@ import { client, getHome, getMe, listUsers, login } from '@controlhome/api-clien
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { jsonResponse } from '../test/app'
 import { isSessionProbe, setupApi } from './api'
+import { resetServerClock, serverOffsetMs } from './serverClock'
 
 function useFakeServer(status: number, body: unknown = { code: 'auth.required' }) {
   const fetch = vi.fn(async (request: Request) => {
@@ -50,6 +51,24 @@ describe('setupApi', () => {
     await login({ body: { userName: 'ana', password: 'nope', rememberMe: false } })
 
     expect(onSessionExpired).not.toHaveBeenCalled()
+  })
+
+  it('keeps the server clock from the time every response states', async () => {
+    setupApi(vi.fn())
+    const server = new Date(Date.now() + 2 * 3_600_000).toISOString()
+    client.setConfig({
+      baseUrl: 'http://localhost',
+      fetch: (async () =>
+        new Response('[]', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-ControlHome-Time': server },
+        })) as unknown as typeof globalThis.fetch,
+    })
+
+    await listUsers()
+
+    expect(Math.abs(serverOffsetMs() - 2 * 3_600_000)).toBeLessThan(1_000)
+    resetServerClock()
   })
 
   it('ignores other statuses', async () => {

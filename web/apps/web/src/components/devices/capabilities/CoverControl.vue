@@ -55,27 +55,36 @@ function setPosition(value: number): void {
 </script>
 
 <template>
-  <button
-    v-if="variant === 'tile'"
-    type="button"
-    :aria-label="`${control.commandLabel(quick.command)} · ${control.name.value}`"
-    :aria-busy="busy || undefined"
-    :disabled="!control.enabled.value || (busy && quick.command !== 'stop')"
-    :class="
-      cn(
-        'relative inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full border bg-card text-foreground shadow-xs transition-[background-color,transform] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 motion-safe:active:scale-95 [&_svg]:size-5',
-        isOpen && !moving && 'border-transparent bg-state-on text-state-on-foreground hover:bg-state-on/95',
-      )
-    "
-    @click="control.send(quick.command)"
-  >
-    <component :is="quick.icon" aria-hidden="true" :stroke-width="2.25" />
+  <!-- Tiles: the action and, under it, what it does ("Open"): a gate never opens from an unlabeled arrow -->
+  <span v-if="variant === 'tile'" class="flex flex-col items-center gap-1">
+    <button
+      type="button"
+      :aria-label="`${control.commandLabel(quick.command)} · ${control.name.value}`"
+      :aria-busy="busy || undefined"
+      :disabled="!control.enabled.value || (busy && quick.command !== 'stop')"
+      :class="
+        cn(
+          'relative inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-full border bg-card text-foreground shadow-xs transition-[background-color,transform] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 motion-safe:active:scale-95 [&_svg]:size-5',
+          isOpen && !moving && 'border-transparent bg-state-on text-state-on-foreground hover:bg-state-on/95',
+        )
+      "
+      @click="control.send(quick.command)"
+    >
+      <component :is="quick.icon" aria-hidden="true" :stroke-width="2.25" />
+      <span
+        v-if="busy"
+        aria-hidden="true"
+        class="pointer-events-none absolute -inset-1 rounded-full border-2 border-transparent border-t-primary motion-safe:animate-spin"
+      />
+    </button>
     <span
-      v-if="busy"
+      class="text-xs leading-none font-medium text-muted-foreground"
       aria-hidden="true"
-      class="pointer-events-none absolute -inset-1 rounded-full border-2 border-transparent border-t-primary motion-safe:animate-spin"
-    />
-  </button>
+      data-slot="quick-verb"
+    >
+      {{ control.commandLabel(quick.command) }}
+    </span>
+  </span>
 
   <div v-else class="grid items-center gap-8 sm:grid-cols-[auto_minmax(0,1fr)]" data-slot="cover-control">
     <!-- The window (or the gate) and its blind -->

@@ -138,5 +138,29 @@
     "matter": "ID Matter",
     "zigbee": "Endereço Zigbee",
     "uuid": "UUID"
+  },
+  "tabs": {
+    "controls": "Controles",
+    "history": "Histórico"
+  },
+  "replace": {
+    "menu": "Substituir por outro dispositivo…",
+    "action": "Substituir dispositivo",
+    "title": "Substituir {name}",
+    "description": "Escolha o dispositivo que assume o lugar: ele recebe o nome, o cômodo, o ícone, o lugar na planta, os favoritos e o histórico deste. Depois este dispositivo é removido.",
+    "search": "Buscar dispositivos",
+    "pick": "O dispositivo que assume",
+    "none": "Não há outro dispositivo para assumir o lugar deste.",
+    "reasons": {
+      "duplicate": "Mesmo aparelho",
+      "sameClass": "Mesmo tipo"
+    },
+    "summary": "Nome, cômodo, ícone, lugar na planta, favoritos e histórico passam para ele.",
+    "confirm": "Substituir",
+    "done": "{name} passou para o novo dispositivo.",
+    "orphanedTitle": "Não é mais informado",
+    "orphanedText": "{integration} não informa mais este dispositivo. Ele mantém nome, cômodo, lugar e histórico; se foi pareado de novo ou trocado, substitua-o pelo novo para manter tudo.",
+    "duplicateTitle": "O mesmo dispositivo, duas vezes?",
+    "duplicateText": "Outra integração alcança um aparelho com o mesmo endereço ou número de série. Substitua um pelo outro para ficar com um só dispositivo, com tudo o que ele tinha."
   }
 }

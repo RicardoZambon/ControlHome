@@ -20,6 +20,9 @@ public interface IControlHomeDb
 
     DbSet<StoredFile> StoredFiles { get; }
 
+    /// <summary>Endpoints and devices on the floor plans.</summary>
+    DbSet<Placement> Placements { get; }
+
     DbSet<Integration> Integrations { get; }
 
     DbSet<Device> Devices { get; }

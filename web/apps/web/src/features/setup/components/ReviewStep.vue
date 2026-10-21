@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Button } from '@controlhome/ui'
-import { Pencil } from '@lucide/vue'
-import { computed } from 'vue'
+import { Button, Switch, cn } from '@controlhome/ui'
+import { FlaskConical, Pencil } from '@lucide/vue'
+import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
 import { formatTimeZoneName, timeZoneOffset } from '../../../lib/format'
@@ -11,8 +11,14 @@ import type { SetupDraft, SetupStepId } from '../setup'
 import StepFooter from './StepFooter.vue'
 
 const props = defineProps<{ draft: SetupDraft; busy?: boolean; error?: string }>()
-const emit = defineEmits<{ edit: [step: SetupStepId]; back: []; finish: [] }>()
+const emit = defineEmits<{
+  edit: [step: SetupStepId]
+  back: []
+  finish: []
+  'update:loadDemoHome': [value: boolean]
+}>()
 const { t, locale } = useI18n()
+const demoId = useId()
 
 const numberFormat = computed(() => new Intl.NumberFormat(locale.value, { maximumFractionDigits: 4 }))
 
@@ -116,6 +122,37 @@ const sections = computed(() => {
         </template>
       </dl>
     </section>
+    <!-- Start with the demo home: floors, rooms and simulated devices already in place -->
+    <div
+      :class="
+        cn(
+          'flex items-start gap-4 rounded-lg border p-4 transition-colors sm:p-5',
+          draft.loadDemoHome ? 'border-primary/50 bg-accent/50' : 'bg-background/60',
+        )
+      "
+      data-slot="demo-home"
+    >
+      <span
+        class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"
+        aria-hidden="true"
+      >
+        <FlaskConical class="size-5" />
+      </span>
+      <div class="grid min-w-0 flex-1 gap-1">
+        <label :for="demoId" class="text-sm font-semibold">{{ t('setup.review.demoTitle') }}</label>
+        <p :id="`${demoId}-help`" class="text-sm text-muted-foreground">
+          {{ t('setup.review.demoDescription') }}
+        </p>
+      </div>
+      <Switch
+        :id="demoId"
+        :model-value="draft.loadDemoHome"
+        :disabled="busy"
+        :aria-describedby="`${demoId}-help`"
+        @update:model-value="(value: boolean) => emit('update:loadDemoHome', value)"
+      />
+    </div>
+
     <StepFooter
       can-go-back
       :busy="busy"

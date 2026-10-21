@@ -3,18 +3,25 @@ import { fileURLToPath } from 'node:url'
 import type { APIRequestContext, Locator, Page } from '@playwright/test'
 import {
   SETUP_CODE,
+  advanceClock,
   attributeIdOf,
   attributeValue,
+  chartsWiderThanTheirCard,
   completeSetup,
   createSimulatedHome,
   createUser,
   dismissToasts,
   expect,
   mutationHeaders,
+  placeEndpoint,
+  planPoint,
+  reportAvailability,
   resetApp,
   savePreferences,
   sendCommand,
+  setUpDemoHome,
   signIn,
+  tapPlan,
   test,
   testData,
   waitForLive,
@@ -30,18 +37,32 @@ const outputDir = fileURLToPath(new URL('./screenshots/', import.meta.url))
 const WIDTHS = [1440, 375] as const
 const THEMES = ['light', 'dark'] as const
 
+/** Every history chart is drawn at its box's width (charts redraw a moment after their box resizes). */
+async function chartsSettled(page: Page): Promise<boolean> {
+  return page.evaluate(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>('[data-slot="history-chart"], [data-slot="energy-bars"]'),
+    ].every((box) => {
+      const svg = box.querySelector('svg')
+      return !svg || Math.abs(Number(svg.getAttribute('width')) - box.clientWidth) <= 1
+    }),
+  )
+}
+
 /**
- * The whole page. On phones the viewport is first stretched to the page's height, so fixed parts (the bottom tab bar)
- * sit where they belong instead of where the first screen ended, as a stitched full-page capture would put them.
+ * The whole page: the viewport is first stretched to the page's height (the width stays), so fixed parts (the phone's
+ * bottom tab bar) sit where they belong instead of where the first screen ended. A full-page capture would also shrink
+ * the window for an instant, and the charts would be caught redrawing for it; here they settle first.
  */
 async function screenshotWholePage(page: Page, path: string): Promise<void> {
   const viewport = page.viewportSize()
-  if (!viewport || viewport.width >= 768) {
+  if (!viewport) {
     await page.screenshot({ path, fullPage: true })
     return
   }
   const height = await page.evaluate(() => document.documentElement.scrollHeight)
   await page.setViewportSize({ width: viewport.width, height: Math.max(height, viewport.height) })
+  await expect.poll(() => chartsSettled(page), { message: 'charts drawn at their width' }).toBe(true)
   await page.screenshot({ path })
   await page.setViewportSize(viewport)
 }
@@ -97,8 +118,8 @@ const signedInRoutes: Route[] = [
   {
     path: '/',
     name: 'dashboard',
-    // Captured once the simulated home is in: the devices ("active now", the favorite light) have loaded too.
-    ready: (page) => page.locator('[data-slot="active-now"]'),
+    // Captured once the simulated home is in: the summary, and the devices (the favorite light) have loaded too.
+    ready: (page) => page.locator('[data-slot="dashboard-favorites"] [data-slot="device-tile"]'),
   },
   {
     path: '/users',
@@ -230,28 +251,75 @@ const emptyDeviceRoutes: Route[] = [
 type SimulatedHome = Awaited<ReturnType<typeof createSimulatedHome>>
 
 /**
- * The Simulated connector's basic home, its devices spread over the seeded floor's rooms (the lock and the door sensor
- * stay without a room, so the "No room" group shows too) and the light marked as a favorite.
+ * The Simulated connector's basic home, its devices spread over the seeded floor's rooms and placed on its plan (the
+ * lock and the door sensor stay without a room and off the plan, so the "No room" group and the editor's "Not on a
+ * plan" list show too) and the light marked as a favorite.
  */
-async function seedDevices(request: APIRequestContext): Promise<SimulatedHome> {
+async function seedDevices(request: APIRequestContext, floorId: number): Promise<SimulatedHome> {
   const home = await createSimulatedHome(request)
-  const rooms = (await (await request.get('/api/rooms')).json()) as { id: number }[]
-  const place = async (device: SimulatedHome[keyof SimulatedHome], roomId: number | undefined) => {
-    const response = await request.put(`/api/devices/${device.id}`, {
-      headers: mutationHeaders(),
-      data: { name: device.name, icon: null, roomId: roomId ?? null },
-    })
-    expect(response.status(), await response.text()).toBe(200)
-  }
-  await place(home.light, rooms[0]?.id)
-  await place(home.plug, rooms[1]?.id)
-  await place(home.ac, rooms[2]?.id)
+  // Living room (100–1000 × 100–750), kitchen (1000–1900 × 100–900), bedroom (100–1000 × 750–1400).
+  await placeEndpoint(request, home.light, floorId, 300, 260)
+  await placeEndpoint(request, home.plug, floorId, 1720, 280)
+  await placeEndpoint(request, home.ac, floorId, 300, 1230)
   const favorite = await request.put(`/api/endpoints/${home.light.endpoints[0]!.id}/favorite`, {
     headers: mutationHeaders(),
     data: { favorite: true },
   })
   expect(favorite.status(), await favorite.text()).toBe(200)
   return home
+}
+
+/**
+ * The pages of milestones 1.3 and 1.4: the integrations catalogue, the Simulated setup flow's first step, the
+ * integration's own page, the editor's Devices tab, a device's history, and the settings pages.
+ */
+function homeRoutes(home: SimulatedHome, floor: { id: number }, integrationId: string): Route[] {
+  return [
+    {
+      path: '/integrations/add',
+      name: 'integrations-catalog',
+      ready: (page) => page.locator('[data-connector="simulated"]'),
+    },
+    {
+      path: '/integrations/add/simulated',
+      name: 'integration-setup',
+      ready: (page) => page.locator('[data-slot="flow-wizard"][data-step="form"]'),
+    },
+    {
+      path: `/integrations/${integrationId}`,
+      name: 'integration-detail',
+      ready: (page) => page.locator('[data-slot="integration-devices"]').getByText(home.lock.name),
+    },
+    {
+      path: `/floors/${floor.id}/edit?tab=devices`,
+      name: 'floor-edit-devices',
+      // Below lg the panel is a sheet: the bar under the plan offers to place a device.
+      ready: (page, locale) =>
+        (page.viewportSize()?.width ?? 1440) < 1024
+          ? page.getByRole('button', { name: tr(locale, 'floors.editor.devices.placeShort') })
+          : page.locator('[data-slot="unplaced-device"]').filter({ hasText: home.lock.name }),
+    },
+    {
+      path: `/devices/${home.plug.id}?tab=history`,
+      name: 'device-plug-history',
+      ready: (page) => page.locator('[data-slot="energy-history"] [data-slot="energy-bars"]'),
+    },
+    {
+      path: '/settings/home',
+      name: 'settings-home',
+      ready: (page) => page.locator('[data-slot="home-save"]'),
+    },
+    {
+      path: '/settings/backup',
+      name: 'settings-backup',
+      ready: (page) => page.locator('[data-slot="backup-scheduled"][data-loaded="true"]'),
+    },
+    {
+      path: '/settings/history',
+      name: 'settings-history',
+      ready: (page) => page.locator('[data-slot="retention-form"] input').first(),
+    },
+  ]
 }
 
 /** The devices grid, a device page per kind of control, and the integrations list. */
@@ -352,30 +420,6 @@ async function simulateDeviceStates(page: Page, home: SimulatedHome): Promise<vo
     }))
     await route.fulfill({ response, json: [...((await response.json()) as unknown[]), ...extra] })
   })
-}
-
-/** Where floor point (x, y) cm is on the screen: from the plan SVG's viewBox (cm) and its box (px). */
-async function planPoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
-  const svg = page.locator('[data-slot="floor-plan"] svg').first()
-  const box = (await svg.boundingBox())!
-  const [vx, vy, vw, vh] = (await svg.getAttribute('viewBox'))!.split(' ').map(Number) as [
-    number,
-    number,
-    number,
-    number,
-  ]
-  const scale = Math.min(box.width / vw, box.height / vh)
-  // preserveAspectRatio xMidYMid meet: the view box is centred in the element.
-  const left = box.x + (box.width - vw * scale) / 2
-  const top = box.y + (box.height - vh * scale) / 2
-  return { x: left + (x - vx) * scale, y: top + (y - vy) * scale }
-}
-
-/** A tap on a touch screen (phones, `hasTouch`), a click elsewhere. */
-async function tapPlan(page: Page, x: number, y: number, touch: boolean): Promise<void> {
-  const point = await planPoint(page, x, y)
-  if (touch) await page.touchscreen.tap(point.x, point.y)
-  else await page.mouse.click(point.x, point.y)
 }
 
 // Interaction states (English, both widths and themes) into ./screenshots/state-<name>-<width>-<theme>.png: field errors,
@@ -534,9 +578,12 @@ for (const width of WIDTHS) {
         await expect(page).toHaveURL(/\/$/)
         await page.unroute('**/api/auth/login')
 
-        // Dashboard: hover on a card row, keyboard focus in the navigation (the menu sheet on phones).
+        // Dashboard: hover on a first step's action, keyboard focus in the navigation (the menu sheet on phones).
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-        await page.getByRole('link', { name: new RegExp(`^${t('dashboard.start.profileTitle')}`) }).hover()
+        await page
+          .locator('[data-slot="dashboard-start"] [data-step="floors"]')
+          .getByRole('link', { name: t('dashboard.start.floorsAction') })
+          .hover()
         await capture('hover-card')
         if (phone) {
           await page.getByRole('button', { name: t('shell.openNavigation') }).click()
@@ -817,6 +864,180 @@ for (const width of WIDTHS) {
   }
 }
 
+/** Demo devices this file needs, by their names in each language (the Simulated connector's SimulatedNames). */
+const DEMO_DEVICES = {
+  plug: { en: 'Coffee maker plug', 'pt-BR': 'Tomada da cafeteira' },
+  washer: { en: 'Washing machine', 'pt-BR': 'Máquina de lavar' },
+} as const
+
+// The demo home (the setup's "Load demo home") in every width, theme and language into
+// ./screenshots/demo-<name>-<width>-<theme>-<locale>.png: the dashboard, both floors with their devices on them, the
+// editor's Devices tab, the integration with its twenty devices, the dashboard with an offline device, a device's history
+// after a simulated hour, and a second integration being added (waiting for the hub's button, then the import review).
+for (const width of WIDTHS) {
+  for (const theme of THEMES) {
+    for (const locale of LOCALES) {
+      test.describe(`demo home, ${width} px, ${theme}, ${locale}`, () => {
+        test.use({
+          viewport: { width, height: width < 768 ? 812 : 900 },
+          colorScheme: theme,
+          locale: locale === 'en' ? 'en-US' : 'pt-BR',
+        })
+
+        test('demo home', async ({ page, request, gates }) => {
+          const l = (key: string, params?: Record<string, string | number>) => tr(locale, key, params)
+          await page.addInitScript(
+            ([savedTheme, savedLocale]) => {
+              localStorage.setItem('ch.theme', savedTheme)
+              localStorage.setItem('ch.locale', savedLocale)
+            },
+            [theme, locale] as const,
+          )
+
+          async function shot(name: string): Promise<void> {
+            await expect(page.locator('html')).toHaveAttribute('lang', locale)
+            await page.evaluate(() => document.fonts.ready)
+            await gates.check(`demo ${name} (${width} px, ${theme}, ${locale})`)
+            await screenshotWholePage(page, `${outputDir}demo-${name}-${width}-${theme}-${locale}.png`)
+          }
+
+          async function capture(route: Route): Promise<void> {
+            await page.goto(route.path)
+            await expect(route.ready(page, locale)).toBeVisible()
+            await shot(route.name)
+          }
+
+          await resetApp(request)
+          const devices = await setUpDemoHome(page.request, locale)
+          await savePreferences(page.request, { displayName: testData.admin.displayName, locale, theme })
+          const demoDevice = (names: { en: string; 'pt-BR': string }) => {
+            const device = devices.find((entry) => entry.name === names[locale])
+            expect(device, `the demo home has ${names[locale]}`).toBeDefined()
+            return device!
+          }
+          const plug = demoDevice(DEMO_DEVICES.plug)
+          const washer = demoDevice(DEMO_DEVICES.washer)
+          const floors = (await (await page.request.get('/api/floors')).json()) as {
+            id: number
+            level: number
+          }[]
+          expect(floors).toHaveLength(2)
+          const [ground, upper] = [...floors].sort((a, b) => a.level - b.level)
+          const [integration] = (await (await page.request.get('/api/integrations')).json()) as {
+            id: string
+          }[]
+
+          // The dashboard: the ground floor's plan with its devices, the favorites, every room, the integration working.
+          await page.goto('/')
+          await expect(page.locator('[data-stat="integrations"]')).toContainText(
+            l('dashboard.glance.allConnected'),
+          )
+          await expect(
+            page.locator('[data-slot="dashboard-favorites"] [data-slot="device-tile"]'),
+          ).toHaveCount(6)
+          await expect(page.locator('[data-slot="room-card"]')).toHaveCount(8)
+          await expect(page.locator('[data-slot="dashboard-plan"] [data-slot="placed-device"]')).toHaveCount(
+            18,
+          )
+          await shot('dashboard')
+
+          const marker = (page: Page) =>
+            page.locator('[data-slot="floor-plan"] [data-slot="placed-device"]').first()
+          for (const route of [
+            { path: `/floors/${ground!.id}`, name: 'floor-ground', ready: marker },
+            { path: `/floors/${upper!.id}`, name: 'floor-upper', ready: marker },
+            {
+              path: `/floors/${ground!.id}/edit?tab=devices`,
+              name: 'floor-edit-devices',
+              ready: (page: Page) =>
+                width < 1024
+                  ? page.getByRole('button', { name: l('floors.editor.devices.placeShort') })
+                  : page.locator('[data-slot="placed-list"]'),
+            },
+            {
+              path: `/integrations/${integration!.id}`,
+              name: 'integration',
+              ready: (page: Page) => page.locator('[data-slot="integration-devices"] li').nth(19),
+            },
+          ])
+            await capture(route)
+
+          // The washer stops answering: the dashboard lists it, and its marker turns offline.
+          await reportAvailability(page.request, washer, 'Offline')
+          await page.goto('/')
+          await expect(page.locator('[data-slot="dashboard-offline"] li')).toHaveCount(1)
+          await expect(page.locator('[data-slot="dashboard-plan"] [data-slot="placed-device"]')).toHaveCount(
+            18,
+          )
+          await shot('dashboard-offline')
+
+          // The coffee maker on for a simulated hour (the runtime clock moved forward five minutes at a time): its power
+          // charted and the energy it used as bars.
+          await sendCommand(page.request, plug, 'switch', 'turnOn')
+          const powerId = attributeIdOf(plug, 'power', 'power')
+          let advanced = 0
+          await expect
+            .poll(
+              async () => {
+                await advanceClock(page.request, 300)
+                advanced += 300
+                const history = (await (
+                  await page.request.get(`/api/attributes/${powerId}/history`)
+                ).json()) as {
+                  points: { v: number | null }[]
+                }
+                const energy = (await (
+                  await page.request.get(`/api/energy/hourly?endpointId=${plug.endpoints[0]!.id}`)
+                ).json()) as unknown[]
+                return (
+                  advanced >= 3_600 &&
+                  history.points.filter((p) => p.v !== null).length >= 6 &&
+                  energy.length >= 1
+                )
+              },
+              { message: 'an hour of power and energy history', timeout: 120_000, intervals: [500] },
+            )
+            .toBe(true)
+          await page.goto(`/devices/${plug.id}?tab=history`)
+          const chart = page.locator(
+            `[data-slot="attribute-history"][data-attribute-id="${powerId}"] [data-slot="history-chart"]`,
+          )
+          await expect(chart.locator('svg path').first()).toBeAttached()
+          await expect
+            .poll(async () =>
+              Number(await page.locator('[data-slot="energy-bars"]').getAttribute('data-buckets')),
+            )
+            .toBeGreaterThanOrEqual(1)
+          await expect.poll(() => chartsWiderThanTheirCard(page)).toEqual([])
+          await shot('device-history')
+
+          // A second integration: its setup flow waiting for the hub's button (its polls held back), then the review.
+          let release!: () => void
+          const held = new Promise<void>((resolve) => (release = resolve))
+          let answers = 0
+          const flowUrl = /\/api\/integrations\/flows\/[^/]+$/
+          await page.route(flowUrl, async (route) => {
+            if (route.request().method() === 'POST' && answers++ > 0) await held
+            await route.continue()
+          })
+          await page.goto('/integrations/add/simulated')
+          const wizard = (step: string) => page.locator(`[data-slot="flow-wizard"][data-step="${step}"]`)
+          await expect(wizard('form')).toBeVisible()
+          await wizard('form')
+            .getByRole('button', { name: l('common.continue') })
+            .click()
+          await expect(wizard('progress')).toBeVisible()
+          await shot('integration-progress')
+          release()
+          await page.unroute(flowUrl)
+          await expect(page.locator('[data-slot="review-list"] > li')).toHaveCount(5, { timeout: 30_000 })
+          await shot('integration-review')
+        })
+      })
+    }
+  }
+}
+
 for (const width of WIDTHS) {
   for (const theme of THEMES) {
     for (const locale of LOCALES) {
@@ -879,9 +1100,38 @@ for (const width of WIDTHS) {
           const floor = await seedFloor(page.request, locale)
           // No integration yet: the empty devices and integrations pages. Then the simulated home in those rooms.
           for (const route of emptyDeviceRoutes) await capture(route)
-          const home = await seedDevices(page.request)
-          for (const route of [...signedInRoutes, ...floorRoutes(floor), ...deviceRoutes(home)])
+          const home = await seedDevices(page.request, floor.id)
+          const integrations = (await (await page.request.get('/api/integrations')).json()) as {
+            id: string
+          }[]
+          for (const route of [
+            ...signedInRoutes,
+            ...floorRoutes(floor),
+            ...deviceRoutes(home),
+            ...homeRoutes(home, floor, integrations[0]!.id),
+          ])
             await capture(route)
+
+          // A device on the plan, tapped: its controls beside it (a sheet on phones).
+          await page.goto(`/floors/${floor.id}`)
+          await waitForLive(page)
+          await expect(page.locator('[data-slot="placed-device"]')).toHaveCount(3)
+          await tapPlan(page, 300, 260, false)
+          await expect(page.locator('[data-slot="device-quick-panel"]')).toBeVisible()
+          await captureScreen('floor-view-device')
+          await page.keyboard.press('Escape')
+          await expect(page.locator('[data-slot="device-quick-panel"]')).toBeHidden()
+
+          // Phones and tablets: the editor's Devices tab is a sheet over the plan.
+          if (width < 1024) {
+            await page.goto(`/floors/${floor.id}/edit?tab=devices`)
+            await page.getByRole('button', { name: tr(locale, 'floors.editor.devices.placeShort') }).click()
+            await expect(
+              page.locator('[data-slot="unplaced-device"]').filter({ hasText: home.lock.name }),
+            ).toBeVisible()
+            await captureScreen('floor-edit-devices-sheet')
+            await page.keyboard.press('Escape')
+          }
 
           // The device info opened: every attribute as a table, or as a stacked list on phones.
           await page.goto(`/devices/${home.contact.id}`)

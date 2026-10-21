@@ -155,6 +155,30 @@ public sealed class DeviceRegistry
     public IReadOnlyList<DeviceEntry> DevicesOf(Guid integrationId) =>
         _devicesById.Values.Where(d => d.IntegrationId == integrationId).ToList();
 
+    /// <summary>Forgets one device (deleted, e.g. replaced by another); returns its attribute ids.</summary>
+    public IReadOnlyList<int> RemoveDevice(Guid deviceId)
+    {
+        var removed = new List<int>();
+        foreach (var attribute in _byId.Values.Where(a => a.DeviceId == deviceId).ToList())
+        {
+            _byId.TryRemove(attribute.AttributeId, out _);
+            _byAddress.TryRemove(attribute.Address, out _);
+            removed.Add(attribute.AttributeId);
+        }
+
+        if (_devicesById.TryRemove(deviceId, out var device))
+        {
+            _devices.TryRemove((device.IntegrationId, device.ExternalId), out _);
+        }
+
+        foreach (var capability in _capabilities.Where(c => c.Value.DeviceId == deviceId).Select(c => c.Key).ToList())
+        {
+            _capabilities.TryRemove(capability, out _);
+        }
+
+        return removed;
+    }
+
     /// <summary>Forgets an integration's devices; returns their attribute ids.</summary>
     public IReadOnlyList<int> RemoveIntegration(Guid integrationId)
     {

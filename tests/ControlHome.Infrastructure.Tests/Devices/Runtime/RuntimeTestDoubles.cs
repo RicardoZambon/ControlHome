@@ -119,6 +119,9 @@ internal sealed class FakeInventory : IDeviceInventory
         return Task.CompletedTask;
     }
 
+    public Task<IReadOnlyList<string>> SyncAsync(Guid integrationId, IReadOnlyList<DiscoveredDevice> devices, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>>([]);
+
     public Task<AttributeInfo?> EnsureAttributeAsync(AttributeAddress address, CancellationToken cancellationToken)
     {
         _lookups.Enqueue(address);

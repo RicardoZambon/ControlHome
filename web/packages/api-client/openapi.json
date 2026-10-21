@@ -1351,7 +1351,7 @@
           "Floors"
         ],
         "summary": "Changes name, level, size, grid and background.",
-        "description": "409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed, also when the new size would cut a room (errors.widthCm / errors.heightCm = geometry.out_of_bounds) or the background file does not exist (errors['background.fileId'] = files.not_found).",
+        "description": "409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed, also when the new size would cut a room or a placed device (errors.widthCm / errors.heightCm = geometry.out_of_bounds) or the background file does not exist (errors['background.fileId'] = files.not_found).",
         "operationId": "updateFloor",
         "parameters": [
           {
@@ -1442,6 +1442,7 @@
           "Floors"
         ],
         "summary": "Deletes the floor and its rooms.",
+        "description": "404 floors.not_found; 409 floors.not_empty while devices are placed on it (take them off the plan first).",
         "operationId": "deleteFloor",
         "parameters": [
           {
@@ -1487,6 +1488,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           }
         }
       }
@@ -1497,7 +1508,7 @@
           "Floors"
         ],
         "summary": "Replaces the floor's rooms atomically (rooms not listed are deleted).",
-        "description": "409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed with field errors; geometry problems are codes under rooms[i].polygon: geometry.too_few_points, geometry.too_many_points, geometry.out_of_bounds, geometry.zero_area, geometry.self_intersecting; rooms[i].id = rooms.not_found for a room that is not on this floor.",
+        "description": "Placed devices whose point ends up in another room (or in none) move to that room. 409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed with field errors; geometry problems are codes under rooms[i].polygon: geometry.too_few_points, geometry.too_many_points, geometry.out_of_bounds, geometry.zero_area, geometry.self_intersecting; rooms[i].id = rooms.not_found for a room that is not on this floor.",
         "operationId": "saveFloorLayout",
         "parameters": [
           {
@@ -1621,6 +1632,177 @@
                   "items": {
                     "$ref": "#/components/schemas/RoomListItemDto"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/placements": {
+      "get": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "Every endpoint and device on the floor plans (optionally of one floor), with the room each is in.",
+        "operationId": "listPlacements",
+        "parameters": [
+          {
+            "name": "floorId",
+            "in": "query",
+            "description": "Only the placements of this floor.",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlacementDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "Places an endpoint or a whole device on a floor (or moves it); its room becomes the room at that point.",
+        "description": "Exactly one of endpointId and deviceId. The target's room is set to the room whose outline contains the point, or cleared when it is outside every room (an endpoint then shows in its device's room). 400 validation.failed with errors.floorId = floors.not_found, errors.endpointId = endpoints.not_found, errors.deviceId = devices.not_found, or errors.xCm / errors.yCm = geometry.out_of_bounds.",
+        "operationId": "placeOnFloor",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/placements/{id}": {
+      "delete": {
+        "tags": [
+          "Floors"
+        ],
+        "summary": "Takes an endpoint or device off the plan (its room is kept).",
+        "description": "404 placements.not_found.",
+        "operationId": "deletePlacement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -2052,6 +2234,109 @@
         }
       }
     },
+    "/api/devices/{id}/replace": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Replaces this device by another: the new one takes over its settings, placements and history.",
+        "description": "Moves name, room, icon, endpoint names/rooms/icons/hidden/favorites (endpoints matched by key, or the only one of each), placements and history (state log, events, statistics, energy) to newDeviceId, then deletes this device. Typically for an orphaned device after re-pairing, or a likely duplicate (possibleDuplicateIds). Returns the new device. 404 devices.not_found; 400 validation.failed with errors.newDeviceId = devices.not_found or devices.replace_same; 409 runtime.standby (this instance is a read-only standby); 503 runtime.starting (still deciding whether it runs the devices).",
+        "operationId": "replaceDevice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceDeviceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/endpoints/{id}": {
       "put": {
         "tags": [
@@ -2206,6 +2491,89 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/endpoints/{id}/camera/snapshot": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "The camera's latest still image (an endpoint with the camera capability).",
+        "description": "Not cached (Cache-Control: no-store). 404 endpoints.not_found, or cameras.no_snapshot (not a camera, or no picture right now); 503 commands.unavailable (its integration is not running).",
+        "operationId": "getCameraSnapshot",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -2543,6 +2911,107 @@
       }
     },
     "/api/integrations/{id}": {
+      "put": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Renames an integration and enables or disables it.",
+        "description": "Disabling stops its runtime (status Stopped; devices are kept, availability Unknown); enabling starts it. 404 integrations.not_found; 409 runtime.standby; 503 runtime.starting.",
+        "operationId": "updateIntegration",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "Integrations"
@@ -2584,6 +3053,328 @@
           },
           "204": {
             "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/flows": {
+      "post": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Starts a connector's setup flow and returns its first step.",
+        "description": "Answer each step with POST /api/integrations/flows/{flowId} until a done (the integration was created: integrationId) or abort step. Connectors without a flow of their own get one form with their config fields. Flows are kept in memory for 15 minutes after their last step and belong to the admin who started them. 400 validation.failed (errors.connectorKey = connectors.not_found); 409 runtime.standby; 503 runtime.starting.",
+        "operationId": "startIntegrationFlow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartFlowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowStepDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/flows/{flowId}": {
+      "post": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Answers the flow's current step and returns the next one.",
+        "description": "input: a form's values (secret fields are write-only), {\"choice\": key}, a pasted value, or {} to poll a progress step. A done step created (setup) or updated (reauth) the integration with its secrets encrypted and started its runtime. 404 flows.not_found (finished, cancelled, expired, or another admin's); 409 runtime.standby; 503 runtime.starting.",
+        "operationId": "continueIntegrationFlow",
+        "parameters": [
+          {
+            "name": "flowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinueFlowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowStepDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Abandons a flow (nothing is created or changed).",
+        "description": "An answer still being processed finishes first. 404 flows.not_found (also when that answer finished the flow: then its done step is what happened).",
+        "operationId": "cancelIntegrationFlow",
+        "parameters": [
+          {
+            "name": "flowId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/integrations/{id}/flows/reauth": {
+      "post": {
+        "tags": [
+          "Integrations"
+        ],
+        "summary": "Starts the connector's flow for an existing integration: re-authorize it or change its settings.",
+        "description": "Its devices, names, rooms and history are kept; the done step updates the configuration and replaces the secrets, then restarts the integration. 404 integrations.not_found or connectors.not_found (the connector is not in this version); 409 runtime.standby; 503 runtime.starting.",
+        "operationId": "startIntegrationReauthFlow",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowStepDto"
+                }
+              }
+            }
           },
           "404": {
             "description": "Not Found",
@@ -2952,6 +3743,417 @@
           }
         }
       }
+    },
+    "/api/dashboard": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "The home at a glance: favorites, rooms (active devices, temperature, power), power now, offline devices, integrations.",
+        "description": "Values are current when served. Keep them live by applying hub StateChanged deltas to the listed attribute ids (rooms[].temperatureAttributeIds / powerAttributeIds / activityAttributes, power.attributeIds) and refetch on DevicesChanged and IntegrationStatusChanged.",
+        "operationId": "getDashboard",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backup/export": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Downloads a backup of the home configuration (zip) without the integrations' secrets.",
+        "description": "Zip: manifest.json (schemaVersion), home.json, floors.json, files.json + files/<id>.<ext>, integrations.json, devices.json, endpoints.json, placements.json, users.json (no password hashes or PINs). History is not included. For a backup with secrets use POST /api/backup/export with a passphrase (kept out of URLs).",
+        "operationId": "exportBackup",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Downloads a backup (zip); with a passphrase it includes the integrations' secrets, encrypted.",
+        "description": "Secrets are encrypted with AES-256-GCM, the key derived from the passphrase with PBKDF2-SHA256 (600 000 iterations); the same passphrase is needed to import them. 400 validation.failed (passphrase of 12–256 characters).",
+        "operationId": "exportBackupWithSecrets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportBackupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backup/import": {
+      "post": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Restores a backup (multipart: file, optional passphrase) into an empty home.",
+        "description": "Only when the home has no floors, integrations or devices (409 backup.not_empty). Floors, rooms, files, integrations (started right away), devices, endpoints, placements and missing user accounts (without passwords: reset them) are restored in one transaction. 400 backup.invalid, backup.unsupported_version, backup.passphrase_required, backup.passphrase_incorrect; 409 runtime.standby; 413 request.too_large over 200 MB; 503 runtime.starting.",
+        "operationId": "importBackup",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "required": [
+                  "file"
+                ],
+                "type": "object",
+                "allOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "file": {
+                        "$ref": "#/components/schemas/IFormFile"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "passphrase": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupImportResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backup/scheduled": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "The automatic backups: the schedule, whether the last attempt failed, and the files kept.",
+        "description": "The server writes a backup without credentials to its data folder on a schedule (daily, keeping seven by default). LastFailedAtUtc is set while the last attempt failed and none succeeded since.",
+        "operationId": "listScheduledBackups",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledBackupsDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Writes an automatic backup now (whatever the schedule) and answers with it.",
+        "description": "Older backups beyond the number kept are deleted. 503 backup.write_failed when the data folder cannot be written.",
+        "operationId": "runScheduledBackup",
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledBackupDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backup/scheduled/{name}": {
+      "get": {
+        "tags": [
+          "Backup"
+        ],
+        "summary": "Downloads one automatic backup (zip) by its name.",
+        "description": "Only the names listed by GET /api/backup/scheduled; any other name is 404 backup.not_found.",
+        "operationId": "getScheduledBackup",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3215,6 +4417,55 @@
         },
         "description": "A device became reachable or not (hub `AvailabilityChanged`)."
       },
+      "BackupImportResultDto": {
+        "required": [
+          "floors",
+          "rooms",
+          "files",
+          "integrations",
+          "devices",
+          "placements",
+          "usersCreated",
+          "secretsRestored"
+        ],
+        "type": "object",
+        "properties": {
+          "floors": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rooms": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "files": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "integrations": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "devices": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "placements": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "usersCreated": {
+            "type": "integer",
+            "description": "Accounts created from the backup (it holds no passwords: an admin sets one for each with a password reset); accounts\nwhose user name already exists are left as they are.",
+            "format": "int32"
+          },
+          "secretsRestored": {
+            "type": "boolean",
+            "description": "The integrations' secrets were in the backup and the passphrase opened them."
+          }
+        },
+        "description": "What `POST /api/backup/import` restored."
+      },
       "CapabilityDto": {
         "required": [
           "id",
@@ -3417,6 +4668,13 @@
           },
           "home": {
             "$ref": "#/components/schemas/HomeInput"
+          },
+          "loadDemoHome": {
+            "type": [
+              "null",
+              "boolean"
+            ],
+            "description": "Also load the demo home (two floors, eight rooms, a Simulated integration with about 20 devices placed on the plans),\nnamed in the home's language. Skipped when the home already has floors, integrations or devices."
           }
         },
         "description": "Completes the first-run setup: creates the first Admin and the home, then signs the admin in."
@@ -3481,10 +4739,11 @@
         "properties": {
           "setupFlow": {
             "type": "boolean",
-            "description": "Setup runs through a flow (milestone 1.3); otherwise integrations are created from the config fields."
+            "description": "The connector has a setup flow of its own (several steps); others get a single config form. Either way, set up through\n`POST /api/integrations/flows`."
           },
           "reauth": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "The flow can re-authorize an existing integration (`POST /api/integrations/{id}/flows/reauth`), keeping its devices."
           },
           "pushInventory": {
             "type": "boolean"
@@ -3500,6 +4759,26 @@
           }
         },
         "description": "What a connector supports."
+      },
+      "ContinueFlowRequest": {
+        "required": [
+          "input"
+        ],
+        "type": "object",
+        "properties": {
+          "input": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "description": "A form's values (secret fields included, write-only), a choice (`{\"choice\":\"key\"}`), a pasted value, or an\nempty object to poll a progress step or confirm an external page; `null` counts as an empty object.",
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          }
+        },
+        "description": "Answers the flow's current step (`POST /api/integrations/flows/{flowId}`, Admin)."
       },
       "CreateFloorRequest": {
         "required": [
@@ -3588,6 +4867,247 @@
           }
         }
       },
+      "DashboardActivityDto": {
+        "required": [
+          "deviceId",
+          "attributeId",
+          "activeValues"
+        ],
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attributeId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "activeValues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StateValue"
+            }
+          }
+        },
+        "description": "A device counts as active while this attribute has one of ActiveValues."
+      },
+      "DashboardDeviceDto": {
+        "required": [
+          "id",
+          "name",
+          "deviceClass",
+          "roomId",
+          "availability",
+          "lastSeenAtUtc"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "deviceClass": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "roomId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "availability": {
+            "type": "string",
+            "description": "`Unknown`, `Online` or `Offline`."
+          },
+          "lastSeenAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        },
+        "description": "A device in a dashboard list."
+      },
+      "DashboardDto": {
+        "required": [
+          "favoriteEndpointIds",
+          "rooms",
+          "power",
+          "offlineDevices",
+          "integrations",
+          "floorCount",
+          "deviceCount"
+        ],
+        "type": "object",
+        "properties": {
+          "favoriteEndpointIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Favorite endpoints (not hidden) in display order: render them with the device tiles."
+          },
+          "rooms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardRoomDto"
+            },
+            "description": "Every room of every floor, by floor level and room order (empty: point to the floor editor)."
+          },
+          "power": {
+            "description": "What the home draws now.",
+            "$ref": "#/components/schemas/DashboardPowerDto"
+          },
+          "offlineDevices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardDeviceDto"
+            },
+            "description": "Devices their connector reports as unreachable (orphaned devices are left out)."
+          },
+          "integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntegrationDto"
+            },
+            "description": "Every integration with its status (empty: point to the integrations page)."
+          },
+          "floorCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deviceCount": {
+            "type": "integer",
+            "description": "Devices that are not orphaned.",
+            "format": "int32"
+          }
+        },
+        "description": "The home at a glance (`GET /api/dashboard`): favorites, rooms with what is on / the temperature / the power drawn,\nthe power drawn now, offline devices and integration health. Values are current when served; to keep them live, apply\nhub `StateChanged` deltas to the listed attribute ids, and refetch on `DevicesChanged`."
+      },
+      "DashboardPowerDto": {
+        "required": [
+          "watts",
+          "attributeIds"
+        ],
+        "type": "object",
+        "properties": {
+          "watts": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "attributeIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "description": "The power drawn now: the sum of every `power.power` reading (W, one decimal; `null` without readings)."
+      },
+      "DashboardRoomDto": {
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "colorToken",
+          "floorId",
+          "floorName",
+          "deviceCount",
+          "activeDeviceCount",
+          "temperatureC",
+          "powerW",
+          "temperatureAttributeIds",
+          "powerAttributeIds",
+          "activityAttributes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "colorToken": {
+            "type": "string"
+          },
+          "floorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "floorName": {
+            "type": "string"
+          },
+          "deviceCount": {
+            "type": "integer",
+            "description": "Devices with at least one endpoint in the room.",
+            "format": "int32"
+          },
+          "activeDeviceCount": {
+            "type": "integer",
+            "description": "Devices with something on in the room: a switch on, a media player powered, an appliance running (see\nActivityAttributes).",
+            "format": "int32"
+          },
+          "temperatureC": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "The mean of the room's temperature readings (°C, one decimal), or `null` when it has none.",
+            "format": "double"
+          },
+          "powerW": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "description": "The sum of the room's power readings (W, one decimal), or `null` when it has none.",
+            "format": "double"
+          },
+          "temperatureAttributeIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "The temperature readings averaged into TemperatureC."
+          },
+          "powerAttributeIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "The power readings summed into PowerW."
+          },
+          "activityAttributes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardActivityDto"
+            },
+            "description": "What makes a device count as active, to recount from live values."
+          }
+        },
+        "description": "One room's summary. Endpoints count in their own room, else their device's; hidden endpoints are left out."
+      },
       "DatabaseSetupRequest": {
         "required": [
           "setupCode",
@@ -3666,7 +5186,8 @@
           "icon",
           "createdAtUtc",
           "endpoints",
-          "children"
+          "children",
+          "possibleDuplicateIds"
         ],
         "type": "object",
         "properties": {
@@ -3772,6 +5293,14 @@
               "$ref": "#/components/schemas/DeviceChildDto"
             },
             "description": "Devices reached through this one (e.g. an NVR's cameras), by name."
+          },
+          "possibleDuplicateIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Devices of other integrations with the same MAC address or serial number."
           }
         },
         "description": "A device with its vendor details (`GET /api/devices/{id}`)."
@@ -3788,7 +5317,8 @@
           "availability",
           "isOrphaned",
           "lastSeenAtUtc",
-          "endpoints"
+          "endpoints",
+          "possibleDuplicateIds"
         ],
         "type": "object",
         "properties": {
@@ -3851,6 +5381,14 @@
               "$ref": "#/components/schemas/EndpointDto"
             },
             "description": "In display order."
+          },
+          "possibleDuplicateIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Devices of other integrations with the same MAC address or serial number: most likely the same hardware reached twice\n(remove one, or move this one's settings and history with `POST /api/devices/{id}/replace`). Empty when none."
           }
         },
         "description": "A device in the device list, with its endpoints, capabilities, attribute ids and current values."
@@ -4022,6 +5560,22 @@
         },
         "description": "The energy one endpoint used in one hour."
       },
+      "ExportBackupRequest": {
+        "required": [
+          "passphrase"
+        ],
+        "type": "object",
+        "properties": {
+          "passphrase": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "12–256 characters: the integrations' secrets are included, encrypted with it (AES-256-GCM, key from PBKDF2-SHA256 with\n600 000 iterations). Without one the backup has no secrets (integrations need their credentials again after import).\nKept out of URLs on purpose."
+          }
+        },
+        "description": "Exports the home with its integrations' secrets (`POST /api/backup/export`, Admin)."
+      },
       "FieldSchemaDto": {
         "required": [
           "key",
@@ -4029,7 +5583,8 @@
           "schema",
           "required",
           "secret",
-          "help"
+          "help",
+          "advanced"
         ],
         "type": "object",
         "properties": {
@@ -4060,6 +5615,10 @@
                 "$ref": "#/components/schemas/LocalizedTextDto"
               }
             ]
+          },
+          "advanced": {
+            "type": "boolean",
+            "description": "Rarely changed: shown folded away under \"Advanced\", after the other fields."
           }
         },
         "description": "A form field."
@@ -4109,7 +5668,8 @@
           "gridCm",
           "background",
           "rooms",
-          "rowVersion"
+          "rowVersion",
+          "placements"
         ],
         "type": "object",
         "properties": {
@@ -4159,9 +5719,16 @@
           "rowVersion": {
             "type": "string",
             "description": "Opaque concurrency token; a change sent with an older one gets 409 `floors.concurrency`."
+          },
+          "placements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlacementDto"
+            },
+            "description": "The endpoints and devices on this floor (`PUT /api/placements`; not part of the layout's concurrency token)."
           }
         },
-        "description": "A floor with its rooms. Send RowVersion back with every change to it."
+        "description": "A floor with its rooms and the devices placed on it. Send RowVersion back with every change to it."
       },
       "FloorSummaryDto": {
         "required": [
@@ -4189,6 +5756,166 @@
           }
         },
         "description": "A floor in the floor list."
+      },
+      "FlowChoiceDto": {
+        "required": [
+          "key",
+          "label",
+          "description"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "$ref": "#/components/schemas/LocalizedTextDto"
+          },
+          "description": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LocalizedTextDto"
+              }
+            ]
+          }
+        },
+        "description": "One option of a `choose` step."
+      },
+      "FlowStepDto": {
+        "required": [
+          "flowId",
+          "type",
+          "stepId",
+          "title",
+          "description",
+          "fields",
+          "values",
+          "errors",
+          "url",
+          "pasteBack",
+          "timeoutSeconds",
+          "choices",
+          "integrationId",
+          "reason",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "flowId": {
+            "type": "string",
+            "description": "Send the answer to `POST /api/integrations/flows/{flowId}`; flows expire 15 minutes after their last step.",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "description": "`form`, `externalUrl`, `progress`, `choose`, `done` or `abort`."
+          },
+          "stepId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The connector's id of the step (for its form, progress, choose and external page steps)."
+          },
+          "title": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LocalizedTextDto"
+              }
+            ]
+          },
+          "description": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LocalizedTextDto"
+              }
+            ]
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldSchemaDto"
+            }
+          },
+          "values": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/JsonElement"
+              }
+            ]
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LocalizedTextDto"
+            }
+          },
+          "url": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pasteBack": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FieldSchemaDto"
+              }
+            ]
+          },
+          "timeoutSeconds": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlowChoiceDto"
+            }
+          },
+          "integrationId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LocalizedTextDto"
+              }
+            ]
+          }
+        },
+        "description": "            One step of a setup or reauth flow. Type says which members apply:\n            * form:  (render with the schema form),  (initial values,\n            never secrets),  (messages by field key after a rejected submission). Send the values.\n* externalUrl: open  (https);  is the field to paste the\n            result into, if any. Send { \"&lt;pasteBack.key&gt;\": \"…\" } or {}.\n* progress: waiting for something on the device for at most ; poll with\n            {} (about every second) until the step changes.\n* choose: pick one of ; send { \"choice\": \"&lt;key&gt;\" }.\n* done: finished;  is the integration created or updated. The flow is gone.\n* abort: the flow cannot continue:  (stable snake_case) and\n            . The flow is gone.\n            Texts come from the connector in both UI languages."
       },
       "HistoryPointDto": {
         "required": [
@@ -4633,6 +6360,104 @@
         },
         "description": "A page of items; pass NextCursor back as `cursor` to get the next page (null = last page)."
       },
+      "PlacementDto": {
+        "required": [
+          "id",
+          "floorId",
+          "endpointId",
+          "deviceId",
+          "xCm",
+          "yCm",
+          "roomId"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "floorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "endpointId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Set when an endpoint is placed (then DeviceId is `null`).",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "Set when a whole device is placed (then EndpointId is `null`).",
+            "format": "uuid"
+          },
+          "xCm": {
+            "type": "number",
+            "format": "double"
+          },
+          "yCm": {
+            "type": "number",
+            "format": "double"
+          },
+          "roomId": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "description": "The room that contains the point (first in the floor's room order), or `null`.",
+            "format": "int32"
+          }
+        },
+        "description": "An endpoint or device on a floor plan."
+      },
+      "PlaceRequest": {
+        "required": [
+          "endpointId",
+          "deviceId",
+          "floorId",
+          "xCm",
+          "yCm"
+        ],
+        "type": "object",
+        "properties": {
+          "endpointId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The endpoint to place (one control of a multi-channel device, or any single-endpoint device).",
+            "format": "uuid"
+          },
+          "deviceId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The device to place as a whole.",
+            "format": "uuid"
+          },
+          "floorId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "xCm": {
+            "type": "number",
+            "description": "0 … the floor's width.",
+            "format": "double"
+          },
+          "yCm": {
+            "type": "number",
+            "description": "0 … the floor's height.",
+            "format": "double"
+          }
+        },
+        "description": "Places an endpoint or a whole device on a floor, or moves it there (`PUT /api/placements`, Admin). Exactly one of\nEndpointId and DeviceId. The target's room becomes the room containing the point\n(none when it is outside every room)."
+      },
       "PointCmDto": {
         "required": [
           "x",
@@ -4697,6 +6522,20 @@
             "description": "Correlates the response with the server log."
           }
         }
+      },
+      "ReplaceDeviceRequest": {
+        "required": [
+          "newDeviceId"
+        ],
+        "type": "object",
+        "properties": {
+          "newDeviceId": {
+            "type": "string",
+            "description": "The device taking over (typically the same hardware re-paired, or its successor).",
+            "format": "uuid"
+          }
+        },
+        "description": "Replaces a device by another one (`POST /api/devices/{id}/replace`, Admin): the new device takes over the old one's\nname, room, icon, endpoint settings, favorites, placements and history; the old device is deleted."
       },
       "ResetPasswordRequest": {
         "required": [
@@ -4913,6 +6752,70 @@
         },
         "description": "Replaces the floor's rooms atomically (Admin): listed rooms with an `id` are updated, rooms without one are\ncreated, rooms not listed are deleted; the list order becomes the display order."
       },
+      "ScheduledBackupDto": {
+        "required": [
+          "name",
+          "writtenAtUtc",
+          "sizeBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "writtenAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "description": "One automatic backup (a zip without credentials): download it with `GET /api/backup/scheduled/{name}`."
+      },
+      "ScheduledBackupsDto": {
+        "required": [
+          "enabled",
+          "intervalHours",
+          "keep",
+          "lastFailedAtUtc",
+          "files"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Backups are written on a schedule (off: only \"back up now\" writes one)."
+          },
+          "intervalHours": {
+            "type": "number",
+            "description": "How often one is written (24: every day).",
+            "format": "double"
+          },
+          "keep": {
+            "type": "integer",
+            "description": "How many are kept; older ones are deleted.",
+            "format": "int32"
+          },
+          "lastFailedAtUtc": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "When the last attempt failed, if it did and none succeeded since (show a warning).",
+            "format": "date-time"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduledBackupDto"
+            },
+            "description": "The backups kept, newest first."
+          }
+        },
+        "description": "The automatic backups (`GET /api/backup/scheduled`, Admin): the schedule, how it went, the files kept."
+      },
       "SetFavoriteRequest": {
         "required": [
           "favorite"
@@ -4992,6 +6895,19 @@
           }
         },
         "description": "First-run state. Answered even while the database is not ready (then SetupCompleted is false)."
+      },
+      "StartFlowRequest": {
+        "required": [
+          "connectorKey"
+        ],
+        "type": "object",
+        "properties": {
+          "connectorKey": {
+            "type": "string",
+            "description": "A key from `GET /api/connectors`. Connectors without a flow of their own get a single form with their config fields."
+          }
+        },
+        "description": "Starts a connector's setup flow (`POST /api/integrations/flows`, Admin)."
       },
       "StateDelta": {
         "required": [
@@ -5292,6 +7208,24 @@
           }
         },
         "description": "Changes the home's settings (Admin only)."
+      },
+      "UpdateIntegrationRequest": {
+        "required": [
+          "name",
+          "enabled"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "1–128 characters."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "A disabled integration's runtime does not run; its devices stay (availability Unknown)."
+          }
+        },
+        "description": "Renames an integration and enables or disables it (`PUT /api/integrations/{id}`, Admin)."
       },
       "UpdateProfileRequest": {
         "required": [
@@ -5637,6 +7571,12 @@
     },
     {
       "name": "Settings"
+    },
+    {
+      "name": "Dashboard"
+    },
+    {
+      "name": "Backup"
     }
   ]
 }

@@ -5,26 +5,31 @@ using ControlHome.Domain.Devices;
 namespace ControlHome.Connectors.Simulated;
 
 /// <summary>
-/// Runs a simulated home: pushes its inventory, reports initial states, then advances the simulation every
-/// <see cref="TickInterval"/> of the context's clock and reports what changed. Commands apply after
-/// <see cref="CommandLatency"/> and complete (<see cref="CommandOutcome.Completed"/>). Delivery is at-most-once: a batch
-/// whose idempotency key was already seen (within <see cref="IdempotencyWindow"/>) is rejected as
-/// <see cref="CommandRejectionCodes.Duplicate"/>, and a safety-critical batch without a key is rejected.
+/// Runs a simulated home: pushes its full inventory (devices it no longer has, e.g. after switching from the demo to the
+/// basic preset, become orphaned), reports initial states, then advances the simulation every <see cref="TickInterval"/>
+/// of the context's clock and reports what changed. Commands apply after <see cref="CommandLatency"/> and complete
+/// (<see cref="CommandOutcome.Completed"/>). Delivery is at-most-once: a batch whose idempotency key was already seen
+/// (within <see cref="IdempotencyWindow"/>) is rejected as <see cref="CommandRejectionCodes.Duplicate"/>, and a
+/// safety-critical batch without a key is rejected. With <c>simulateReauth</c> the hub "rejects its token": the
+/// integration goes to <see cref="IntegrationStatus.NeedsReauth"/> and reports nothing until the reauth flow clears it.
 /// </summary>
 /// <remarks>
 /// Deterministic: everything random comes from one <see cref="Random"/> seeded with the configured seed, and all time from
 /// <see cref="IConnectorContext.Time"/>, so the same seed and clock produce the same reports.
 /// </remarks>
-public sealed class SimulatedRuntime : IConnectorRuntime
+public sealed class SimulatedRuntime : IConnectorRuntime, ICameraSnapshotSource
 {
     public static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(5);
     public static readonly TimeSpan CommandLatency = TimeSpan.FromMilliseconds(150);
     public static readonly TimeSpan IdempotencyWindow = TimeSpan.FromMinutes(10);
 
+    /// <summary>The status message while <c>simulateReauth</c> is on.</summary>
+    public const string ReauthMessage = "The simulated hub rejected the stored token. Run the reauthorization flow.";
+
     private readonly Lock _lock = new();
     private readonly SimulatedHome _home;
     private readonly Dictionary<string, DateTimeOffset> _usedKeys = new(StringComparer.Ordinal);
-    private readonly Dictionary<(string Device, string Capability, string Attribute), StateValue> _reported = [];
+    private readonly Dictionary<(string Device, string Endpoint, string Capability, string Attribute), StateValue> _reported = [];
     private IConnectorContext? _context;
     private long _completedTicks;
 
@@ -58,10 +63,15 @@ public sealed class SimulatedRuntime : IConnectorRuntime
         try
         {
             context.SetStatus(IntegrationStatus.Connecting, null);
-            foreach (var device in _home.Devices)
+            if (Settings.SimulateReauth)
             {
-                await context.UpsertDeviceAsync(device.Describe(), cancellationToken).ConfigureAwait(false);
+                // Like a vendor answering 401: nothing can be read until the user re-authorizes (the devices stay Unknown).
+                context.SetStatus(IntegrationStatus.NeedsReauth, ReauthMessage);
+                await Task.Delay(Timeout.InfiniteTimeSpan, context.Time, cancellationToken).ConfigureAwait(false);
+                return;
             }
+
+            await context.SyncInventoryAsync([.. _home.Devices.Select(d => d.Describe(Settings.Language))], cancellationToken).ConfigureAwait(false);
 
             lock (_lock)
             {
@@ -118,6 +128,11 @@ public sealed class SimulatedRuntime : IConnectorRuntime
             if (_context is null)
             {
                 return CommandOutcome.Reject(CommandRejectionCodes.Unavailable, "The simulated home is not running.");
+            }
+
+            if (Settings.SimulateReauth)
+            {
+                return CommandOutcome.Reject(CommandRejectionCodes.Unavailable, "The simulated hub needs reauthorization.");
             }
 
             context = _context;
@@ -199,18 +214,39 @@ public sealed class SimulatedRuntime : IConnectorRuntime
         return Task.CompletedTask;
     }
 
+    /// <summary>The bundled image of a demo camera (its main endpoint); <c>null</c> for anything else.</summary>
+    public Task<CameraSnapshot?> GetSnapshotAsync(string externalDeviceId, string endpointKey, CancellationToken cancellationToken)
+    {
+        DateTimeOffset? takenAt;
+        lock (_lock)
+        {
+            if (_context is not { } context
+                || Settings.SimulateReauth
+                || _home.Find(externalDeviceId) is not SimulatedCamera camera
+                || !string.Equals(endpointKey, Endpoint.MainKey, StringComparison.Ordinal))
+            {
+                return Task.FromResult<CameraSnapshot?>(null);
+            }
+
+            takenAt = camera.LastSnapshotAt ?? context.Time.GetUtcNow();
+        }
+
+        var channel = SimulatedDemoDevices.Cameras.ToList().IndexOf(externalDeviceId) + 1;
+        return Task.FromResult<CameraSnapshot?>(new CameraSnapshot(SimulatedSnapshots.ContentType, SimulatedSnapshots.ForChannel(channel), takenAt));
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     private static CommandOutcome? Check(SimulatedDevice device, DeviceCommand command, out CommandDefinition definition)
     {
         definition = null!;
-        if (!string.Equals(command.EndpointKey, Endpoint.MainKey, StringComparison.Ordinal))
+        if (!device.Endpoints.Any(e => string.Equals(e.Key, command.EndpointKey, StringComparison.Ordinal)))
         {
-            return CommandOutcome.Reject(CommandRejectionCodes.UnknownEndpoint, "Simulated devices have only the main endpoint.");
+            return CommandOutcome.Reject(CommandRejectionCodes.UnknownEndpoint, "The simulated device has no such endpoint.");
         }
 
-        if (!device.Capabilities.Any(c => string.Equals(c.CapabilityId, command.CapabilityId, StringComparison.Ordinal))
-            || CapabilityCatalog.Find(command.CapabilityId)?.FindCommand(command.Command) is not { } found)
+        if (device.BindingOf(command.EndpointKey, command.CapabilityId) is not { } binding
+            || (binding.GenericDefinition ?? CapabilityCatalog.Find(command.CapabilityId))?.FindCommand(command.Command) is not { } found)
         {
             return CommandOutcome.Reject(CommandRejectionCodes.UnsupportedCommand, "The device does not support this command.");
         }
@@ -219,8 +255,8 @@ public sealed class SimulatedRuntime : IConnectorRuntime
         var validation = CommandValidator.Validate(
             found,
             command.Arguments,
-            device.ConstraintsOf(command.CapabilityId),
-            device.StateOf(command.CapabilityId));
+            binding.Constraints,
+            device.StateOf(command.EndpointKey, command.CapabilityId));
         return validation.IsValid
             ? null
             : CommandOutcome.Reject(
@@ -233,16 +269,16 @@ public sealed class SimulatedRuntime : IConnectorRuntime
     {
         foreach (var device in devices)
         {
-            foreach (var (capability, attribute, value) in device.Snapshot())
+            foreach (var (endpoint, capability, attribute, value) in device.Snapshot())
             {
-                var key = (device.ExternalId, capability, attribute);
+                var key = (device.ExternalId, endpoint, capability, attribute);
                 if (!force && _reported.TryGetValue(key, out var previous) && previous.Equals(value))
                 {
                     continue;
                 }
 
                 _reported[key] = value;
-                context.ReportState(new StateReport(device.ExternalId, Endpoint.MainKey, capability, attribute, value, now));
+                context.ReportState(new StateReport(device.ExternalId, endpoint, capability, attribute, value, now));
             }
         }
     }

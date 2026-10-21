@@ -70,20 +70,24 @@ public sealed class PowerOnlyConnectorFactory(PowerOnlySpy spy) : IConnectorFact
         public void ReportAvailability(string externalDeviceId, Availability availability, string? reason) =>
             inner.ReportAvailability(externalDeviceId, availability, reason);
 
-        public Task UpsertDeviceAsync(DiscoveredDevice device, CancellationToken cancellationToken)
-        {
-            ArgumentNullException.ThrowIfNull(device);
-            return inner.UpsertDeviceAsync(
-                device.ExternalId != PlugId
-                    ? device
-                    : device with
-                    {
-                        Endpoints = [.. device.Endpoints.Select(e => e with { Capabilities = [.. e.Capabilities.Where(c => c.CapabilityId != CapabilityIds.Energy)] })],
-                    },
-                cancellationToken);
-        }
+        public Task UpsertDeviceAsync(DiscoveredDevice device, CancellationToken cancellationToken) =>
+            inner.UpsertDeviceAsync(WithoutEnergy(device), cancellationToken);
 
         public Task RemoveDeviceAsync(string externalDeviceId, CancellationToken cancellationToken) => inner.RemoveDeviceAsync(externalDeviceId, cancellationToken);
+
+        public Task SyncInventoryAsync(IReadOnlyList<DiscoveredDevice> devices, CancellationToken cancellationToken) =>
+            inner.SyncInventoryAsync([.. devices.Select(WithoutEnergy)], cancellationToken);
+
+        private static DiscoveredDevice WithoutEnergy(DiscoveredDevice device)
+        {
+            ArgumentNullException.ThrowIfNull(device);
+            return device.ExternalId != PlugId
+                ? device
+                : device with
+                {
+                    Endpoints = [.. device.Endpoints.Select(e => e with { Capabilities = [.. e.Capabilities.Where(c => c.CapabilityId != CapabilityIds.Energy)] })],
+                };
+        }
 
         public void SetStatus(IntegrationStatus status, string? message) => inner.SetStatus(status, message);
     }

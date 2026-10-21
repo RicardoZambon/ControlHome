@@ -23,9 +23,10 @@ public sealed class IntegrationApiTests(DevicesApiFactory factory) : DevicesTest
         capabilities.Single(c => c.Id == CapabilityIds.Lock).Commands.Single(c => c.Name == "unlock").SafetyCritical.ShouldBeTrue();
         var simulated = connectors.Single(c => c.Key == "simulated");
         (simulated.DisplayName, simulated.Category, simulated.Icon).ShouldBe((new LocalizedTextDto("Simulated home", "Casa simulada"), "virtual", "flask-conical"));
-        simulated.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "seed"]);
+        simulated.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "language", "seed", "simulateReauth"]);
+        simulated.ConfigFields.Where(f => f.Advanced).Select(f => f.Key).ShouldBe(["language", "seed", "simulateReauth"]);
         simulated.ConfigFields[0].Schema.ShouldBeOfType<EnumSchema>().Values.ShouldBe(["basic", "demo"]);
-        simulated.Features.PushInventory.ShouldBeTrue();
+        (simulated.Features.PushInventory, simulated.Features.SetupFlow, simulated.Features.Reauth).ShouldBe((true, true, true));
         connectors.Single(c => c.Key == CanaryConnectorFactory.Key).ConfigFields.Single(f => f.Key == "token").Secret.ShouldBeTrue();
     }
 

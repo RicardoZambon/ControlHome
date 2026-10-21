@@ -37,7 +37,12 @@
     "roomLabel": "{name}, {area}",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "fit": "Fit to screen"
+    "fit": "Fit to screen",
+    "devices": {
+      "openDevice": "Open device",
+      "panelDescription": "The device's controls and state.",
+      "group": "{count} devices here: {names}. Zoom in to tell them apart."
+    }
   },
   "theme": {
     "label": "Theme",
@@ -72,7 +77,8 @@
     "chooseLanguage": "Change language",
     "chooseTheme": "Change theme",
     "preferencesNotSaved": "Applied here, but not saved to your profile.",
-    "systemReady": "All systems normal",
+    "systemReady": "Server running",
+    "devicesOffline": "{n} device offline | {n} devices offline",
     "systemDatabase": "Database: {state}",
     "nav": {
       "groups": {
@@ -133,6 +139,7 @@
     "noValue": "—",
     "noFlags": "None",
     "choose": "Choose…",
+    "advanced": "Advanced settings",
     "errors": {
       "between": "Use a value from {min} to {max}.",
       "atLeast": "Use {min} or more.",
@@ -239,6 +246,9 @@
       "remoteControlEnabled": "Remote control"
     },
     "attributesIn": {
+      "switch": {
+        "on": "On/off"
+      },
       "power": {
         "power": "Power use"
       },
@@ -555,7 +565,8 @@
     },
     "floors": {
       "not_found": "That floor no longer exists.",
-      "concurrency": "Someone else changed this floor while you were editing. Reload it to see their changes."
+      "concurrency": "Someone else changed this floor while you were editing. Reload it to see their changes.",
+      "not_empty": "Devices are placed on this floor. Take them off the plan before deleting it."
     },
     "rooms": {
       "not_found": "That room is no longer on this floor. Reload the floor and try again."
@@ -574,7 +585,8 @@
       "invalid_image": "The image couldn't be read. It may be damaged; try exporting it again."
     },
     "devices": {
-      "not_found": "That device no longer exists. Reload the page."
+      "not_found": "That device no longer exists. Reload the page.",
+      "replace_same": "Pick another device: a device can't replace itself."
     },
     "endpoints": {
       "not_found": "That device control no longer exists. Reload the page."
@@ -626,6 +638,72 @@
     },
     "energy": {
       "too_many_rows": "That's too much energy data for one request. Pick a shorter period or a single device."
+    },
+    "placements": {
+      "not_found": "That device is no longer on the plan. Reload the floor."
+    },
+    "flows": {
+      "not_found": "This setup step expired or was already finished. Start again."
+    },
+    "cameras": {
+      "no_snapshot": "This camera has no picture right now. Try again in a moment."
+    },
+    "backup": {
+      "not_empty": "A backup can only be imported into an empty home. Remove the floors and integrations first.",
+      "invalid": "That file isn't a ControlHome backup, or it is damaged.",
+      "unsupported_version": "This backup comes from a newer ControlHome version. Update ControlHome first.",
+      "passphrase_required": "This backup contains encrypted secrets. Enter the passphrase used to export it.",
+      "passphrase_incorrect": "That passphrase doesn't open this backup's secrets.",
+      "not_found": "That automatic backup is no longer kept. Refresh the list.",
+      "write_failed": "The backup couldn't be written to the server's data folder. Check that it has free space."
+    },
+    "demo": {
+      "not_empty": "The demo home can only be loaded into an empty home."
     }
+  },
+  "integrationStatus": {
+    "Ok": "Connected",
+    "Connecting": "Connecting",
+    "Degraded": "Partly working",
+    "NeedsReauth": "Needs sign-in",
+    "PlanRequired": "Plan required",
+    "QuotaExceeded": "Quota reached",
+    "Error": "Error",
+    "Stopped": "Stopped"
+  },
+  "history": {
+    "description": "What this device recorded. Recent ranges show every change; longer ones, averages with their lows and highs.",
+    "range": "Period",
+    "ranges": {
+      "24h": "last 24 hours",
+      "7d": "last 7 days",
+      "30d": "last 30 days"
+    },
+    "rangesShort": {
+      "24h": "24 h",
+      "7d": "7 days",
+      "30d": "30 days"
+    },
+    "resolution": {
+      "raw": "Every change",
+      "5m": "5-minute averages",
+      "1h": "Hourly averages"
+    },
+    "chartLabel": "{name}, {range}",
+    "empty": "Nothing recorded in this period yet.",
+    "nothingRecorded": "This device keeps no history: none of its readings are recorded.",
+    "energy": "Energy used",
+    "energyLabel": "Energy used, {range}",
+    "perHour": "Per hour",
+    "perDay": "Per day",
+    "noEnergy": "No energy used in this period yet.",
+    "estimated": "estimated",
+    "partlyEstimated": "Partly estimated from power readings",
+    "now": "Now",
+    "recordingSince": "Recording since {time}",
+    "notRecorded": "Not recorded yet",
+    "since": "{state} since {time}",
+    "throughout": "{state} the whole time",
+    "energyTotal": "{amount} in {range}"
   }
 }

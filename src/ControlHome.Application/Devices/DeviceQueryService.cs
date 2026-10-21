@@ -52,6 +52,7 @@ public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader 
         var list = await WithInventory(devices).OrderBy(d => d.Name).ThenBy(d => d.Id).ToListAsync(cancellationToken);
         var values = await ValuesAsync(list, cancellationToken);
         var live = statuses.Get([.. list.Select(d => d.Id)]);
+        var duplicates = await DuplicatesAsync(cancellationToken);
         return list.Select(device =>
             {
                 var (availability, lastSeen) = StatusOf(device, live);
@@ -66,9 +67,53 @@ public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader 
                     availability,
                     device.IsOrphaned,
                     lastSeen,
-                    Endpoints(device, values));
+                    Endpoints(device, values),
+                    duplicates.GetValueOrDefault(device.Id) ?? []);
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// For each device that has any: the devices of other integrations sharing a hardware identifier (MAC address or
+    /// serial number, see <see cref="DeviceIdentity"/>), by id.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> DuplicatesAsync(CancellationToken cancellationToken)
+    {
+        var rows = await db.Devices.AsNoTracking()
+            .Select(d => new { d.Id, d.IntegrationId, d.ConnectionsJson })
+            .ToListAsync(cancellationToken);
+        var byKey = new Dictionary<string, List<(Guid Id, Guid IntegrationId)>>(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            foreach (var key in DeviceIdentity.HardwareKeys(ParseConnections(row.ConnectionsJson)))
+            {
+                if (!byKey.TryGetValue(key, out var group))
+                {
+                    byKey[key] = group = [];
+                }
+
+                group.Add((row.Id, row.IntegrationId));
+            }
+        }
+
+        var result = new Dictionary<Guid, SortedSet<Guid>>();
+        foreach (var group in byKey.Values.Where(g => g.Count > 1))
+        {
+            foreach (var device in group)
+            {
+                foreach (var other in group.Where(o => o.IntegrationId != device.IntegrationId))
+                {
+                    if (!result.TryGetValue(device.Id, out var set))
+                    {
+                        result[device.Id] = set = [];
+                    }
+
+                    set.Add(other.Id);
+                }
+            }
+        }
+
+        return result.ToDictionary(r => r.Key, r => (IReadOnlyList<Guid>)[.. r.Value]);
     }
 
     /// <summary>One device with its vendor details and children; 404 <c>devices.not_found</c>.</summary>
@@ -92,6 +137,7 @@ public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader 
             .ToListAsync(cancellationToken);
         var values = await ValuesAsync([device], cancellationToken);
         var (availability, lastSeen) = StatusOf(device, statuses.Get([device.Id]));
+        var duplicates = await DuplicatesAsync(cancellationToken);
 
         return new DeviceDetailDto(
             device.Id,
@@ -113,7 +159,8 @@ public sealed class DeviceQueryService(IControlHomeDb db, IAttributeStateReader 
             device.Icon,
             device.CreatedAtUtc,
             Endpoints(device, values),
-            children);
+            children,
+            duplicates.GetValueOrDefault(device.Id) ?? []);
     }
 
     /// <summary>Every current attribute value (<c>GET /api/state</c>).</summary>

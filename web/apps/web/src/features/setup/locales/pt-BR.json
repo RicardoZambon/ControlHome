@@ -90,7 +90,9 @@
     "edit": "Editar",
     "editSection": "Editar {section}",
     "finish": "Concluir configuração",
-    "finishing": "Preparando sua casa…"
+    "finishing": "Preparando sua casa…",
+    "demoTitle": "Começar com a casa de demonstração",
+    "demoDescription": "Dois andares, oito cômodos e cerca de vinte dispositivos simulados já nas plantas, para experimentar tudo de uma vez. Remova a integração dela quando quiser."
   },
   "database": {
     "host": "Servidor",

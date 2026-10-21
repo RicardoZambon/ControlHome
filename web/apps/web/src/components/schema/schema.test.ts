@@ -134,6 +134,7 @@ describe('helpers', () => {
           schema: { type: 'string' },
           required: true,
           secret: true,
+          advanced: false,
           help: { en: 'From the app', ptBr: 'Do aplicativo' },
         },
       ],
@@ -146,6 +147,7 @@ describe('helpers', () => {
         schema: { type: 'string' },
         required: true,
         secret: true,
+        advanced: false,
         help: 'Do aplicativo',
       },
     ])

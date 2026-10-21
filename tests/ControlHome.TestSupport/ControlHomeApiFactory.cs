@@ -69,6 +69,9 @@ public class ControlHomeApiFactory(SqlServerFixture sql) : WebApplicationFactory
             ["ConnectionStrings:ControlHome"] = ConnectionString ?? string.Empty,
             ["ControlHome:DataPath"] = _dataPath,
             ["Setup:Code"] = SetupCode,
+
+            // Tests write backups themselves (BackupScheduler.RunOnceAsync), never in the background.
+            ["Backup:ScheduleEnabled"] = "false",
         };
         ConfigureSettings(settings);
 

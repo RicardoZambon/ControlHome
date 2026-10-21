@@ -108,6 +108,7 @@ export interface SimulatedDevice {
   id: string
   name: string
   deviceClass: string | null
+  availability: string
   endpoints: {
     id: string
     capabilities: {
@@ -168,6 +169,63 @@ export async function createSimulatedHome(
   }
 }
 
+/**
+ * The first-run setup with the demo home (`loadDemoHome`, what the wizard's "Load demo home" switch sends): two floors,
+ * eight rooms and the Simulated connector's twenty demo devices on the plans, named in `locale`. The admin is signed in
+ * on `request`. Waits until every device is online with its first values, and returns them.
+ */
+export async function setUpDemoHome(
+  request: APIRequestContext,
+  locale: 'en' | 'pt-BR' = 'en',
+): Promise<SimulatedDevice[]> {
+  const response = await request.post('/api/setup/complete', {
+    headers: mutationHeaders(),
+    data: {
+      setupCode: SETUP_CODE,
+      admin: testData.admin,
+      home: { latitude: null, longitude: null, pricePerKwh: null, ...testData.home, locale },
+      loadDemoHome: true,
+    },
+  })
+  expect(response.status(), `POST /api/setup/complete: ${await response.text()}`).toBe(200)
+  let devices: SimulatedDevice[] = []
+  await expect
+    .poll(
+      async () => {
+        devices = await listDevices(request)
+        return devices.length === 20 && devices.every((device) => device.availability === 'Online')
+      },
+      { message: 'the demo devices to come online', timeout: 30_000 },
+    )
+    .toBe(true)
+  return devices
+}
+
+/**
+ * `POST /api/_test/devices/{id}/availability` (Testing environment only): the device's availability goes through the
+ * state pipeline as if its connector had reported it (the Simulated connector never reports a device offline).
+ */
+export async function reportAvailability(
+  request: APIRequestContext,
+  device: Pick<SimulatedDevice, 'id'>,
+  availability: 'Online' | 'Offline',
+): Promise<void> {
+  const response = await request.post(`/api/_test/devices/${device.id}/availability`, {
+    headers: mutationHeaders(),
+    data: { availability },
+  })
+  expect(response.status(), `POST availability ${availability}: ${await response.text()}`).toBe(204)
+}
+
+/** `POST /api/_test/clock`: moves the server's runtime clock forward (connector ticks, history rollups). */
+export async function advanceClock(request: APIRequestContext, seconds: number): Promise<void> {
+  const response = await request.post('/api/_test/clock', {
+    headers: mutationHeaders(),
+    data: { advanceSeconds: seconds },
+  })
+  expect(response.status(), await response.text()).toBe(200)
+}
+
 /** The current value of `capability.attribute` of a device (`GET /api/devices`). */
 export async function attributeValue(
   request: APIRequestContext,
@@ -214,12 +272,145 @@ export function attributeIdOf(device: SimulatedDevice, capabilityId: string, key
   return attribute!.attributeId
 }
 
+// --- Floors and placements -------------------------------------------------------------------------------------------
+
+/** A room of a floor created by `createFloor`. */
+export interface SeededRoom {
+  id: number
+  name: string
+}
+
+export interface SeededFloor {
+  id: number
+  name: string
+  rooms: SeededRoom[]
+}
+
+/** An axis-aligned room outline (cm), clockwise from the top-left corner. */
+export function rectangle(x0: number, y0: number, x1: number, y1: number): { x: number; y: number }[] {
+  return [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ]
+}
+
+/**
+ * Creates a 2000 × 1500 cm floor with `rooms` (the request context must be an Admin's): by default a living room
+ * (100–1000 × 100–750), a kitchen (1000–1900 × 100–900) and a bedroom (100–1000 × 750–1400). The Simulated basic home
+ * suggests "Living room" and "Bedroom", so devices added afterwards land in those rooms.
+ */
+export async function createFloor(
+  request: APIRequestContext,
+  name = 'Ground floor',
+  rooms: { name: string; icon: string; colorToken: string; polygon: { x: number; y: number }[] }[] = [
+    { name: 'Living room', icon: 'sofa', colorToken: 'room-1', polygon: rectangle(100, 100, 1000, 750) },
+    { name: 'Kitchen', icon: 'cooking-pot', colorToken: 'room-2', polygon: rectangle(1000, 100, 1900, 900) },
+    { name: 'Bedroom', icon: 'bed-double', colorToken: 'room-3', polygon: rectangle(100, 750, 1000, 1400) },
+  ],
+): Promise<SeededFloor> {
+  const created = await request.post('/api/floors', {
+    headers: mutationHeaders(),
+    data: { name, level: 0, widthCm: 2000, heightCm: 1500 },
+  })
+  expect(created.status(), `POST /api/floors: ${await created.text()}`).toBe(201)
+  const floor = (await created.json()) as { id: number; rowVersion: string }
+  const layout = await request.put(`/api/floors/${floor.id}/layout`, {
+    headers: mutationHeaders(),
+    data: { rowVersion: floor.rowVersion, rooms: rooms.map((room) => ({ id: null, ...room })) },
+  })
+  expect(layout.status(), `PUT /api/floors/${floor.id}/layout: ${await layout.text()}`).toBe(200)
+  const saved = (await layout.json()) as { rooms: SeededRoom[] }
+  return { id: floor.id, name, rooms: saved.rooms.map((room) => ({ id: room.id, name: room.name })) }
+}
+
+/** A placement as `GET /api/placements` lists it. */
+export interface Placement {
+  id: number
+  floorId: number
+  endpointId: string | null
+  deviceId: string | null
+  xCm: number
+  yCm: number
+  roomId: number | null
+}
+
+export async function listPlacements(request: APIRequestContext): Promise<Placement[]> {
+  const response = await request.get('/api/placements')
+  expect(response.status(), `GET /api/placements: ${await response.text()}`).toBe(200)
+  return (await response.json()) as Placement[]
+}
+
+/** Places a device's first endpoint on a floor (`PUT /api/placements`, Admin). */
+export async function placeEndpoint(
+  request: APIRequestContext,
+  device: SimulatedDevice,
+  floorId: number,
+  xCm: number,
+  yCm: number,
+): Promise<Placement> {
+  const response = await request.put('/api/placements', {
+    headers: mutationHeaders(),
+    data: { endpointId: device.endpoints[0]!.id, deviceId: null, floorId, xCm, yCm },
+  })
+  expect(response.status(), `PUT /api/placements: ${await response.text()}`).toBe(200)
+  return (await response.json()) as Placement
+}
+
+/** Where floor point (x, y) cm is on the screen: from the plan SVG's viewBox (cm) and its box (px). */
+export async function planPoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
+  const svg = page.locator('[data-slot="floor-plan"] svg').first()
+  const box = (await svg.boundingBox())!
+  const [vx, vy, vw, vh] = (await svg.getAttribute('viewBox'))!.split(' ').map(Number) as [
+    number,
+    number,
+    number,
+    number,
+  ]
+  const scale = Math.min(box.width / vw, box.height / vh)
+  // preserveAspectRatio xMidYMid meet: the view box is centred in the element.
+  const left = box.x + (box.width - vw * scale) / 2
+  const top = box.y + (box.height - vh * scale) / 2
+  return { x: left + (x - vx) * scale, y: top + (y - vy) * scale }
+}
+
+/** A tap on a touch screen (phones, `hasTouch`), a click elsewhere. */
+export async function tapPlan(page: Page, x: number, y: number, touch: boolean): Promise<void> {
+  const point = await planPoint(page, x, y)
+  if (touch) await page.touchscreen.tap(point.x, point.y)
+  else await page.mouse.click(point.x, point.y)
+}
+
 /** Waits until the page's live connection to the hub is up (devices update without a reload from then on). */
 export async function waitForLive(page: Page): Promise<void> {
   await expect(page.locator('[data-realtime-status="connected"]')).toBeAttached({ timeout: 15_000 })
 }
 
 // --- UI helpers ------------------------------------------------------------------------------------------------------
+
+/**
+ * The history charts on the page drawn wider than their card, described ("history-chart ends at 1270 px, its card at
+ * 836 px"). Empty when every chart follows its card's width. Poll it: charts redraw a moment after their card resizes.
+ */
+export async function chartsWiderThanTheirCard(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-slot="history-chart"], [data-slot="energy-bars"], [data-slot="state-timeline"]',
+      ),
+    ].flatMap((chart) => {
+      const card = chart.closest('section')
+      if (!card) return []
+      const limit = card.getBoundingClientRect().right + 1
+      const drawn = [chart, ...chart.querySelectorAll<Element>('svg, canvas')]
+      const widest = Math.max(...drawn.map((element) => element.getBoundingClientRect().right))
+      return widest > limit
+        ? [`${chart.dataset.slot} ends at ${Math.round(widest)} px, its card at ${Math.round(limit)} px`]
+        : []
+    }),
+  )
+}
 
 /** Phones get the sidebar as a sheet (below Tailwind's md breakpoint). */
 export function isPhone(page: Page): boolean {

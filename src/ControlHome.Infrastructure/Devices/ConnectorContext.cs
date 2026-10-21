@@ -76,6 +76,22 @@ internal sealed class ConnectorContext(
         }
     }
 
+    public async Task SyncInventoryAsync(IReadOnlyList<DiscoveredDevice> devices, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(devices);
+        ObjectDisposedException.ThrowIf(_closed, this);
+        var orphaned = await inventory.SyncAsync(IntegrationId, devices, cancellationToken).ConfigureAwait(false);
+
+        // As for RemoveDeviceAsync: through the pipeline, in each orphaned device's availability slot.
+        if (!_closed)
+        {
+            foreach (var externalDeviceId in orphaned)
+            {
+                processor.ReportAvailability(IntegrationId, externalDeviceId, Availability.Unknown);
+            }
+        }
+    }
+
     public void SetStatus(IntegrationStatus status, string? message)
     {
         if (!_closed)

@@ -295,6 +295,9 @@ const goBack = () => emit('back', asDraft({ ...props.modelValue, ...values }))
       </FormItem>
     </FormField>
 
-    <StepFooter can-go-back @back="goBack" />
+    <!-- The wizard's Back / Continue; Settings puts its own Save here -->
+    <slot name="footer">
+      <StepFooter can-go-back @back="goBack" />
+    </slot>
   </form>
 </template>

@@ -1,38 +1,17 @@
 <script setup lang="ts">
 import {
-  createIntegration,
-  deleteIntegration,
   listConnectors,
   listIntegrations,
   type ConnectorDto,
   type IntegrationDto,
 } from '@controlhome/api-client'
-import {
-  Alert,
-  AlertDescription,
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  Badge,
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  Skeleton,
-  cn,
-  toast,
-} from '@controlhome/ui'
-import { Blocks, ChevronRight, Ellipsis, FlaskConical, Plus, RefreshCw, Sparkles, Trash } from '@lucide/vue'
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Component } from 'vue'
+import { Alert, AlertDescription, Button, Skeleton, cn } from '@controlhome/ui'
+import { ChevronRight, FlaskConical, KeyRound, Plus, RefreshCw, Sparkles } from '@lucide/vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FormAlert from '../../../components/FormAlert.vue'
 import PageHeader from '../../../components/PageHeader.vue'
+import IntegrationStatusBadge from '../../../components/integrations/IntegrationStatusBadge.vue'
+import { connectorIcon, statusStyle } from '../../../components/integrations/integrationStatus'
 import { localized } from '../../../components/schema/schema'
 import { useProblem } from '../../../composables/useProblem'
 import { formatDateTime } from '../../../lib/format'
@@ -41,10 +20,10 @@ import { useDevicesStore } from '../../../stores/devices'
 import { useRealtimeStore } from '../../../stores/realtime'
 
 /**
- * Admin: the home's integrations with their live status and device count, and — until the setup flows arrive
- * (milestone 1.3) — one button that adds the simulated demo home (`connector: simulated`, preset `basic`).
+ * Admin: the home's integrations with their live status and device count, each opening its own page; "Add
+ * integration" opens the catalogue. One that needs a new sign-in says so, with the way to do it.
  */
-const { t, te, locale } = useI18n()
+const { t, locale } = useI18n()
 const problem = useProblem()
 const devices = useDevicesStore()
 const realtime = useRealtimeStore()
@@ -87,25 +66,7 @@ onBeforeUnmount(() => clearTimeout(reloadTimer))
 const connectorsByKey = computed(
   () => new Map(connectors.value.map((connector) => [connector.key, connector])),
 )
-const simulatedAvailable = computed(() => connectors.value.some((connector) => connector.key === 'simulated'))
-
-const CONNECTOR_ICONS: Record<string, Component> = { 'flask-conical': FlaskConical }
-
-interface StatusStyle {
-  tone: string
-  pulse?: boolean
-}
-
-const STATUS: Record<string, StatusStyle> = {
-  Ok: { tone: 'bg-state-on' },
-  Connecting: { tone: 'bg-state-info', pulse: true },
-  Degraded: { tone: 'bg-state-warn' },
-  NeedsReauth: { tone: 'bg-state-warn' },
-  PlanRequired: { tone: 'bg-state-warn' },
-  QuotaExceeded: { tone: 'bg-state-warn' },
-  Error: { tone: 'bg-state-danger' },
-  Stopped: { tone: 'bg-state-off' },
-}
+const simulated = computed(() => connectorsByKey.value.get('simulated'))
 
 const cards = computed(() =>
   integrations.value.map((integration) => {
@@ -114,72 +75,14 @@ const cards = computed(() =>
     return {
       integration,
       connectorName: connector ? localized(connector.displayName, locale.value) : integration.connectorKey,
-      icon: (connector && CONNECTOR_ICONS[connector.icon]) ?? Blocks,
+      icon: connectorIcon(connector?.icon),
       status: live.status,
-      statusLabel: te(`integrations.status.${live.status}`)
-        ? t(`integrations.status.${live.status}`)
-        : live.status,
-      statusStyle: STATUS[live.status] ?? { tone: 'bg-state-off' },
+      attention: statusStyle(live.status).attention ?? false,
+      canReauth: live.status === 'NeedsReauth' && (connector?.features.reauth ?? false),
       message: live.message,
     }
   }),
 )
-
-// --- Add the simulated demo ----------------------------------------------------------------------------------------------
-const adding = ref(false)
-
-async function addDemo(): Promise<void> {
-  adding.value = true
-  try {
-    const created = unwrap(
-      await createIntegration({
-        body: { connectorKey: 'simulated', name: t('integrations.demo.name'), config: { preset: 'basic' } },
-      }),
-    )
-    integrations.value = [...integrations.value, created]
-    devices.setIntegrations(integrations.value)
-    toast.success(t('integrations.demo.added'))
-  } catch (error) {
-    problem.toastError(error)
-  } finally {
-    adding.value = false
-  }
-}
-
-// --- Delete --------------------------------------------------------------------------------------------------------------
-const deleting = ref<IntegrationDto | null>(null)
-const deleteOpen = ref(false)
-const deleteBusy = ref(false)
-const deleteError = ref('')
-
-function askDelete(integration: IntegrationDto): void {
-  deleting.value = integration
-  deleteError.value = ''
-  deleteOpen.value = true
-}
-
-async function confirmDelete(): Promise<void> {
-  const integration = deleting.value
-  if (!integration) return
-  deleteBusy.value = true
-  deleteError.value = ''
-  try {
-    unwrap(await deleteIntegration({ path: { id: integration.id } }))
-    integrations.value = integrations.value.filter((entry) => entry.id !== integration.id)
-    devices.setIntegrations(integrations.value)
-    deleteOpen.value = false
-    toast.success(t('integrations.delete.done', { name: integration.name }))
-    void devices.load(true)
-  } catch (error) {
-    deleteError.value = problem.message(error)
-  } finally {
-    deleteBusy.value = false
-  }
-}
-
-function onDeleteOpenChange(open: boolean): void {
-  deleteOpen.value = open || deleteBusy.value
-}
 </script>
 
 <template>
@@ -189,27 +92,13 @@ function onDeleteOpenChange(open: boolean): void {
       :title="t('integrations.title')"
       :description="t('integrations.description')"
     >
-      <template v-if="simulatedAvailable && integrations.length > 0" #actions>
-        <!-- One way to add any integration: a picker (setup flows add the real ones in a later version) -->
-        <DropdownMenu>
-          <DropdownMenuTrigger as-child>
-            <Button class="max-sm:w-full" :loading="adding" data-slot="add-integration">
-              <Plus aria-hidden="true" />
-              {{ t('integrations.add') }}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" class="w-72">
-            <DropdownMenuItem @select="addDemo">
-              <FlaskConical aria-hidden="true" />
-              {{ t('integrations.demo.option') }}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <p class="flex items-start gap-2 px-2 py-1.5 text-xs text-muted-foreground">
-              <Sparkles class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-              {{ t('integrations.comingSoon') }}
-            </p>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <template v-if="integrations.length > 0" #actions>
+        <Button as-child class="max-sm:w-full" data-slot="add-integration">
+          <RouterLink :to="{ name: 'integration-catalog' }">
+            <Plus aria-hidden="true" />
+            {{ t('integrations.add') }}
+          </RouterLink>
+        </Button>
       </template>
     </PageHeader>
 
@@ -254,117 +143,103 @@ function onDeleteOpenChange(open: boolean): void {
           {{ t('integrations.empty.title') }}
         </h2>
         <p class="text-muted-foreground">{{ t('integrations.empty.description') }}</p>
-        <div v-if="simulatedAvailable">
-          <Button size="lg" :loading="adding" @click="addDemo">
-            <FlaskConical aria-hidden="true" />
-            {{ t('integrations.demo.add') }}
+        <div class="flex flex-wrap gap-2">
+          <Button as-child size="lg">
+            <RouterLink :to="{ name: 'integration-catalog' }">
+              <Plus aria-hidden="true" />
+              {{ t('integrations.empty.browse') }}
+            </RouterLink>
+          </Button>
+          <Button v-if="simulated" as-child size="lg" variant="outline">
+            <RouterLink :to="{ name: 'integration-setup', params: { connector: 'simulated' } }">
+              <FlaskConical aria-hidden="true" />
+              {{ t('integrations.empty.demo') }}
+            </RouterLink>
           </Button>
         </div>
       </div>
     </section>
 
-    <template v-else>
-      <ul class="grid gap-4" :aria-label="t('integrations.listLabel')">
-        <li
-          v-for="card in cards"
-          :key="card.integration.id"
-          class="flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-5 shadow-xs sm:flex-nowrap"
-          :data-integration-id="card.integration.id"
+    <ul v-else class="grid gap-4" :aria-label="t('integrations.listLabel')">
+      <li
+        v-for="card in cards"
+        :key="card.integration.id"
+        :class="
+          cn(
+            'group relative flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-5 shadow-xs transition-[border-color,box-shadow] has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring hover:border-ring/40 hover:shadow-md sm:flex-nowrap',
+            card.attention && 'border-state-warn/50',
+            !card.integration.enabled && 'bg-muted/40',
+          )
+        "
+        :data-integration-id="card.integration.id"
+      >
+        <span
+          :class="
+            cn(
+              'inline-flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground [&_svg]:size-6',
+              !card.integration.enabled && 'opacity-60',
+            )
+          "
+          aria-hidden="true"
         >
-          <span
-            class="inline-flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground [&_svg]:size-6"
-            aria-hidden="true"
-          >
-            <component :is="card.icon" />
-          </span>
-          <div class="grid min-w-0 flex-1 gap-1">
-            <h2 class="truncate font-serif text-xl font-medium tracking-tight">
-              {{ card.integration.name }}
-            </h2>
-            <!-- Phones: one line each (a "·" left at the end of a wrapped line reads as a typo). -->
-            <p
-              class="grid gap-1 text-sm text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:gap-x-2"
+          <component :is="card.icon" />
+        </span>
+        <div class="grid min-w-0 flex-1 gap-1">
+          <h2 class="truncate font-serif text-xl font-medium tracking-tight">
+            <RouterLink
+              :to="{ name: 'integration', params: { id: card.integration.id } }"
+              class="outline-none after:absolute after:inset-0 after:content-['']"
             >
-              <!-- The connector only when its name says something the integration's own name does not. -->
-              <template v-if="card.connectorName !== card.integration.name">
-                <span>{{ card.connectorName }}</span>
-                <span aria-hidden="true" class="max-sm:hidden">·</span>
-              </template>
-              <span>{{
-                t('integrations.added', { date: formatDateTime(card.integration.createdAtUtc, locale) })
-              }}</span>
-            </p>
-            <p v-if="card.message" class="text-sm text-muted-foreground">{{ card.message }}</p>
-          </div>
-          <div class="flex w-full items-center gap-2 sm:w-auto">
-            <Badge variant="outline" class="gap-1.5 bg-card py-1" data-slot="integration-status">
-              <span class="relative flex size-2" aria-hidden="true">
-                <span
-                  v-if="card.statusStyle.pulse"
-                  :class="
-                    cn(
-                      'absolute inset-0 rounded-full opacity-60 motion-safe:animate-ping',
-                      card.statusStyle.tone,
-                    )
-                  "
-                />
-                <span :class="cn('relative size-2 rounded-full', card.statusStyle.tone)" />
-              </span>
-              {{ card.statusLabel }}
-            </Badge>
-            <Button variant="ghost" size="sm" as-child class="ml-auto sm:ml-0">
-              <RouterLink :to="{ name: 'devices', query: { integration: card.integration.id } }">
-                {{
-                  t(
-                    'integrations.deviceCount',
-                    { count: card.integration.deviceCount },
-                    card.integration.deviceCount,
-                  )
-                }}
-                <ChevronRight aria-hidden="true" />
-              </RouterLink>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  class="size-11"
-                  :aria-label="t('integrations.actions', { name: card.integration.name })"
-                >
-                  <Ellipsis aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem variant="destructive" @select="askDelete(card.integration)">
-                  <Trash aria-hidden="true" />
-                  {{ t('common.delete') }}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </li>
-      </ul>
-    </template>
-
-    <AlertDialog :open="deleteOpen" @update:open="onDeleteOpenChange">
-      <AlertDialogContent v-if="deleting">
-        <AlertDialogHeader>
-          <AlertDialogTitle class="font-serif text-2xl font-medium tracking-tight">
-            {{ t('integrations.delete.title', { name: deleting.name }) }}
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {{ t('integrations.delete.description', { count: deleting.deviceCount }, deleting.deviceCount) }}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <FormAlert v-if="deleteError" :message="deleteError" />
-        <AlertDialogFooter>
-          <AlertDialogCancel :disabled="deleteBusy">{{ t('common.cancel') }}</AlertDialogCancel>
-          <Button variant="destructive" :loading="deleteBusy" @click="confirmDelete">
-            {{ t('integrations.delete.confirm') }}
+              {{ card.integration.name }}
+            </RouterLink>
+          </h2>
+          <!-- Phones: one line each (a "·" left at the end of a wrapped line reads as a typo). -->
+          <p class="grid gap-1 text-sm text-muted-foreground sm:flex sm:flex-wrap sm:items-center sm:gap-x-2">
+            <template v-if="card.connectorName !== card.integration.name">
+              <span>{{ card.connectorName }}</span>
+              <span aria-hidden="true" class="max-sm:hidden">·</span>
+            </template>
+            <span data-slot="device-count">{{
+              t(
+                'integrations.deviceCount',
+                { count: card.integration.deviceCount },
+                card.integration.deviceCount,
+              )
+            }}</span>
+            <span aria-hidden="true" class="max-sm:hidden">·</span>
+            <span>{{
+              t('integrations.added', { date: formatDateTime(card.integration.createdAtUtc, locale) })
+            }}</span>
+          </p>
+          <p v-if="card.message" class="text-sm text-muted-foreground">{{ card.message }}</p>
+        </div>
+        <div class="flex w-full items-center gap-2 sm:w-auto">
+          <IntegrationStatusBadge :status="card.integration.enabled ? card.status : 'Stopped'" />
+          <span
+            v-if="!card.integration.enabled"
+            class="text-xs font-medium text-muted-foreground"
+            data-slot="integration-disabled"
+          >
+            {{ t('integrations.disabled') }}
+          </span>
+          <Button
+            v-if="card.canReauth"
+            as-child
+            size="sm"
+            variant="outline"
+            class="relative z-10 ml-auto sm:ml-0"
+          >
+            <RouterLink :to="{ name: 'integration-reauth', params: { id: card.integration.id } }">
+              <KeyRound aria-hidden="true" />
+              {{ t('integrations.detail.reauth') }}
+            </RouterLink>
           </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          <ChevronRight
+            class="ml-auto size-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:ml-0"
+            aria-hidden="true"
+          />
+        </div>
+      </li>
+    </ul>
   </div>
 </template>

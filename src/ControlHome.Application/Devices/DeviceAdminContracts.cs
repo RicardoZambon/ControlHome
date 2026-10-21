@@ -18,6 +18,21 @@ public sealed record UpdateEndpointRequest(string? Name, string? Icon, int? Room
 /// <summary>Adds an endpoint to (or removes it from) the dashboard's favorites (<c>PUT /api/endpoints/{id}/favorite</c>, Member).</summary>
 public sealed record SetFavoriteRequest(bool Favorite);
 
+/// <summary>
+/// Replaces a device by another one (<c>POST /api/devices/{id}/replace</c>, Admin): the new device takes over the old one's
+/// name, room, icon, endpoint settings, favorites, placements and history; the old device is deleted.
+/// </summary>
+/// <param name="NewDeviceId">The device taking over (typically the same hardware re-paired, or its successor).</param>
+public sealed record ReplaceDeviceRequest(Guid NewDeviceId);
+
+public sealed class ReplaceDeviceRequestValidator : AbstractValidator<ReplaceDeviceRequest>
+{
+    public ReplaceDeviceRequestValidator()
+    {
+        RuleFor(x => x.NewDeviceId).NotEmpty();
+    }
+}
+
 internal static class DeviceFieldRules
 {
     public const string IconPattern = "^[a-z0-9:-]+$";

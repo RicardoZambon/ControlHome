@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Devices;
@@ -7,7 +6,14 @@ using ControlHome.Domain.Devices;
 namespace ControlHome.Connectors.Simulated;
 
 /// <summary>One attribute value of a simulated device.</summary>
-internal readonly record struct SimulatedValue(string CapabilityId, string AttributeKey, StateValue Value);
+internal readonly record struct SimulatedValue(string EndpointKey, string CapabilityId, string AttributeKey, StateValue Value)
+{
+    /// <summary>A value of the device's main endpoint.</summary>
+    public SimulatedValue(string capabilityId, string attributeKey, StateValue value)
+        : this(Endpoint.MainKey, capabilityId, attributeKey, value)
+    {
+    }
+}
 
 /// <summary>
 /// The simulated home of a preset: its devices in a fixed order and one seeded random generator. Not thread-safe: the
@@ -23,8 +29,8 @@ internal sealed class SimulatedHome
         Settings = settings;
         _random = new Random(settings.Seed);
 
-        // The basic preset; "demo" grows into the full demo home later (same first five devices).
-        Devices =
+        // The basic preset; "demo" adds the rest of the demo home after the same first five devices.
+        List<SimulatedDevice> devices =
         [
             new SimulatedLight(settings.Seed, _random),
             new SimulatedPlug(settings.Seed, _random),
@@ -32,6 +38,12 @@ internal sealed class SimulatedHome
             new SimulatedContactSensor(settings.Seed, _random),
             new SimulatedLock(settings.Seed),
         ];
+        if (settings.Preset == SimulatedSettings.DemoPreset)
+        {
+            devices.AddRange(SimulatedDemoDevices.Create(settings.Seed, _random));
+        }
+
+        Devices = devices;
     }
 
     public SimulatedSettings Settings { get; }
@@ -58,7 +70,10 @@ internal sealed class SimulatedHome
     }
 }
 
-/// <summary>A simulated device with one endpoint (<see cref="Endpoint.MainKey"/>).</summary>
+/// <summary>
+/// A simulated device. Most have one endpoint (<see cref="Endpoint.MainKey"/>) with <see cref="Capabilities"/>; devices
+/// with several endpoints (a 3-gang switch) override <see cref="Endpoints"/>.
+/// </summary>
 internal abstract class SimulatedDevice(string externalId, int index, int seed)
 {
     public string ExternalId { get; } = externalId;
@@ -71,17 +86,24 @@ internal abstract class SimulatedDevice(string externalId, int index, int seed)
 
     public abstract string SuggestedRoom { get; }
 
-    /// <summary>The capabilities of the main endpoint (with the device's constraints).</summary>
-    public abstract IReadOnlyList<CapabilityBinding> Capabilities { get; }
+    /// <summary>The device it is reached through (a camera's NVR), or <c>null</c>.</summary>
+    public virtual string? ParentExternalId => null;
 
-    public DiscoveredDevice Describe() => new(
+    /// <summary>The capabilities of the main endpoint (with the device's constraints).</summary>
+    public virtual IReadOnlyList<CapabilityBinding> Capabilities => [];
+
+    /// <summary>The device's endpoints; by default only the main endpoint with <see cref="Capabilities"/>.</summary>
+    public virtual IReadOnlyList<DiscoveredEndpoint> Endpoints => [new DiscoveredEndpoint(Endpoint.MainKey, null, Capabilities)];
+
+    /// <summary>The device as the inventory reports it, its names (device, controls, room) in <paramref name="language"/>.</summary>
+    public DiscoveredDevice Describe(string language) => new(
         ExternalId,
-        Name,
+        SimulatedNames.In(language, Name),
         DeviceClass,
         "ControlHome",
         Model,
         "1.0.0",
-        ParentExternalId: null,
+        ParentExternalId,
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             // Locally administered MAC derived from the seed: the same seed is the same (duplicate) hardware.
@@ -90,8 +112,8 @@ internal abstract class SimulatedDevice(string externalId, int index, int seed)
                 $"02:00:{(seed >> 16) & 0xFF:X2}:{(seed >> 8) & 0xFF:X2}:{seed & 0xFF:X2}:{index:X2}"),
             ["serial"] = string.Create(CultureInfo.InvariantCulture, $"SIM-{seed}-{index}"),
         },
-        SuggestedRoom,
-        [new DiscoveredEndpoint(Endpoint.MainKey, null, Capabilities)]);
+        SimulatedNames.In(language, SuggestedRoom),
+        [.. Endpoints.Select(e => e.Name is null ? e : e with { Name = SimulatedNames.In(language, e.Name) })]);
 
     /// <summary>The current value of every attribute, in a fixed order.</summary>
     public abstract IEnumerable<SimulatedValue> Snapshot();
@@ -104,17 +126,25 @@ internal abstract class SimulatedDevice(string externalId, int index, int seed)
     {
     }
 
-    /// <summary>Applies an already validated command of one of <see cref="Capabilities"/>.</summary>
+    /// <summary>Applies an already validated command of one of the device's endpoint capabilities.</summary>
     public abstract void Apply(DeviceCommand command, DateTimeOffset now);
 
-    /// <summary>The current values of one capability's attributes, by key (for mode-dependent argument ranges).</summary>
-    public IReadOnlyDictionary<string, StateValue> StateOf(string capabilityId) =>
-        Snapshot().Where(v => string.Equals(v.CapabilityId, capabilityId, StringComparison.Ordinal))
+    /// <summary>The binding of a capability on an endpoint, or <c>null</c> when the endpoint does not have it.</summary>
+    public CapabilityBinding? BindingOf(string endpointKey, string capabilityId) =>
+        Endpoints.FirstOrDefault(e => string.Equals(e.Key, endpointKey, StringComparison.Ordinal))?
+            .Capabilities.FirstOrDefault(c => string.Equals(c.CapabilityId, capabilityId, StringComparison.Ordinal));
+
+    /// <summary>The current values of one endpoint capability's attributes, by key (for mode-dependent argument ranges).</summary>
+    public IReadOnlyDictionary<string, StateValue> StateOf(string endpointKey, string capabilityId) =>
+        Snapshot().Where(v => string.Equals(v.EndpointKey, endpointKey, StringComparison.Ordinal)
+                && string.Equals(v.CapabilityId, capabilityId, StringComparison.Ordinal))
             .ToDictionary(v => v.AttributeKey, v => v.Value, StringComparer.Ordinal);
 
     protected static double Number(DeviceCommand command, string argument) => command.Arguments.GetProperty(argument).GetDouble();
 
     protected static string Text(DeviceCommand command, string argument) => command.Arguments.GetProperty(argument).GetString()!;
+
+    protected static bool Flag(DeviceCommand command, string argument) => command.Arguments.GetProperty(argument).GetBoolean();
 
     protected static CapabilityConstraints Constraints(params (string Attribute, AttributeConstraint Constraint)[] attributes) =>
         new(attributes.ToDictionary(a => a.Attribute, a => a.Constraint, StringComparer.Ordinal));
@@ -191,21 +221,30 @@ internal sealed class SimulatedPlug : SimulatedDevice
     private double _energyWh;
     private DateTimeOffset _integratedUntil;
 
+    /// <summary>The basic preset's coffee maker plug.</summary>
     public SimulatedPlug(int seed, Random random)
-        : base("plug-1", 2, seed)
+        : this("plug-1", 2, "Coffee maker plug", "Kitchen", seed, random, minBaseW: 40, spreadW: 80)
     {
-        _basePowerW = Math.Round(40 + (random.NextDouble() * 80), 1);
+    }
+
+    public SimulatedPlug(string externalId, int index, string name, string room, int seed, Random random, double minBaseW, double spreadW)
+        : base(externalId, index, seed)
+    {
+        ArgumentNullException.ThrowIfNull(random);
+        Name = name;
+        SuggestedRoom = room;
+        _basePowerW = Math.Round(minBaseW + (random.NextDouble() * spreadW), 1);
         _powerW = _basePowerW;
         _energyWh = Math.Round(random.NextDouble() * 5000, 3);
     }
 
-    public override string Name => "Coffee maker plug";
+    public override string Name { get; }
 
     public override string DeviceClass => DeviceClasses.Outlet;
 
     public override string Model => "Simulated smart plug";
 
-    public override string SuggestedRoom => "Kitchen";
+    public override string SuggestedRoom { get; }
 
     public override IReadOnlyList<CapabilityBinding> Capabilities { get; } =
     [
@@ -436,11 +475,4 @@ internal sealed class SimulatedLock(int seed) : SimulatedDevice("lock-1", 5, see
             "unlock" => "unlocked",
             _ => throw Unsupported(command),
         };
-}
-
-/// <summary>Reads a capability binding's constraints JSON.</summary>
-internal static class BindingExtensions
-{
-    public static JsonElement? ConstraintsOf(this SimulatedDevice device, string capabilityId) =>
-        device.Capabilities.FirstOrDefault(c => string.Equals(c.CapabilityId, capabilityId, StringComparison.Ordinal))?.Constraints;
 }

@@ -64,12 +64,22 @@ internal sealed class SimulatedHarness : IAsyncDisposable
         }
     }
 
-    /// <summary>Sends a batch and advances the clock by the simulated command latency.</summary>
-    public async Task<CommandOutcome> ExecuteAsync(string device, string capability, string command, string? arguments = null, string? key = null)
+    /// <summary>Sends a batch to the device's main endpoint and advances the clock by the simulated command latency.</summary>
+    public Task<CommandOutcome> ExecuteAsync(string device, string capability, string command, string? arguments = null, string? key = null) =>
+        ExecuteOnAsync(device, "main", capability, command, arguments, key);
+
+    /// <summary>Sends a batch to one endpoint and advances the clock by the simulated command latency.</summary>
+    public async Task<CommandOutcome> ExecuteOnAsync(
+        string device,
+        string endpoint,
+        string capability,
+        string command,
+        string? arguments = null,
+        string? key = null)
     {
         var batch = new DeviceCommandBatch(
             device,
-            [new DeviceCommand("main", capability, command, Json(arguments ?? "{}"))],
+            [new DeviceCommand(endpoint, capability, command, Json(arguments ?? "{}"))],
             key ?? Guid.NewGuid().ToString("N"));
         var pending = Runtime.ExecuteAsync(batch, TestContext.Current.CancellationToken);
         if (!pending.IsCompleted)

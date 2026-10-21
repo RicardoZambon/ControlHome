@@ -3,7 +3,6 @@ import {
   getDevice,
   setEndpointFavorite,
   type DeviceDetailDto,
-  type EndpointCapabilityDto,
   type EndpointDto,
 } from '@controlhome/api-client'
 import {
@@ -17,6 +16,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -24,13 +27,25 @@ import {
   cn,
   toast,
 } from '@controlhome/ui'
-import { ArrowLeft, ChevronDown, Ellipsis, Pencil, RefreshCw, SearchX, Star } from '@lucide/vue'
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import {
+  ArrowLeft,
+  ChevronDown,
+  Ellipsis,
+  Pencil,
+  RefreshCw,
+  Replace,
+  SearchX,
+  Star,
+  Unlink,
+} from '@lucide/vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { isHistoryRange, type HistoryRange } from '../../../components/charts/chartOptions'
 import DeviceIcon from '../../../components/devices/DeviceIcon.vue'
 import StateBadge from '../../../components/devices/StateBadge.vue'
-import { CapabilityControl, PowerToggle, resolveControl } from '../../../components/devices/capabilities'
+import { CapabilityControl, PowerToggle } from '../../../components/devices/capabilities'
+import { layoutOf } from '../../../components/devices/endpointLayout'
 import { standsOpen, summarizeEndpoint, type Tone } from '../../../components/devices/deviceState'
 import { capabilityLabel } from '../../../components/devices/format'
 import { isLightEndpoint } from '../../../components/devices/lightColor'
@@ -45,15 +60,23 @@ import { useRealtimeStore } from '../../../stores/realtime'
 import { useSessionStore } from '../../../stores/session'
 import AttributesTable from '../components/AttributesTable.vue'
 import DeviceEditForm from '../components/DeviceEditForm.vue'
+import ReplaceDeviceDialog from '../components/ReplaceDeviceDialog.vue'
+import { suggestsReplace } from '../replace'
+
+// The charts (ECharts) load with the History tab, not with every device page.
+const DeviceHistory = defineAsyncComponent(() => import('../components/DeviceHistory.vue'))
 
 /**
  * One device, control first: its name with a favorite star, then each endpoint's controls as cards (a light's power is
  * the switch in its brightness card's header, an AC's in its climate card's) and its readings, sized to their content.
  * The device's details (vendor, ids, every attribute) sit in a "Device info" section that starts closed; attribute ids
- * are for Admins. Admins edit the device from the "…" menu. Live like the device grid.
+ * are for Admins. The History tab charts what it recorded (24 h, 7 days, 30 days). A device its integration no longer
+ * reports (or the same hardware reached twice) says so, and Admins can hand it over to another device. Admins edit the
+ * device from the "…" menu. Live like the device grid.
  */
 const { t, te, locale } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const devices = useDevicesStore()
 const realtime = useRealtimeStore()
 const session = useSessionStore()
@@ -105,65 +128,20 @@ usePageTrail(() =>
 
 const summary = computed(() => (device.value ? toSummary(device.value) : null))
 const availability = computed(() => (device.value ? devices.availabilityOf(device.value) : 'Unknown'))
-const room = computed(() => (device.value?.roomId ? devices.roomsById.get(device.value.roomId) : undefined))
+/**
+ * The device's room; a device without one is in the room all its endpoints are in (a plug placed on a plan puts its
+ * endpoint in a room, not the device), so the header agrees with its tile and the plan.
+ */
+const room = computed(() => {
+  const current = device.value
+  if (!current) return undefined
+  const endpointRooms = new Set(current.endpoints.map((endpoint) => endpoint.effectiveRoomId))
+  const roomId =
+    current.roomId ?? (endpointRooms.size === 1 ? (endpointRooms.values().next().value ?? null) : null)
+  return roomId === null ? undefined : devices.roomsById.get(roomId)
+})
 const canFavorite = computed(() => session.hasRole('Admin', 'Member'))
 const multiple = computed(() => (device.value?.endpoints.length ?? 0) > 1)
-
-/** Controls that take the endpoint's power switch into their card's header (by registry order, the first wins). */
-const POWER_HOSTS = new Set(['level', 'thermostat', 'color'])
-
-interface ControlEntry {
-  capability: EndpointCapabilityDto
-  /** Takes both columns of the control grid. */
-  full: boolean
-  /** The endpoint's `switch`, shown as a toggle in this card's header. */
-  power?: EndpointCapabilityDto
-}
-
-interface EndpointLayout {
-  controls: ControlEntry[]
-  readings: EndpointCapabilityDto[]
-  /** The readings fill the free column next to a lone half-width control (a plug's power beside its use). */
-  readingsBeside: boolean
-}
-
-/**
- * An endpoint's controls (cards, in the registry's order) and readings (sensor cards sized to their content). Power
- * folds into the main adjustment's header; a reading the main control already shows (an AC's room temperature on its
- * dial) is left out; a lone half-width control gets the readings beside it, or else takes the whole row.
- */
-function layoutOf(endpoint: EndpointDto): EndpointLayout {
-  const resolved = endpoint.capabilities
-    .filter((capability) => !capability.retired)
-    .map((capability) => ({ capability, control: resolveControl(capability.capabilityId) }))
-    .sort((a, b) => a.control.options.order - b.control.options.order)
-  const has = (id: string) => resolved.some((entry) => entry.capability.capabilityId === id)
-  const power = resolved.find((entry) => entry.capability.capabilityId === 'switch')?.capability
-  const host = power
-    ? resolved.find((entry) => POWER_HOSTS.has(entry.capability.capabilityId))?.capability
-    : undefined
-  const thermostat = resolved.find((entry) => entry.capability.capabilityId === 'thermostat')?.capability
-  const dialShowsRoom = thermostat?.attributes.some((attribute) => attribute.key === 'currentTemperature')
-
-  const controls: ControlEntry[] = resolved
-    .filter((entry) => entry.control.options.kind === 'control')
-    .filter((entry) => !(host && entry.capability === power))
-    .map((entry) => ({
-      capability: entry.capability,
-      full: entry.control.options.wide,
-      power: entry.capability === host ? power : undefined,
-    }))
-  const readings = resolved
-    .filter((entry) => entry.control.options.kind === 'reading')
-    .filter(
-      (entry) => !(dialShowsRoom && has('thermostat') && entry.capability.capabilityId === 'temperature'),
-    )
-    .map((entry) => entry.capability)
-  const halves = controls.filter((entry) => !entry.full)
-  const readingsBeside = readings.length > 0 && readings.length <= 4 && halves.length % 2 === 1
-  if (!readingsBeside && halves.length % 2 === 1) halves[halves.length - 1]!.full = true
-  return { controls, readings, readingsBeside }
-}
 
 const endpointViews = computed(() =>
   (device.value?.endpoints ?? []).map((endpoint) => ({ endpoint, layout: layoutOf(endpoint) })),
@@ -220,6 +198,32 @@ async function toggleFavorite(endpoint: EndpointDto): Promise<void> {
   } finally {
     favoriteBusy.value = null
   }
+}
+
+// --- Tabs: controls / history (kept in the address, so a reload or a link keeps them) -------------------------------
+const tab = computed<'controls' | 'history'>({
+  get: () => (route.query.tab === 'history' ? 'history' : 'controls'),
+  set: (value) => {
+    void router.replace({ query: { ...route.query, tab: value === 'history' ? 'history' : undefined } })
+  },
+})
+const range = computed<HistoryRange>({
+  get: () => (isHistoryRange(route.query.range) ? route.query.range : '24h'),
+  set: (value) => {
+    void router.replace({ query: { ...route.query, range: value === '24h' ? undefined : value } })
+  },
+})
+
+// --- Replace (Admin) -----------------------------------------------------------------------------------------------------
+const replaceOpen = ref(false)
+const showReplace = computed(() => !!device.value && suggestsReplace(device.value))
+
+async function onReplaced(saved: DeviceDetailDto): Promise<void> {
+  replaceOpen.value = false
+  devices.upsertDevice(saved)
+  void devices.load(true)
+  toast.success(t('devices.replace.done', { name: saved.name }))
+  await router.replace({ name: 'device', params: { id: saved.id } })
 }
 
 // --- Edit (Admin) ------------------------------------------------------------------------------------------------------
@@ -286,6 +290,10 @@ const info = computed(() => {
             <Pencil aria-hidden="true" />
             {{ t('devices.edit.title') }}
           </DropdownMenuItem>
+          <DropdownMenuItem data-slot="replace-device-menu" @select="replaceOpen = true">
+            <Replace aria-hidden="true" />
+            {{ t('devices.replace.menu') }}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -340,7 +348,7 @@ const info = computed(() => {
           class="max-sm:size-12 max-sm:rounded-xl max-sm:[&_svg]:size-6"
         />
         <div class="grid min-w-0 flex-1 gap-1.5">
-          <p class="eyebrow truncate">
+          <p class="eyebrow truncate" data-slot="device-room">
             {{ room?.name ?? t('device.noRoom')
             }}<template v-if="room && room.floorName"> · {{ room.floorName }}</template>
           </p>
@@ -399,126 +407,189 @@ const info = computed(() => {
         {{ t('devices.detail.offline') }}
       </p>
 
-      <!-- Endpoints and their controls -->
-      <div class="grid gap-12">
-        <section
-          v-for="{ endpoint, layout } in endpointViews"
-          :key="endpoint.id"
-          :aria-label="endpointName(device, endpoint)"
-          data-slot="endpoint"
-          :data-endpoint-id="endpoint.id"
+      <!-- No longer reported, or the same hardware twice: hand it over to another device -->
+      <div
+        v-if="showReplace"
+        class="mb-8 flex flex-wrap items-start gap-4 rounded-2xl border border-state-warn/50 bg-state-warn/10 p-5"
+        role="status"
+        data-slot="orphaned-notice"
+      >
+        <Unlink class="mt-0.5 size-5 shrink-0 text-state-warn" aria-hidden="true" />
+        <div class="grid min-w-0 flex-1 gap-1">
+          <p class="font-medium">
+            {{ device.isOrphaned ? t('devices.replace.orphanedTitle') : t('devices.replace.duplicateTitle') }}
+          </p>
+          <p class="text-sm text-muted-foreground">
+            {{
+              device.isOrphaned
+                ? t('devices.replace.orphanedText', { integration: device.integrationName })
+                : t('devices.replace.duplicateText')
+            }}
+          </p>
+        </div>
+        <Button
+          v-if="session.isAdmin"
+          variant="outline"
+          data-slot="replace-device"
+          @click="replaceOpen = true"
         >
-          <header v-if="multiple" class="mb-5 flex items-center justify-between gap-3">
-            <h2 class="truncate font-serif text-2xl font-medium tracking-tight">
-              {{ endpointName(device, endpoint) }}
-            </h2>
-            <Button
-              v-if="canFavorite"
-              variant="ghost"
-              size="icon"
-              class="rounded-full"
-              :aria-pressed="endpoint.favorite"
-              :aria-label="t('devices.favorite.toggle', { name: endpointName(device, endpoint) })"
-              :loading="favoriteBusy === endpoint.id"
-              @click="toggleFavorite(endpoint)"
-            >
-              <Star
-                :class="
-                  cn(
-                    'size-5',
-                    endpoint.favorite ? 'fill-state-energy text-state-energy' : 'text-muted-foreground',
-                  )
-                "
-                aria-hidden="true"
-              />
-            </Button>
-          </header>
-
-          <div
-            v-if="layout.controls.length > 0"
-            class="grid items-start gap-4 md:grid-flow-row-dense md:grid-cols-2"
-          >
-            <section
-              v-for="entry in layout.controls"
-              :key="entry.capability.id"
-              :class="cn('rounded-2xl border bg-card p-5 shadow-xs sm:p-6', entry.full && 'md:col-span-2')"
-              :aria-label="capabilityLabel(entry.capability.capabilityId, t, te)"
-              :data-capability="entry.capability.capabilityId"
-            >
-              <div class="mb-5 flex min-h-control items-center justify-between gap-3">
-                <h3 class="eyebrow">{{ capabilityLabel(entry.capability.capabilityId, t, te) }}</h3>
-                <PowerToggle
-                  v-if="entry.power"
-                  :device="summary"
-                  :endpoint="endpoint"
-                  :capability="entry.power"
-                />
-              </div>
-              <CapabilityControl :device="summary" :endpoint="endpoint" :capability="entry.capability" />
-            </section>
-            <!-- Readings in the free column beside a lone control, sized to their content -->
-            <div
-              v-if="layout.readingsBeside"
-              :class="cn('grid content-start items-start gap-3', layout.readings.length > 1 && 'grid-cols-2')"
-              data-slot="readings"
-            >
-              <CapabilityControl
-                v-for="capability in layout.readings"
-                :key="capability.id"
-                :device="summary"
-                :endpoint="endpoint"
-                :capability="capability"
-              />
-            </div>
-          </div>
-
-          <div
-            v-if="layout.readings.length > 0 && !layout.readingsBeside"
-            :class="
-              cn(
-                'grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4',
-                layout.controls.length > 0 && 'mt-4',
-              )
-            "
-            data-slot="readings"
-          >
-            <CapabilityControl
-              v-for="capability in layout.readings"
-              :key="capability.id"
-              :device="summary"
-              :endpoint="endpoint"
-              :capability="capability"
-            />
-          </div>
-        </section>
+          <Replace aria-hidden="true" />
+          {{ t('devices.replace.action') }}
+        </Button>
       </div>
 
-      <!-- Device info: closed until asked for -->
-      <details class="group mt-12 rounded-2xl border bg-card shadow-xs" data-slot="device-info">
-        <summary
-          class="flex min-h-control-lg cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-5 py-3 font-medium outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden"
-        >
-          <span class="grid gap-0.5">
-            <span class="font-serif text-xl tracking-tight">{{ t('devices.info.title') }}</span>
-            <span class="text-sm font-normal text-muted-foreground">{{ t('devices.info.summary') }}</span>
-          </span>
-          <ChevronDown
-            class="size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
-            aria-hidden="true"
-          />
-        </summary>
-        <div class="grid gap-6 border-t px-5 py-5 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
-          <dl class="grid grid-cols-2 content-start gap-x-4 gap-y-3 text-sm lg:grid-cols-1">
-            <div v-for="row in info" :key="row.label" class="grid gap-0.5">
-              <dt class="text-muted-foreground">{{ row.label }}</dt>
-              <dd :class="cn('font-medium break-words', row.mono && 'font-mono text-xs')">{{ row.value }}</dd>
-            </div>
-          </dl>
-          <div class="min-w-0">
-            <AttributesTable :device="device" :endpoints="device.endpoints" :show-ids="session.isAdmin" />
+      <Tabs v-model="tab" class="gap-8">
+        <TabsList class="w-full sm:w-auto" data-slot="device-tabs">
+          <TabsTrigger value="controls" class="px-4">{{ t('devices.tabs.controls') }}</TabsTrigger>
+          <TabsTrigger value="history" class="px-4" data-slot="history-tab">{{
+            t('devices.tabs.history')
+          }}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="history" class="mt-0">
+          <DeviceHistory v-if="tab === 'history'" v-model:range="range" :device="device" />
+        </TabsContent>
+
+        <TabsContent value="controls" class="mt-0">
+          <!-- Endpoints and their controls -->
+          <div class="grid gap-12">
+            <section
+              v-for="{ endpoint, layout } in endpointViews"
+              :key="endpoint.id"
+              :aria-label="endpointName(device, endpoint)"
+              data-slot="endpoint"
+              :data-endpoint-id="endpoint.id"
+            >
+              <header v-if="multiple" class="mb-5 flex items-center justify-between gap-3">
+                <h2 class="truncate font-serif text-2xl font-medium tracking-tight">
+                  {{ endpointName(device, endpoint) }}
+                </h2>
+                <Button
+                  v-if="canFavorite"
+                  variant="ghost"
+                  size="icon"
+                  class="rounded-full"
+                  :aria-pressed="endpoint.favorite"
+                  :aria-label="t('devices.favorite.toggle', { name: endpointName(device, endpoint) })"
+                  :loading="favoriteBusy === endpoint.id"
+                  @click="toggleFavorite(endpoint)"
+                >
+                  <Star
+                    :class="
+                      cn(
+                        'size-5',
+                        endpoint.favorite ? 'fill-state-energy text-state-energy' : 'text-muted-foreground',
+                      )
+                    "
+                    aria-hidden="true"
+                  />
+                </Button>
+              </header>
+
+              <div
+                v-if="layout.controls.length > 0"
+                class="grid items-start gap-4 md:grid-flow-row-dense md:grid-cols-2"
+              >
+                <section
+                  v-for="entry in layout.controls"
+                  :key="entry.capability.id"
+                  :class="
+                    cn('rounded-2xl border bg-card p-5 shadow-xs sm:p-6', entry.full && 'md:col-span-2')
+                  "
+                  :aria-label="capabilityLabel(entry.capability.capabilityId, t, te)"
+                  :data-capability="entry.capability.capabilityId"
+                >
+                  <div class="mb-5 flex min-h-control items-center justify-between gap-3">
+                    <h3 class="eyebrow">{{ capabilityLabel(entry.capability.capabilityId, t, te) }}</h3>
+                    <PowerToggle
+                      v-if="entry.power"
+                      :device="summary"
+                      :endpoint="endpoint"
+                      :capability="entry.power"
+                    />
+                  </div>
+                  <CapabilityControl :device="summary" :endpoint="endpoint" :capability="entry.capability" />
+                </section>
+                <!-- Readings in the free column beside a lone control, sized to their content -->
+                <div
+                  v-if="layout.readingsBeside"
+                  :class="
+                    cn('grid content-start items-start gap-3', layout.readings.length > 1 && 'grid-cols-2')
+                  "
+                  data-slot="readings"
+                >
+                  <CapabilityControl
+                    v-for="capability in layout.readings"
+                    :key="capability.id"
+                    :device="summary"
+                    :endpoint="endpoint"
+                    :capability="capability"
+                  />
+                </div>
+              </div>
+
+              <div
+                v-if="layout.readings.length > 0 && !layout.readingsBeside"
+                :class="
+                  cn(
+                    'grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4',
+                    layout.controls.length > 0 && 'mt-4',
+                  )
+                "
+                data-slot="readings"
+              >
+                <CapabilityControl
+                  v-for="capability in layout.readings"
+                  :key="capability.id"
+                  :device="summary"
+                  :endpoint="endpoint"
+                  :capability="capability"
+                />
+              </div>
+            </section>
           </div>
-        </div>
-      </details>
+
+          <!-- Device info: closed until asked for -->
+          <details class="group mt-12 rounded-2xl border bg-card shadow-xs" data-slot="device-info">
+            <summary
+              class="flex min-h-control-lg cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-5 py-3 font-medium outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background [&::-webkit-details-marker]:hidden"
+            >
+              <span class="grid gap-0.5">
+                <span class="font-serif text-xl tracking-tight">{{ t('devices.info.title') }}</span>
+                <span class="text-sm font-normal text-muted-foreground">{{ t('devices.info.summary') }}</span>
+              </span>
+              <ChevronDown
+                class="size-5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                aria-hidden="true"
+              />
+            </summary>
+            <div class="grid gap-6 border-t px-5 py-5 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
+              <dl class="grid grid-cols-2 content-start gap-x-4 gap-y-3 text-sm lg:grid-cols-1">
+                <div v-for="row in info" :key="row.label" class="grid gap-0.5">
+                  <dt class="text-muted-foreground">{{ row.label }}</dt>
+                  <dd :class="cn('font-medium break-words', row.mono && 'font-mono text-xs')">
+                    {{ row.value }}
+                  </dd>
+                </div>
+              </dl>
+              <div class="min-w-0">
+                <AttributesTable :device="device" :endpoints="device.endpoints" :show-ids="session.isAdmin" />
+              </div>
+            </div>
+          </details>
+        </TabsContent>
+      </Tabs>
+
+      <Dialog v-model:open="replaceOpen">
+        <DialogScrollContent :close-label="t('common.close')" class="sm:max-w-lg">
+          <ReplaceDeviceDialog
+            v-if="replaceOpen"
+            :device="device"
+            @replaced="onReplaced"
+            @cancel="replaceOpen = false"
+          />
+        </DialogScrollContent>
+      </Dialog>
 
       <Dialog v-model:open="editOpen">
         <DialogScrollContent :close-label="t('common.close')" class="sm:max-w-lg">

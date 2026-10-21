@@ -28,6 +28,7 @@ public sealed class SimulatedRuntimeTests
         Capabilities(context, Contact).ShouldBe(["contact", "battery"]);
         Capabilities(context, DoorLock).ShouldBe(["lock"]);
 
+        context.Syncs.ShouldHaveSingleItem().ShouldBe([Light, Plug, Ac, Contact, DoorLock], "one full inventory");
         context.Availability.ShouldBe(context.Devices.Select(d => (d.ExternalId, Availability.Online)).ToList());
         context.Statuses.Select(s => s.Status).ShouldBe([IntegrationStatus.Connecting, IntegrationStatus.Ok]);
 
@@ -330,10 +331,14 @@ public sealed class SimulatedRuntimeTests
 
         descriptor.Key.ShouldBe("simulated");
         descriptor.Category.ShouldBe(ConnectorCategory.Virtual);
-        descriptor.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "seed"]);
-        descriptor.ConfigFields.ShouldAllBe(f => !f.Secret);
-        descriptor.Features.PushInventory.ShouldBeTrue();
-        new SimulatedConnectorFactory().CreateSetupFlow().ShouldBeNull();
+        descriptor.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "language", "seed", "simulateReauth"]);
+        descriptor.ConfigFields.ShouldAllBe(f => !f.Secret && !f.Required);
+        descriptor.ConfigFields.Where(f => f.Advanced).Select(f => f.Key).ShouldBe(["language", "seed", "simulateReauth"]);
+        var presetHelp = descriptor.ConfigFields[0].Help.ShouldNotBeNull();
+        presetHelp.En.ShouldNotContain("basic:", Case.Sensitive, "option keys are not prose");
+        presetHelp.En.ShouldContain("20 devices", Case.Sensitive, "the count comes from the demo home itself");
+        (descriptor.Features.PushInventory, descriptor.Features.SetupFlow, descriptor.Features.Reauth).ShouldBe((true, true, true));
+        new SimulatedConnectorFactory().CreateSetupFlow().ShouldBeOfType<SimulatedSetupFlow>();
     }
 
     private static List<string> Capabilities(RecordingContext context, string device) =>

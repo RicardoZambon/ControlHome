@@ -29,7 +29,7 @@ import { emptyDraw, removeLastDrawPoint, type DrawState } from './tools/drawTool
 import { useCommandStack } from './useCommandStack'
 
 export type EditorTool = 'select' | 'draw' | 'calibrate' | 'background'
-export type PanelTab = 'rooms' | 'floor' | 'background'
+export type PanelTab = 'rooms' | 'devices' | 'floor' | 'background'
 
 export interface EditorSelection {
   roomKey: string | null

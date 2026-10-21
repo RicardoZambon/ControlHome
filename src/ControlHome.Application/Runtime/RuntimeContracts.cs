@@ -48,4 +48,27 @@ public static class RuntimeStatusExtensions
         ArgumentNullException.ThrowIfNull(status);
         return new SystemStatusDto(status.Mode.ToString(), status.HistoryPaused, AppVersion.Informational);
     }
+
+    /// <summary>
+    /// Why an integration change (create, update, delete, a flow's result) must not be made in this process, or <c>null</c>.
+    /// Integration changes are made only where they are applied: the active instance reads integrations only when it
+    /// becomes active, so a change made on a standby would never reach it (a deleted integration would keep running with
+    /// its credentials): 409 <c>runtime.standby</c>. While this process is still deciding (Starting, with a device runtime)
+    /// it may yet become a standby: 503 <c>runtime.starting</c>. Without a device runtime nothing runs anywhere from here,
+    /// so nothing is refused.
+    /// </summary>
+    public static AppError? IntegrationChangeRefusal(this IRuntimeStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        return status.Mode switch
+        {
+            RuntimeMode.Standby => AppError.Conflict(
+                ErrorCodes.RuntimeStandby,
+                "This instance is a read-only standby; make the change on the instance that runs the devices."),
+            RuntimeMode.Starting when status.Enabled => AppError.Unavailable(
+                ErrorCodes.RuntimeStarting,
+                "The device runtime is starting; try again in a moment."),
+            _ => null,
+        };
+    }
 }

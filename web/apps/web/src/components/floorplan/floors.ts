@@ -18,6 +18,32 @@ export function floorEyebrow(floor: Pick<FloorSummaryDto, 'name' | 'level'>, t: 
   return same ? '' : label
 }
 
+/** How much room is left around what a plan shows when it is fitted to it (cm). */
+const PLAN_MARGIN_CM = 60
+
+/**
+ * What is drawn on a floor — its rooms and its devices — as a rectangle in cm, with a margin, inside the floor: a plan
+ * opens fitted to it rather than to the whole (mostly empty) floor sheet. The whole floor when it has no rooms.
+ */
+export function planBounds(floor: {
+  widthCm: number
+  heightCm: number
+  rooms: readonly { polygon: readonly { x: number; y: number }[] }[]
+  placements: readonly { xCm: number; yCm: number }[]
+}): { x: number; y: number; width: number; height: number } {
+  const points = [
+    ...floor.rooms.flatMap((room) => room.polygon),
+    ...floor.placements.map((placement) => ({ x: placement.xCm, y: placement.yCm })),
+  ]
+  if (floor.rooms.length === 0 || points.length === 0)
+    return { x: 0, y: 0, width: floor.widthCm, height: floor.heightCm }
+  const minX = Math.max(0, Math.min(...points.map((p) => p.x)) - PLAN_MARGIN_CM)
+  const minY = Math.max(0, Math.min(...points.map((p) => p.y)) - PLAN_MARGIN_CM)
+  const maxX = Math.min(floor.widthCm, Math.max(...points.map((p) => p.x)) + PLAN_MARGIN_CM)
+  const maxY = Math.min(floor.heightCm, Math.max(...points.map((p) => p.y)) + PLAN_MARGIN_CM)
+  return { x: minX, y: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) }
+}
+
 /** The rooms' total area in m². */
 export function totalAreaM2(floor: Pick<FloorDto, 'rooms'>): number {
   return floor.rooms.reduce((sum, room) => sum + roomAreaM2(room.polygon), 0)
