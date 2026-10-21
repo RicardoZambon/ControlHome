@@ -27,9 +27,11 @@ const props = withDefaults(
     /** Names of on/off states (`'0'`, `'1'`) and enum values. */
     labelOf?: (value: string) => string
     enumValues?: readonly string[]
+    /** The last value holds until the window's end (raw changes; statistics completed with recent raw changes). */
+    heldToEnd?: boolean
     class?: HTMLAttributes['class']
   }>(),
-  { token: 'primary' },
+  { token: 'primary', heldToEnd: false },
 )
 
 const { t, locale } = useI18n()
@@ -65,6 +67,7 @@ const option = computed(() =>
     labelOf: props.labelOf,
     enumValues: props.enumValues,
     name: props.label,
+    heldToEnd: props.heldToEnd,
   }),
 )
 </script>

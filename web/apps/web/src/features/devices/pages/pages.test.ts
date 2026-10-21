@@ -20,12 +20,32 @@ const api = vi.hoisted(() => ({
   getDevice: vi.fn(),
   sendCommand: vi.fn(),
   setEndpointFavorite: vi.fn(),
+  getAttributeHistory: vi.fn(),
+  listEnergyHourly: vi.fn(),
 }))
 
 vi.mock('@controlhome/api-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@controlhome/api-client')>()),
   ...api,
 }))
+
+// jsdom lays nothing out, so ECharts can't draw: a stand-in that shows how many points a chart was given.
+vi.mock('vue-echarts', async () => {
+  const { defineComponent, h } = await import('vue')
+  return {
+    default: defineComponent({
+      name: 'VChart',
+      props: { option: { type: Object, required: true } },
+      setup: (props) => () =>
+        h('div', {
+          'data-slot': 'vchart',
+          'data-series': JSON.stringify(
+            (props.option.series as { name?: string; data: unknown[] }[]).map((entry) => entry.data.length),
+          ),
+        }),
+    }),
+  }
+})
 
 const ok = (data: unknown, status = 200) => ({
   data,
@@ -365,6 +385,89 @@ describe('device page', () => {
       expect.objectContaining({ command: 'setLevel', arguments: { level: 26 } }),
     ])
     light.wrapper.unmount()
+  })
+
+  it('charts the recorded history up to now, and the energy used', async () => {
+    signedIn('Member', 'en')
+    // The plug's power is recorded (a measurement): statistics, then the raw changes since the last bucket.
+    api.listCapabilities.mockResolvedValue(
+      ok(
+        CATALOGUE.map((capability) =>
+          capability.id === 'power'
+            ? {
+                ...capability,
+                attributes: capability.attributes.map((entry) => ({
+                  ...entry,
+                  recorded: true,
+                  stateClass: 'measurement',
+                })),
+              }
+            : capability,
+        ),
+      ),
+    )
+    const minute = 60_000
+    // Within the last hour (the chart's window ends now).
+    const bucket = Math.floor((Date.now() - 60 * minute) / (5 * minute)) * 5 * minute
+    const at = (time: number, v: number, band?: [number, number]) => ({
+      t: new Date(time).toISOString(),
+      v,
+      min: band?.[0] ?? null,
+      max: band?.[1] ?? null,
+      s: null,
+    })
+    api.getAttributeHistory.mockImplementation(({ query }: { query: { resolution: string } }) =>
+      Promise.resolve(
+        ok(
+          query.resolution === 'raw'
+            ? {
+                attributeId: 4,
+                resolution: 'raw',
+                unit: 'W',
+                points: [at(bucket + 10 * minute, 41), at(bucket + 12 * minute, 55)],
+              }
+            : {
+                attributeId: 4,
+                resolution: '5m',
+                unit: 'W',
+                points: [at(bucket, 40, [38, 44]), at(bucket + 5 * minute, 42, [40, 45])],
+              },
+        ),
+      ),
+    )
+    api.listEnergyHourly.mockResolvedValue(
+      ok([
+        {
+          endpointId: 'e-plug',
+          hourStartUtc: '2026-10-21T10:00:00Z',
+          wh: 120,
+          source: 'counter',
+          estimated: false,
+        },
+      ]),
+    )
+
+    const { wrapper } = await open('/devices/d-plug?tab=history')
+    // The tab's charts load on their own (a separate chunk).
+    const power = await vi.waitFor(() =>
+      wrapper.get('[data-slot="attribute-history"][data-attribute-id="4"]'),
+    )
+    await vi.waitFor(() => power.get('[data-slot="history-chart"]'))
+    // The last 24 hours (the server's default range), and the raw changes from the last bucket's end on.
+    expect(api.getAttributeHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ path: { id: 4 }, query: { resolution: 'auto' } }),
+    )
+    expect(api.getAttributeHistory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { id: 4 },
+        query: { from: new Date(bucket + 10 * minute).toISOString(), resolution: 'raw' },
+      }),
+    )
+    expect(power.get('[data-slot="history-chart"]').attributes('data-points')).toBe('4')
+    // The band (min, range) under the mean; the mean runs on with the latest value to now.
+    expect(JSON.parse(power.get('[data-slot="vchart"]').attributes('data-series')!)).toEqual([4, 4, 5])
+    expect(wrapper.get('[data-slot="energy-total"]').text()).toContain('120')
+    wrapper.unmount()
   })
 
   it('says when a device is gone', async () => {

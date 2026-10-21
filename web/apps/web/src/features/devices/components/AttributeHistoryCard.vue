@@ -5,7 +5,13 @@ import { RefreshCw } from '@lucide/vue'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import HistoryChart from '../../../components/charts/HistoryChart.vue'
-import { rangeQuery, timeWindow, type HistoryRange } from '../../../components/charts/chartOptions'
+import {
+  rangeQuery,
+  rawTailFrom,
+  timeWindow,
+  withRawTail,
+  type HistoryRange,
+} from '../../../components/charts/chartOptions'
 import {
   attributeLabel,
   capabilityLabel,
@@ -20,7 +26,9 @@ import { chartToken, type RecordedAttribute } from '../history'
 
 /**
  * One recorded attribute over the chosen range: its name, its value now, and its history (`GET
- * /api/attributes/{id}/history`, resolution picked by the server). Fetched again when the range or `refresh` changes.
+ * /api/attributes/{id}/history`, resolution picked by the server). Statistics end with their last closed bucket, so a
+ * number's raw changes since then are fetched too and complete the line up to now. Fetched again when the range or
+ * `refresh` changes.
  */
 const props = defineProps<{
   entry: RecordedAttribute
@@ -39,18 +47,34 @@ const series = shallowRef<HistorySeriesDto | null>(null)
 const loading = ref(true)
 const error = ref<unknown>(null)
 const fetchedAt = ref(Date.now())
+/** The series ends with raw changes: its last value holds until now. */
+const heldToEnd = ref(false)
 
 async function load(): Promise<void> {
   error.value = null
   const now = Date.now()
+  const id = props.entry.attribute.attributeId
   try {
-    const result = unwrap(
+    let result = unwrap(
       await getAttributeHistory({
-        path: { id: props.entry.attribute.attributeId },
+        path: { id },
         query: { ...rangeQuery(props.range, now), resolution: 'auto' },
       }),
     )
+    // Statistics end with the last closed bucket: the raw changes since then complete the chart up to now.
+    const tailFrom = props.entry.kind === 'number' ? rawTailFrom(result, now) : null
+    let tail = false
+    if (tailFrom) {
+      const raw = unwrap(
+        await getAttributeHistory({ path: { id }, query: { from: tailFrom, resolution: 'raw' } }),
+      )
+      const merged = withRawTail(result, raw)
+      tail = merged.points.length > result.points.length
+      // No bucket closed yet (a device that just started reporting): its raw changes are the whole series.
+      result = result.points.length === 0 ? { ...merged, resolution: 'raw' } : merged
+    }
     series.value = result
+    heldToEnd.value = result.resolution === 'raw' || tail
     fetchedAt.value = now
   } catch (failure) {
     error.value = failure
@@ -166,6 +190,7 @@ const chartLabel = computed(() =>
       :format-value="(value) => formatMeasurement(value, unit, locale)"
       :label-of="labelOf"
       :enum-values="enumValues"
+      :held-to-end="heldToEnd"
     />
   </section>
 </template>

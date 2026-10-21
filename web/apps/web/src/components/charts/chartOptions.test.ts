@@ -11,8 +11,10 @@ import {
   historyOption,
   isHistoryRange,
   rangeQuery,
+  rawTailFrom,
   timeWindow,
   totalWh,
+  withRawTail,
   type ChartPalette,
   type HistoryOptionInput,
 } from './chartOptions'
@@ -108,6 +110,37 @@ describe('historyOption', () => {
     expect(series[2]!.step).toBe(false)
   })
 
+  it('holds statistics followed by recent raw changes to the end of the window', () => {
+    const option = historyOption(
+      input({
+        series: {
+          resolution: '5m',
+          points: [point(NOW - 10 * 60_000, 20, { min: 18, max: 23 }), point(NOW - 3 * 60_000, 26)],
+        },
+        heldToEnd: true,
+      }),
+    )
+    const line = (option.series as SeriesList).find((entry) => entry.name === 'Power')!
+    expect(line.data.at(-1)).toEqual([NOW, 26])
+  })
+
+  it('marks the points of a series with only one or two of them, so a short one still shows', () => {
+    const one = historyOption(
+      input({ kind: 'bool', series: { resolution: 'raw', points: [point(NOW - 60_000, 1)] } }),
+    )
+    expect((one.series as { showSymbol?: boolean }[])[0]!.showSymbol).toBe(true)
+    const many = historyOption(
+      input({
+        kind: 'bool',
+        series: {
+          resolution: 'raw',
+          points: [point(NOW - 3 * HOUR, 1), point(NOW - 2 * HOUR, 0), point(NOW - HOUR, 1)],
+        },
+      }),
+    )
+    expect((many.series as { showSymbol?: boolean }[])[0]!.showSymbol).toBe(false)
+  })
+
   it('draws booleans as on/off steps with their names on the axis', () => {
     const option = historyOption(
       input({
@@ -167,6 +200,41 @@ describe('series helpers', () => {
 
   it('escapes HTML', () => {
     expect(escapeHtml(`<a href="x">'&'</a>`)).toBe('&#60;a href=&#34;x&#34;&#62;&#39;&#38;&#39;&#60;/a&#62;')
+  })
+})
+
+describe('recent raw tail', () => {
+  const MINUTE = 60_000
+
+  it('starts the tail where the last statistics bucket ends, else the last 6 hours', () => {
+    const stats = { resolution: '5m', points: [point(NOW - 20 * MINUTE, 40), point(NOW - 15 * MINUTE, 42)] }
+    expect(rawTailFrom(stats, NOW)).toBe(new Date(NOW - 10 * MINUTE).toISOString())
+    expect(rawTailFrom({ resolution: '1h', points: [point(NOW - 3 * HOUR, 40)] }, NOW)).toBe(
+      new Date(NOW - 2 * HOUR).toISOString(),
+    )
+    expect(rawTailFrom({ resolution: '5m', points: [] }, NOW)).toBe(new Date(NOW - 6 * HOUR).toISOString())
+    // Raw series need no tail.
+    expect(rawTailFrom({ resolution: 'raw', points: [point(NOW - HOUR, 1)] }, NOW)).toBeNull()
+  })
+
+  it('appends the raw changes after the last bucket to the statistics', () => {
+    const stats = {
+      attributeId: 7,
+      unit: 'W',
+      resolution: '5m',
+      points: [point(NOW - 20 * MINUTE, 40, { min: 38, max: 44 }), point(NOW - 15 * MINUTE, 42)],
+    }
+    const raw = {
+      attributeId: 7,
+      unit: 'W',
+      resolution: 'raw',
+      points: [point(NOW - 11 * MINUTE, 41), point(NOW - 10 * MINUTE, 43), point(NOW - 2 * MINUTE, 50)],
+    }
+    const merged = withRawTail(stats, raw)
+    expect(merged.resolution).toBe('5m')
+    expect(merged.points.map((entry) => entry.v)).toEqual([40, 42, 43, 50])
+    // Nothing from the statistics: the raw changes alone.
+    expect(withRawTail({ ...stats, points: [] }, raw).points).toHaveLength(3)
   })
 })
 

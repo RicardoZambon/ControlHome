@@ -240,9 +240,9 @@ type SimulatedHome = Awaited<ReturnType<typeof createSimulatedHome>>
 async function seedDevices(request: APIRequestContext, floorId: number): Promise<SimulatedHome> {
   const home = await createSimulatedHome(request)
   // Living room (100–1000 × 100–750), kitchen (1000–1900 × 100–900), bedroom (100–1000 × 750–1400).
-  await placeEndpoint(request, home.light, floorId, 520, 380)
-  await placeEndpoint(request, home.plug, floorId, 1450, 420)
-  await placeEndpoint(request, home.ac, floorId, 560, 1080)
+  await placeEndpoint(request, home.light, floorId, 300, 260)
+  await placeEndpoint(request, home.plug, floorId, 1720, 280)
+  await placeEndpoint(request, home.ac, floorId, 300, 1230)
   const favorite = await request.put(`/api/endpoints/${home.light.endpoints[0]!.id}/favorite`, {
     headers: mutationHeaders(),
     data: { favorite: true },
@@ -275,7 +275,11 @@ function homeRoutes(home: SimulatedHome, floor: { id: number }, integrationId: s
     {
       path: `/floors/${floor.id}/edit?tab=devices`,
       name: 'floor-edit-devices',
-      ready: (page) => page.locator('[data-slot="unplaced-device"]').filter({ hasText: home.lock.name }),
+      // Below lg the panel is a sheet: the bar under the plan offers to place a device.
+      ready: (page, locale) =>
+        (page.viewportSize()?.width ?? 1440) < 1024
+          ? page.getByRole('button', { name: tr(locale, 'floors.editor.devices.placeShort') })
+          : page.locator('[data-slot="unplaced-device"]').filter({ hasText: home.lock.name }),
     },
     {
       path: `/devices/${home.plug.id}?tab=history`,
@@ -915,11 +919,22 @@ for (const width of WIDTHS) {
           await page.goto(`/floors/${floor.id}`)
           await waitForLive(page)
           await expect(page.locator('[data-slot="placed-device"]')).toHaveCount(3)
-          await tapPlan(page, 520, 380, false)
+          await tapPlan(page, 300, 260, false)
           await expect(page.locator('[data-slot="device-quick-panel"]')).toBeVisible()
           await captureScreen('floor-view-device')
           await page.keyboard.press('Escape')
           await expect(page.locator('[data-slot="device-quick-panel"]')).toBeHidden()
+
+          // Phones and tablets: the editor's Devices tab is a sheet over the plan.
+          if (width < 1024) {
+            await page.goto(`/floors/${floor.id}/edit?tab=devices`)
+            await page.getByRole('button', { name: tr(locale, 'floors.editor.devices.placeShort') }).click()
+            await expect(
+              page.locator('[data-slot="unplaced-device"]').filter({ hasText: home.lock.name }),
+            ).toBeVisible()
+            await captureScreen('floor-edit-devices-sheet')
+            await page.keyboard.press('Escape')
+          }
 
           // The device info opened: every attribute as a table, or as a stacked list on phones.
           await page.goto(`/devices/${home.contact.id}`)

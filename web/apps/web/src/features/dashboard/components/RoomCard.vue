@@ -62,7 +62,11 @@ const power = computed(() =>
           {{
             room.deviceCount === 0
               ? t('dashboard.rooms.noDevices')
-              : t('dashboard.rooms.active', { active: live.activeDeviceCount, total: room.deviceCount })
+              : t(
+                  'dashboard.rooms.active',
+                  { active: live.activeDeviceCount, total: room.deviceCount },
+                  room.deviceCount,
+                )
           }}
         </span>
       </p>

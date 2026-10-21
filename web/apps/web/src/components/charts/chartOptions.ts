@@ -76,6 +76,11 @@ export interface HistoryOptionInput {
   enumValues?: readonly string[]
   /** Accessible series name. */
   name: string
+  /**
+   * The last value holds until the window's end: always for raw changes, and for statistics followed by the recent
+   * raw changes (`withRawTail`).
+   */
+  heldToEnd?: boolean
 }
 
 /** A point's time in ms. */
@@ -91,6 +96,43 @@ export function extendToEnd<T>(points: readonly [number, T][], end: number): [nu
   return [...points, [end, last[1]]]
 }
 
+/** How long a statistics bucket lasts. */
+const BUCKET_MS: Record<string, number> = { '5m': 5 * 60_000, '1h': HOUR_MS }
+
+/** The longest raw stretch the server serves for `auto` (docs/architecture.md §6 "Reading history"). */
+const RAW_TAIL_MAX_MS = 6 * HOUR_MS
+
+/**
+ * Statistics end where the last closed bucket ends (up to a few minutes ago, a fresh device has none yet): where the
+ * recent raw changes that complete such a series start — the last bucket's end, or the last 6 hours when there is no
+ * bucket. `null` for a raw series (it is complete).
+ */
+export function rawTailFrom(
+  series: Pick<HistorySeriesDto, 'resolution' | 'points'>,
+  now: number,
+): string | null {
+  const bucket = BUCKET_MS[series.resolution]
+  if (bucket === undefined) return null
+  const last = series.points[series.points.length - 1]
+  const from = last ? timeOf(last) + bucket : now - RAW_TAIL_MAX_MS
+  return new Date(from).toISOString()
+}
+
+/**
+ * Statistics completed with the raw changes after their last bucket (as the newest part of a chart: what happened in
+ * the last minutes, before its bucket closed). The raw series is the one served from `rawTailFrom`.
+ */
+export function withRawTail<T extends Pick<HistorySeriesDto, 'resolution' | 'points'>>(
+  statistics: T,
+  raw: Pick<HistorySeriesDto, 'points'>,
+): T {
+  const last = statistics.points[statistics.points.length - 1]
+  const bucket = BUCKET_MS[statistics.resolution] ?? 0
+  const end = last ? timeOf(last) + bucket : -Infinity
+  const tail = raw.points.filter((point) => timeOf(point) >= end)
+  return { ...statistics, points: [...statistics.points, ...tail] }
+}
+
 /** The distinct string values of a series, in the order given (then any others in the order seen). */
 export function enumCategories(
   points: readonly Pick<HistoryPointDto, 's'>[],
@@ -104,6 +146,10 @@ export function enumCategories(
 export function historyOption(input: HistoryOptionInput): ChartOption {
   const { series, kind, window, palette } = input
   const raw = series.resolution === 'raw'
+  const held = raw || input.heldToEnd === true
+  // A series of one or two points (a device that just started reporting) can be a sliver at the window's edge: its
+  // points are marked so it still shows.
+  const showSymbol = series.points.length <= 2
   const withDate = window.max - window.min > DAY_MS
   const xAxis = {
     type: 'time' as const,
@@ -153,7 +199,7 @@ export function historyOption(input: HistoryOptionInput): ChartOption {
           name: input.name,
           data,
           step: 'end',
-          showSymbol: false,
+          showSymbol,
           connectNulls: false,
           lineStyle: { width: 2, color: palette.line },
           itemStyle: { color: palette.line },
@@ -188,7 +234,7 @@ export function historyOption(input: HistoryOptionInput): ChartOption {
           name: input.name,
           data,
           step: 'end',
-          showSymbol: false,
+          showSymbol,
           connectNulls: false,
           lineStyle: { width: 2, color: palette.line },
           itemStyle: { color: palette.line },
@@ -233,9 +279,9 @@ export function historyOption(input: HistoryOptionInput): ChartOption {
   lines.push({
     type: 'line',
     name: input.name,
-    data: raw ? extendToEnd(values, window.max) : values,
+    data: held ? extendToEnd(values, window.max) : values,
     step: raw ? 'end' : false,
-    showSymbol: series.points.length === 1,
+    showSymbol,
     connectNulls: false,
     lineStyle: { width: 2, color: palette.line },
     itemStyle: { color: palette.line },

@@ -28,6 +28,11 @@ const props = withDefaults(
     focusable?: boolean
     /** Shown dimmed (the editor's other tabs). */
     muted?: boolean
+    /**
+     * The name stays shown while selected (the editor). Off in view mode, where the selected device's panel, open
+     * beside it, already names it, and the label would only cover the plan.
+     */
+    nameOnSelect?: boolean
   }>(),
   {
     compact: false,
@@ -37,6 +42,7 @@ const props = withDefaults(
     at: null,
     focusable: false,
     muted: false,
+    nameOnSelect: true,
   },
 )
 
@@ -171,7 +177,7 @@ const offline = computed(() => summary.value.tone === 'offline')
         :class="
           cn(
             'pointer-events-none fill-foreground stroke-card font-sans font-medium transition-opacity',
-            selected || dragging
+            (selected && nameOnSelect) || dragging
               ? 'opacity-100'
               : 'opacity-0 group-hover/marker:opacity-100 group-focus-visible/marker:opacity-100',
           )

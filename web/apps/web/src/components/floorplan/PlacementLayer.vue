@@ -111,6 +111,7 @@ function onActivate(marker: PlanMarker): void {
       :coarse="coarse"
       :muted="muted"
       :selected="selectedId === marker.placement.id"
+      :name-on-select="mode === 'edit'"
       :dragging="drag?.id === marker.placement.id && drag.moved"
       :at="drag?.id === marker.placement.id ? drag.at : null"
       :focusable="mode !== 'preview' && !muted"

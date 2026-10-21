@@ -103,7 +103,7 @@ const label = computed(() => t('history.energyLabel', { range: t(`history.ranges
           class="font-serif text-2xl leading-none font-medium tracking-tight tabular-nums"
           data-slot="energy-total"
         >
-          {{ rows ? total : '—' }}
+          {{ rows && rows.length > 0 ? total : '—' }}
         </span>
         <span v-if="estimated" class="text-xs text-muted-foreground">{{ t('history.partlyEstimated') }}</span>
       </div>

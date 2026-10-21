@@ -56,7 +56,7 @@
   },
   "rooms": {
     "heading": "Cômodos",
-    "active": "{active} de {total} ligados",
+    "active": "{active} de {total} ligado | {active} de {total} ligados",
     "noDevices": "Ainda sem dispositivos",
     "temperature": "Temperatura",
     "power": "Potência",
