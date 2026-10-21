@@ -1,11 +1,13 @@
 import { statSync, writeFileSync } from 'node:fs'
+import type { APIRequestContext } from '@playwright/test'
 import {
+  SIMULATED,
   completeSetup,
   createFloor,
-  createSimulatedHome,
   expect,
   listDevices,
   listPlacements,
+  mutationHeaders,
   placeEndpoint,
   resetApp,
   test,
@@ -18,6 +20,35 @@ import { t } from './i18n'
 
 const PASSPHRASE = 'correct horse battery staple'
 
+type FlowStep = { flowId: string; type: string }
+
+/**
+ * Adds the Simulated basic home through its setup flow (`POST /api/integrations/flows`), so the integration has a
+ * credential (the hub's token) for the backup to carry: the settings, then the "press the button" step, polled until it
+ * is done (it presses itself after 2 s of the runtime clock).
+ */
+async function addSimulatedHomeWithFlow(request: APIRequestContext): Promise<void> {
+  const answer = async (url: string, data: unknown): Promise<FlowStep> => {
+    const response = await request.post(url, { headers: mutationHeaders(), data })
+    expect(response.status(), `POST ${url}: ${await response.text()}`).toBe(200)
+    return (await response.json()) as FlowStep
+  }
+  const form = await answer('/api/integrations/flows', { connectorKey: 'simulated' })
+  expect(form.type).toBe('form')
+  const continueUrl = `/api/integrations/flows/${form.flowId}`
+  let step = await answer(continueUrl, { input: { preset: 'basic', seed: 42, simulateReauth: false } })
+  await expect
+    .poll(
+      async () => {
+        if (step.type === 'progress') step = await answer(continueUrl, { input: {} })
+        return step.type
+      },
+      { timeout: 20_000, intervals: [1_000] },
+    )
+    .toBe('done')
+  await expect.poll(async () => (await listDevices(request)).length, { timeout: 30_000 }).toBe(5)
+}
+
 test('a backup with its credentials is restored into a new, empty home', async ({
   page,
   request,
@@ -26,8 +57,9 @@ test('a backup with its credentials is restored into a new, empty home', async (
   await resetApp(request)
   await completeSetup(page.request)
   const floor = await createFloor(page.request)
-  const home = await createSimulatedHome(page.request)
-  await placeEndpoint(page.request, home.light, floor.id, 500, 400)
+  await addSimulatedHomeWithFlow(page.request)
+  const light = (await listDevices(page.request)).find((device) => device.name === SIMULATED.light)!
+  await placeEndpoint(page.request, light, floor.id, 500, 400)
 
   await page.goto('/settings/backup')
   await expect(page.getByRole('heading', { level: 1, name: t('settings.backup.title') })).toBeVisible()
