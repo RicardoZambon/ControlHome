@@ -82,7 +82,10 @@ public sealed class DeviceReplaceTests(DevicesApiFactory factory) : DevicesTestB
         }
 
         (await viewer.GetFloorAsync(floor.Id, Ct)).Placements.ShouldHaveSingleItem().EndpointId.ShouldBe(endpoint.Id);
-        (await QueryDbAsync(db => db.StateLog.CountAsync(s => s.AttributeId == newOn, Ct))).ShouldBeGreaterThanOrEqualTo(oldHistory + 1);
+        // The old light's history moved; the new light's own first values are written behind, so they can land later.
+        await RecordingRealtimePublisher.WaitUntilAsync(
+            async () => await QueryDbAsync(db => db.StateLog.CountAsync(s => s.AttributeId == newOn, Ct)) >= oldHistory + 1,
+            "the new light has the old history and its own");
         (await QueryDbAsync(db => db.StateLog.CountAsync(s => s.AttributeId == oldOn, Ct))).ShouldBe(0);
         (await AuditEntriesAsync("devices.replaced")).ShouldHaveSingleItem().TargetId.ShouldBe(oldLight.Id.ToString());
 
