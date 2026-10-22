@@ -16,12 +16,20 @@ internal static class SmartThingsDeviceMapper
     public const string MainEndpoint = "main";
 
     /// <summary>The mapped device, or <c>null</c> when nothing of it can be represented (no usable capability on any component).</summary>
-    public static MappedDevice? Map(SmartThingsDevice device, DeviceStatus status, MapContext context)
+    public static MappedDevice? Map(SmartThingsDevice device, DeviceStatus status, MapContext context) => Map(device, status, context, out _);
+
+    /// <summary>
+    /// The mapped device, or <c>null</c> when nothing of it can be represented yet; <paramref name="missingDefinitions"/>
+    /// names the capability definitions it waits for either way (a device of custom capabilities only — a community Edge
+    /// driver's — has nothing to show until they arrive, so they must still be fetched).
+    /// </summary>
+    public static MappedDevice? Map(SmartThingsDevice device, DeviceStatus status, MapContext context, out IReadOnlyList<CapabilityRef> missingDefinitions)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(status);
         ArgumentNullException.ThrowIfNull(context);
 
+        missingDefinitions = [];
         var main = device.Main;
         if (main is null)
         {
@@ -65,6 +73,7 @@ internal static class SmartThingsDeviceMapper
             capabilityClass ??= mapping.CapabilityClass;
         }
 
+        missingDefinitions = missing;
         if (endpoints.Count == 0)
         {
             return null;

@@ -127,6 +127,23 @@ public sealed class SetupFlowTests : IDisposable
     }
 
     [Fact]
+    public async Task An_answered_sign_in_cannot_be_pasted_again()
+    {
+        TokenEndpoint();
+        Locations(Location1, Location2);
+        await using var flow = Flow();
+        await ToAuthorizeAsync(flow);
+        var address = $"https://httpbin.org/get?code=code-0001&state={flow.State}";
+        (await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste(address), Ct)).ShouldBeOfType<ChooseStep>();
+
+        // The state is used up with the exchange: a replayed address never reaches the token endpoint again.
+        var replay = await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste(address), Ct);
+
+        replay.ShouldBeOfType<AbortStep>().Reason.ShouldBe("unknown_step");
+        _fake.Requests("/oauth/token").Count.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task Too_many_foreign_pastes_abort_the_sign_in()
     {
         await using var flow = Flow();
@@ -310,6 +327,137 @@ public sealed class SetupFlowTests : IDisposable
 
         abort.Reason.ShouldBe("location_mismatch");
         _fake.Requests("/oauth/ha-token").Count.ShouldBe(1); // the Home Assistant preset's token URL
+    }
+
+    [Fact]
+    public async Task A_refused_authorization_with_the_right_state_starts_a_fresh_sign_in()
+    {
+        await using var flow = Flow();
+        await ToAuthorizeAsync(flow);
+        var state = flow.State;
+
+        var again = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"https://httpbin.org/get?error=access_denied&state={state}"), Ct);
+
+        again.Description!.En.ShouldContain("did not grant access (access_denied)");
+        flow.State.ShouldNotBe(state);
+        again.Url.Query.ShouldContain("state=" + flow.State);
+        _fake.Requests("/oauth/token").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Switching_the_mode_midway_forgets_the_other_modes_sign_in()
+    {
+        TokenEndpoint();
+        Locations(Location1);
+        await using var flow = Flow();
+        await ToAuthorizeAsync(flow);
+        var state = flow.State;
+
+        // Back to the start, the personal access token this time …
+        (await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("pat"), Ct)).ShouldBeOfType<FormStep>();
+
+        // … so the OAuth sign-in of before is no longer part of the flow (it would finish as "pat" without a token).
+        var stale = await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=code-0001&state={state}"), Ct);
+        stale.ShouldBeOfType<AbortStep>().Reason.ShouldBe("unknown_step");
+        _fake.Requests("/oauth/token").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_location_choice_left_over_from_the_other_mode_is_not_accepted()
+    {
+        Locations(Location1, Location2);
+        await using var flow = Flow();
+        await flow.StartAsync(Context(), Ct);
+        await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("pat"), Ct);
+        (await flow.ContinueAsync(SmartThingsSetupFlow.TokenStep, Json(new JsonObject { ["personalAccessToken"] = "pat-0001" }), Ct)).ShouldBeOfType<ChooseStep>();
+        await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("oauth"), Ct);
+
+        var stale = await flow.ContinueAsync(SmartThingsSetupFlow.LocationStep, Choice(Location1), Ct);
+
+        stale.ShouldBeOfType<AbortStep>().Reason.ShouldBe("unknown_step");
+    }
+
+    [Fact]
+    public async Task A_failed_location_read_after_the_exchange_is_retried_without_signing_in_again()
+    {
+        TokenEndpoint();
+        _fake.Server.Given(Request.Create().WithPath("/v1/locations").UsingGet()).InScenario("locations").WillSetStateTo("up")
+            .RespondWith(Response.Create().WithStatusCode(503));
+        _fake.Server.Given(Request.Create().WithPath("/v1/locations").UsingGet()).InScenario("locations").WhenStateIs("up")
+            .RespondWith(Response.Create().WithStatusCode(200).WithHeader("Content-Type", "application/json")
+                .WithBody($$"""{"items":[{"locationId":"{{Location1}}","name":"Home"}],"_links":null}"""));
+        await using var flow = Flow();
+        await ToAuthorizeAsync(flow);
+
+        // The single-use code is spent by now: the tokens are kept and only the location read is repeated.
+        var retry = (FormStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=code-0001&state={flow.State}"), Ct);
+        retry.StepId.ShouldBe(SmartThingsSetupFlow.LocationsRetryStep);
+        retry.Fields.ShouldBeEmpty();
+        retry.Description!.PtBr.ShouldNotBeNullOrWhiteSpace();
+
+        var done = (DoneStep)await flow.ContinueAsync(SmartThingsSetupFlow.LocationsRetryStep, Empty(), Ct);
+        done.Config.GetProperty("locationId").GetString().ShouldBe(Location1);
+        TokenSet.Deserialize(done.Secrets[SecretKeys.Tokens])!.RefreshToken.ShouldBe("refresh-token-0001");
+        _fake.Requests("/oauth/token").Count.ShouldBe(1);
+        _fake.Requests("/v1/locations").Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Tokens_of_an_earlier_app_never_finish_the_flow_with_another_app()
+    {
+        TokenEndpoint();
+        _fake.Server.Given(Request.Create().WithPath("/v1/locations").UsingGet()).RespondWith(Response.Create().WithStatusCode(503));
+        await using var flow = Flow();
+        await ToAuthorizeAsync(flow);
+        (await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=code-0001&state={flow.State}"), Ct)).ShouldBeOfType<FormStep>()
+            .StepId.ShouldBe(SmartThingsSetupFlow.LocationsRetryStep);
+
+        // The app form again, with another app: the tokens issued to the first one are dropped.
+        (await flow.ContinueAsync(SmartThingsSetupFlow.AppStep, Json(new JsonObject
+        {
+            ["clientId"] = "another-client",
+            ["clientSecret"] = "another-secret",
+            ["redirectUri"] = "https://httpbin.org/get",
+            ["endpoints"] = "documented",
+        }), Ct)).ShouldBeOfType<ExternalUrlStep>();
+
+        var stale = await flow.ContinueAsync(SmartThingsSetupFlow.LocationsRetryStep, Empty(), Ct);
+        stale.ShouldBeOfType<AbortStep>().Reason.ShouldBe("unknown_step");
+    }
+
+    [Fact]
+    public async Task A_location_already_connected_with_the_same_app_is_not_added_twice()
+    {
+        TokenEndpoint();
+        Locations(Location1);
+        var factory = Factory();
+        var running = Guid.NewGuid();
+        factory.Locations.TryClaim(FakeSmartThings.ClientId, Location1, running, owner: new object()).ShouldBeTrue();
+
+        // A new setup: SmartThings hands out the running integration's own tokens again; two runtimes would spend them.
+        await using (var flow = (SmartThingsSetupFlow)factory.CreateSetupFlow()!)
+        {
+            await ToAuthorizeAsync(flow);
+            var abort = await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=code-0001&state={flow.State}"), Ct);
+            abort.ShouldBeOfType<AbortStep>().Reason.ShouldBe("already_configured");
+            abort.ShouldBeOfType<AbortStep>().Message.PtBr.ShouldNotBeNullOrWhiteSpace();
+        }
+
+        // Signing in again for that very integration is fine.
+        var existing = new IntegrationInstance(running, "My SmartThings", StFixtures.Parse(StHarness.OAuthConfig()), new MemorySecretStore(new Dictionary<string, string> { [SecretKeys.ClientSecret] = "stored-secret-0001" }));
+        await using (var reauth = (SmartThingsSetupFlow)factory.CreateSetupFlow()!)
+        {
+            await reauth.StartAsync(Context(existing), Ct);
+            await reauth.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("oauth"), Ct);
+            await reauth.ContinueAsync(SmartThingsSetupFlow.InstructionsStep, Empty(), Ct);
+            await reauth.ContinueAsync(SmartThingsSetupFlow.AppStep, Json(new JsonObject
+            {
+                ["clientId"] = FakeSmartThings.ClientId,
+                ["redirectUri"] = "https://httpbin.org/get",
+                ["endpoints"] = "documented",
+            }), Ct);
+            (await reauth.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=code-0002&state={reauth.State}"), Ct)).ShouldBeOfType<DoneStep>();
+        }
     }
 
     private SmartThingsConnectorFactory Factory() => new(FakeSmartThings.Http, null, _fake.Options());

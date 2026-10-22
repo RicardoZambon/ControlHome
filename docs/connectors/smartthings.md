@@ -11,8 +11,9 @@ OAuth-In app**. SmartThings cannot push events to a LAN-only server (webhooks ne
 connector **polls** — every device every 30 s, and a device you just commanded every 5 s for 30 s.
 
 - **Mibo Smart** (Intelbras) cameras, locks, lights, outlets and switches are "Works with SmartThings": add them to the
-  SmartThings app and they come in through this connector, with no Intelbras-specific code. (Mibo Zigbee sensors such as
-  the MSM 1001 work better re-paired to Zigbee2MQTT: see `docs/connectors/mqtt.md`.)
+  SmartThings app and they come in through this connector, with no Intelbras-specific code. (Cameras show their
+  SmartThings attributes only: SmartThings video streams are not supported. Mibo Zigbee sensors such as the MSM 1001
+  work better re-paired to Zigbee2MQTT: see `docs/connectors/mqtt.md`.)
 - **Your own app, your own account.** ControlHome never ships or hosts a shared client id or secret: each household
   creates its own app under its own Samsung account. That keeps the integration (and any bill) yours.
 - **Paid Personal Plan.** Samsung announced paid API tiers from October 2026 (a US$ 4.99/month Personal Plan for
@@ -22,8 +23,8 @@ connector **polls** — every device every 30 s, and a device you just commanded
 
 ## Create your own SmartThings app
 
-You do this once, on any computer with [Node.js](https://nodejs.org) 20 or later. Samsung's Developer Workspace cannot
-create OAuth-In apps ("coming soon"), so the SmartThings CLI is the way.
+You do this once, on any computer with a current [Node.js](https://nodejs.org) LTS release. Samsung's Developer Workspace
+cannot create OAuth-In apps ("coming soon"), so the SmartThings CLI is the way.
 
 1. Run `npx @smartthings/cli apps:create`. The first time, the CLI opens a browser to sign in with your Samsung account
    (the one your SmartThings devices are in).
@@ -37,8 +38,8 @@ create OAuth-In apps ("coming soon"), so the SmartThings CLI is the way.
 6. The CLI prints the **OAuth Client Id** and the **OAuth Client Secret** once: copy both now.
 
 Useful later: `npx @smartthings/cli apps` lists your apps; `npx @smartthings/cli apps:oauth:update <appId>` changes the
-scopes or redirect URIs; `npx @smartthings/cli apps:oauth:generate <appId>` makes a new client secret (then sign in again
-in ControlHome with it). The wizard shows these instructions from data
+scopes or redirect URIs; `npx @smartthings/cli apps:oauth:generate <appId>` regenerates the OAuth client id and secret
+(then sign in again in ControlHome with the new ones). The wizard shows these instructions from data
 (`src/ControlHome.Connectors.SmartThings/Resources/setup-instructions.json`), so they can follow Samsung's changes.
 
 ## The redirect URL and your privacy
@@ -74,7 +75,12 @@ ControlHome's `state`) in the address. You then copy that address back into Cont
    lands on the redirect URL: copy the whole address from the address bar (on httpbin.org you can also copy the page's
    JSON text) and paste it into ControlHome.
 4. ControlHome exchanges the code (HTTP Basic client authentication) and reads your locations. With several, it asks
-   which one; each further location is **another integration**.
+   which one; each further location is **another integration**. If SmartThings cannot be reached at that moment, the
+   wizard offers *Try again* for the location read only (the one-time code is already spent; you stay signed in).
+5. A location that another integration already reads **with the same app** is refused (*already connected*): SmartThings
+   hands out the same single-use tokens when a location is authorized again, so two integrations would spend each
+   other's refresh token. Use *Sign in again* on the existing integration instead. (Should two such integrations exist
+   anyway, only the first one to start runs; the other shows an error.)
 
 To sign in again (expired or revoked authorization, a new client secret): open the integration and choose *Sign in
 again*. Devices, rooms and automations are kept. A blank client secret keeps the stored one while the client id stays
@@ -90,13 +96,20 @@ integration then shows *Needs re-authorization*. While it runs, its status says 
 ## How it works
 
 **Tokens.** Access tokens live about 24 h; refresh tokens are **single-use** and rotate on every refresh (unused, they die
-after about 30 days). ControlHome refreshes when less than 3 h are left and at least once a week. Refreshes are
-single-flight (one at a time; callers that waited reuse the result) and the new access + refresh token pair is saved as
-**one** secret before it is used, so a crash can never leave a spent refresh token behind. A refresh request is sent
-exactly once (never retried) and is not abandoned half-way when a caller gives up. Only one process runs connectors at a
-time (the single-active-runtime lock), so two instances never refresh the same token. A rejected token (HTTP 401) is
-refreshed once and the read repeated; an `invalid_grant` (spent, expired or revoked: also what happens when you remove
-the app in the SmartThings app — a LAN-only server never gets that event) shows **Needs re-authorization**.
+after about 30 days). ControlHome refreshes when less than 3 h are left (or half the token's lifetime, should SmartThings
+ever hand out tokens shorter than 6 h — never on every call) and at least once a week. Refreshes are single-flight (one
+at a time; callers that waited reuse the result) and the new access + refresh token pair is saved as **one** secret
+before it is used, so a crash can never leave a spent refresh token behind. A refresh request is sent exactly once (never
+retried) and is not abandoned half-way when a caller gives up; none is started once the integration is stopping (its
+secrets can no longer be saved then). Should the new pair still not be saved — the database is down, or the integration
+is stopped while a refresh is in flight — ControlHome keeps using it and remembers it in memory: the integration's next
+run (a restart, *Sign in again*) goes on with it instead of the spent pair in the database, and saves it. That also
+covers *Sign in again* handing back the pair a refresh had just spent (SmartThings gives an already authorized location
+the same tokens); new tokens from a sign-in always win. The lifetime SmartThings states is believed between 10 minutes
+and 30 days. Only one process runs connectors at a time (the single-active-runtime lock), and within it only one
+integration per location and app (see step 5 above), so two runtimes never refresh the same token. A rejected token
+(HTTP 401) is refreshed once and the read repeated; an `invalid_grant` (spent, expired or revoked: also what happens when
+you remove the app in the SmartThings app — a LAN-only server never gets that event) shows **Needs re-authorization**.
 
 **Polling and rate limits.**
 
@@ -106,12 +119,16 @@ the app in the SmartThings app — a LAN-only server never gets that event) show
   history, never deleted); a listing that could not be read completely only adds and updates.
 - The `X-RateLimit-Limit/Remaining/Reset` headers drive a budget per kind of call. SmartThings' documents disagree on the
   unit of `X-RateLimit-Reset` (milliseconds in the API reference, seconds on the rate-limit pages): values above 1000 are
-  read as milliseconds, smaller ones as seconds (unless that bucket has already shown milliseconds), epoch timestamps as
-  absolute, and every wait is capped at 15 minutes. With less than half of the budget left the poll slows to 60 s; when
-  it is used up, the poll waits for the reset instead of earning a 429. A 429 blocks that kind of call until
-  `Retry-After` (or the reset) and the integration is *Degraded* meanwhile.
+  read as milliseconds, smaller ones as seconds (unless any call of the integration has already shown milliseconds —
+  except the rooms call, whose hourly window can count past 1000 s), epoch timestamps as absolute, and every wait is
+  capped at 15 minutes. With less than half of the budget left the poll slows to 60 s; when it is used up, the poll
+  waits for the reset instead of earning a 429. A 429 blocks that kind of call until `Retry-After` (or the reset) and
+  the integration is *Degraded* meanwhile.
 - After a command the device's status (`GET /v1/devices/{id}/status`) is read every 5 s for 30 s. Status reads and
-  commands together stay within **12 per minute per device** (a sliding window; two are kept free for commands).
+  commands together stay within **12 per minute per device** (a sliding window; two are kept free for commands; a
+  command batch takes all its requests' permits at once or is refused).
+- The polling interval has ±10 % jitter (integrations do not poll in lock-step); a poll is due from the earliest
+  jittered wake-up, so 30 s stays 30 s on average.
 - Rooms (`GET /v1/locations/{id}/rooms`, limited to 50 calls an hour) are read at start and every 6 hours, or again
   (at most every 15 minutes) when a device names a room nobody knows; they only suggest rooms when devices are imported.
 - Idempotent GETs are retried twice on network errors, timeouts and 5xx (exponential back-off with jitter); nothing else
@@ -122,7 +139,10 @@ the app in the SmartThings app — a LAN-only server never gets that event) show
 batch goes out in several requests). `ACCEPTED` (or `COMPLETED`) only means SmartThings queued the command: ControlHome
 keeps it *pending* until the polled state confirms it, and a `FAILED` result is reported as refused. Commands are
 **at most once**: never retried, a repeated idempotency key within 10 minutes is a duplicate (also after a timeout), and
-an unlock without an idempotency key is refused. Unlocking needs the step-up PIN like every safety-critical command.
+an unlock without an idempotency key is refused. A request that got no answer (timeout, network error) or a server error
+may still have been carried out: it is reported as failed with that warning and never sent again, and the device is
+read every 5 s for 30 s so its real state (an unlocked door too) shows up at once. Unlocking needs the step-up PIN like
+every safety-critical command.
 
 **Devices.** Each enabled component becomes an endpoint (`main`, `freezer`, `cooler`, …); components and capabilities
 listed in `custom.disabledComponents` / `custom.disabledCapabilities` are hidden.
@@ -147,7 +167,10 @@ listed in `custom.disabledComponents` / `custom.disabledCapabilities` are hidden
 
 Plumbing and diagnostics (`ocf`, `healthCheck`, `refresh`, `execute`, firmware and software update, device identification,
 …) are not shown. The firmware, model and manufacturer come from them; a Samsung appliance's serial number becomes a
-hardware connection (to spot the same device in another integration).
+hardware connection (to spot the same device in another integration). Never shown either: camera stream, clip and image
+URLs (`videoStream`, `videoCapture`, `videoCapture2`, `imageCapture`, `webrtc`: they can carry credentials or signed
+tokens), the people behind a lock (`lockCodes`, `lockUsers`, `lockCredentials`, `lockSchedules`), and any generic value
+holding a URL with user info or a token/key/signature/password parameter (it reads as unknown).
 
 ## Limitations
 
@@ -156,13 +179,19 @@ hardware connection (to spot the same device in another integration).
 - **Energy windows**: `powerConsumptionReport` windows (15–30 min of `deltaEnergy`) are parsed but not yet stored as
   hourly vendor windows; the cumulative counter feeds the energy history meanwhile. TVs that list the report under
   `custom.disabledCapabilities` (while still sending real values) have no per-device "show anyway" override yet.
-- Capability definitions are cached in memory (a restart fetches them again, a few per poll); until a definition arrives,
-  that capability's generic attributes are left out (never guessed and changed later).
+- Capability definitions are cached in memory (a restart fetches them again, up to 10 per poll); until a definition
+  arrives, that capability's generic attributes are left out (never guessed and changed later), so a device made only
+  of custom capabilities (a community Edge driver's) appears once its definitions are read. A definition SmartThings
+  refuses to give (404, 403, 400, …) is asked again after 6 hours; meanwhile the attributes are shown read-only from
+  their values.
 - Scenes are not exposed yet (they will become automation actions); they will need the `r:scenes:*` and `x:scenes:*`
   scopes (add them with `apps:oauth:update`, then sign in again).
 - Generic controls of lock-, door- or valve-like vendor capabilities are read-only by design.
-- If ControlHome is stopped exactly while it refreshes a token, the new pair may not be saved; the next start then needs
-  *Sign in again*.
+- A rotated token pair that could not be saved is carried on in memory only: if the whole ControlHome process stops
+  (crash, power cut, container stop) after a refresh and before the pair reached the database — a sub-second window
+  about once a day, longer only during a database outage — the next start needs *Sign in again*.
+- Without a persisted quota counter from the host, the rooms budget (40 of SmartThings' 50 calls an hour) is counted
+  per run; rooms are read once per run and then every 6 hours.
 
 ## Troubleshooting
 
@@ -174,6 +203,9 @@ hardware connection (to spot the same device in another integration).
   registered, HTTPS, not localhost) and try the other OAuth URL preset.
 - *That address does not belong to this sign-in*: you pasted an address from an older attempt; use the button on the
   current step and paste the new address.
+- *This SmartThings location is already connected with this app* (wizard) or *Another SmartThings integration is already
+  connected to this location* (integration status): keep one integration per location and app; delete the duplicate
+  and use *Sign in again* on the one you keep (if you keep the stopped one, disable and enable it first).
 - *Plan required*: SmartThings asked for its paid plan. Subscribe in your Samsung account; ControlHome retries every 30
   minutes (or disable and re-enable the integration).
 - *Rate limit … waiting*: the integration waits for SmartThings' window to reset; reduce the polling frequency if it
@@ -213,3 +245,5 @@ Tick each item with a real account (record the date and firmware where relevant)
 13. [ ] Mibo Smart devices added to SmartThings appear and can be controlled.
 14. [ ] `powerConsumptionReport` windows of a Samsung appliance (start/end/`deltaEnergy`) look plausible against its
     meter (for the energy-window wiring).
+15. [ ] Authorizing an already connected location again with the same app returns the same tokens (as reported) — and
+    the wizard refuses it as *already connected*; with a camera in SmartThings, no stream or image URL shows up anywhere.

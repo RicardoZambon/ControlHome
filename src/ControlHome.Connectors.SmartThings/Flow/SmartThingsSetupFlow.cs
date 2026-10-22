@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Connectors.SmartThings.Api;
 using ControlHome.Connectors.SmartThings.Auth;
+using ControlHome.Connectors.SmartThings.Runtime;
 using ControlHome.Domain.Capabilities;
 using Microsoft.Extensions.Logging;
 
@@ -15,9 +16,13 @@ namespace ControlHome.Connectors.SmartThings.Flow;
 /// sign-in page (authorize URL with a random <c>state</c>) and the pasted-back redirected URL (its state must match: CSRF
 /// protection) → the code exchange (HTTP Basic client authentication) → the location (asked only when the token sees
 /// several) → done. Personal access token (development only, 24 h): token → location → done. Re-authorizing keeps the
-/// integration's location (and with it every device); a token for another location is refused.
+/// integration's location (and with it every device); a token for another location is refused, and so is a location
+/// another running integration already reads with the same app (both would hold the same single-use tokens). When the
+/// locations cannot be read right after the code exchange (the code is spent by then), only that read is retried.
+/// Answering the first step again starts over: nothing of the other sign-in mode is kept.
 /// </summary>
-internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartThingsOptions options, SetupInstructions instructions) : IConnectorFlow
+internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartThingsOptions options, SetupInstructions instructions, LocationClaims locations)
+    : IConnectorFlow
 {
     public const string ModeStep = "mode";
     public const string InstructionsStep = "instructions";
@@ -25,6 +30,7 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     public const string AuthorizeStep = "authorize";
     public const string TokenStep = "token";
     public const string LocationStep = "location";
+    public const string LocationsRetryStep = "locationsRetry";
     public const string RedirectedUrlField = "redirectedUrl";
 
     /// <summary>Pasted URLs whose state does not match before the flow gives up.</summary>
@@ -60,6 +66,8 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
         switch (stepId)
         {
             case ModeStep:
+                // Starting over: a sign-in, token or location list of the other mode must never finish this one.
+                Reset();
                 switch (input.Str("choice"))
                 {
                     case SmartThingsSettings.OAuthMode:
@@ -76,11 +84,13 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 return AppForm(AppDefaults(context), new Dictionary<string, LocalizedText>());
             case AppStep when _mode == SmartThingsAuthMode.OAuth:
                 return await SubmitAppAsync(context, input, cancellationToken).ConfigureAwait(false);
-            case AuthorizeStep when _app is not null && _state is not null:
+            case AuthorizeStep when _mode == SmartThingsAuthMode.OAuth && _app is not null && _state is not null:
                 return await SubmitRedirectAsync(context, input, cancellationToken).ConfigureAwait(false);
             case TokenStep when _mode == SmartThingsAuthMode.PersonalAccessToken:
                 return await SubmitTokenAsync(context, input, cancellationToken).ConfigureAwait(false);
-            case LocationStep when _locations.Count > 0:
+            case LocationsRetryStep when _mode == SmartThingsAuthMode.OAuth && _app is not null && _tokens is not null:
+                return await LocationsAsync(context, new PersonalAccessToken(_tokens.AccessToken), tokenField: null, cancellationToken).ConfigureAwait(false);
+            case LocationStep when _locations.Count > 0 && HasCredentials:
                 return input.Str("choice") is { } choice && _locations.FirstOrDefault(l => l.Id == choice) is { } location
                     ? Done(context, location)
                     : new AbortStep("unknown_choice", new LocalizedText("Unknown location.", "Local desconhecido."));
@@ -94,6 +104,23 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
         _http?.Dispose();
         _http = null;
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Whether the credentials of the current mode are in hand (a location choice can finish the flow).</summary>
+    private bool HasCredentials => _mode == SmartThingsAuthMode.OAuth ? _app is not null && _tokens is not null : _pat is not null;
+
+    private void Reset()
+    {
+        _app = null;
+        _redirectUri = null;
+        _preset = SmartThingsSettings.DocumentedPreset;
+        _customAuthorizeUrl = null;
+        _customTokenUrl = null;
+        _state = null;
+        _mismatches = 0;
+        _tokens = null;
+        _pat = null;
+        _locations = [];
     }
 
     // ---- steps --------------------------------------------------------------------------------------------------------
@@ -265,6 +292,9 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
             return AppForm(values, errors);
         }
 
+        // Another app: tokens and locations of an earlier sign-in (with the previous app) never finish this one.
+        _tokens = null;
+        _locations = [];
         _app = new OAuthApp(clientId, secret!, endpoints!);
         _redirectUri = redirect;
         _preset = preset;
@@ -431,9 +461,15 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 ConnectorErrorKind.Permanent => new LocalizedText("The token may not read locations: it needs the r:locations:* scope.", "O token não pode ler locais: ele precisa do escopo r:locations:*."),
                 _ => new LocalizedText("SmartThings could not be reached. Try again in a moment.", "Não foi possível falar com a SmartThings. Tente de novo daqui a pouco."),
             };
-            return tokenField is null
-                ? new AbortStep("locations_failed", message)
-                : TokenForm(new Dictionary<string, LocalizedText>(StringComparer.Ordinal) { [tokenField] = message });
+            if (tokenField is not null)
+            {
+                return TokenForm(new Dictionary<string, LocalizedText>(StringComparer.Ordinal) { [tokenField] = message });
+            }
+
+            // OAuth: the single-use code is spent and the tokens are in hand: a passing outage only needs the read again.
+            return exception.Kind is ConnectorErrorKind.Transient or ConnectorErrorKind.RateLimited
+                ? LocationsRetry()
+                : new AbortStep("locations_failed", message);
         }
 
         if (_locations.Count == 0)
@@ -467,8 +503,25 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
             [.. _locations.Select(l => new FlowChoice(l.Id, new LocalizedText(l.Name, l.Name), null))]);
     }
 
-    private DoneStep Done(FlowContext context, SmartThingsLocation location)
+    private static FormStep LocationsRetry() => new(
+        LocationsRetryStep,
+        new LocalizedText("Signed in to SmartThings", "Acesso à SmartThings concluído"),
+        new LocalizedText(
+            "You are signed in, but SmartThings could not be reached to read your locations. Try again in a moment (no need to sign in again).",
+            "O acesso foi concluído, mas não foi possível falar com a SmartThings para ler os seus locais. Tente de novo daqui a pouco (sem precisar entrar de novo)."),
+        []);
+
+    private FlowStep Done(FlowContext context, SmartThingsLocation location)
     {
+        // SmartThings gives a location authorized again with the same app the same single-use tokens: a second
+        // integration of it would spend the running one's refresh token.
+        if (_mode == SmartThingsAuthMode.OAuth && locations.IsClaimedByOther(_app!.ClientId, location.Id, context.Existing?.Id))
+        {
+            return new AbortStep("already_configured", new LocalizedText(
+                "This SmartThings location is already connected with this app in another integration. Use Sign in again on that integration instead.",
+                "Este local da SmartThings já está conectado com este app em outra integração. Use a opção Entrar novamente naquela integração."));
+        }
+
         var config = new JsonObject
         {
             [SmartThingsSettings.LocationIdField] = location.Id,

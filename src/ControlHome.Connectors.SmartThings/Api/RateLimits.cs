@@ -22,7 +22,7 @@ internal sealed record RateLimitHeaders(long? Limit, long? Remaining, double? Re
     /// How long until the window resets. SmartThings' documents disagree on the unit of <c>X-RateLimit-Reset</c> (the
     /// Swagger spec and API overview say milliseconds, the rate-limit and troubleshooting pages say seconds), so: values
     /// that look like epoch timestamps (≥ 10⁹ s or ≥ 10¹² ms) are absolute; values above 1000 are milliseconds; smaller
-    /// ones are seconds — unless this bucket has already shown milliseconds (<paramref name="milliseconds"/>). Clamped to
+    /// ones are seconds — unless the API has already shown milliseconds (<paramref name="milliseconds"/>). Clamped to
     /// 0 … <see cref="MaxReset"/>.
     /// </summary>
     public static TimeSpan? ResetAfter(double? raw, DateTimeOffset nowUtc, bool milliseconds)
@@ -71,17 +71,36 @@ internal sealed record RateLimitHeaders(long? Limit, long? Remaining, double? Re
 }
 
 /// <summary>
+/// Whether the API has shown that it counts <c>X-RateLimit-Reset</c> in milliseconds. One API, one convention: the
+/// buckets of an integration share it, so a device bucket answering for the first time with a small value (the last
+/// second of its window) is not read as that many seconds. Thread-safe.
+/// </summary>
+internal sealed class ResetUnitEvidence
+{
+    private volatile bool _milliseconds;
+
+    public bool Milliseconds => _milliseconds;
+
+    public void SawMilliseconds() => _milliseconds = true;
+}
+
+/// <summary>
 /// One rate-limit bucket (the device list, a device's status/commands, rooms, …) as the last responses described it,
 /// plus any block imposed by a 429. Thread-safe.
 /// </summary>
-internal sealed class RateBudget
+/// <param name="unit">Evidence of the reset unit, shared with the integration's other buckets (or this bucket's own).</param>
+internal sealed class RateBudget(ResetUnitEvidence unit)
 {
     private readonly Lock _lock = new();
     private long? _limit;
     private long? _remaining;
     private DateTimeOffset? _resetAt;
     private DateTimeOffset _blockedUntil = DateTimeOffset.MinValue;
-    private bool _milliseconds;
+
+    public RateBudget()
+        : this(new ResetUnitEvidence())
+    {
+    }
 
     public long? Limit
     {
@@ -105,17 +124,8 @@ internal sealed class RateBudget
         }
     }
 
-    /// <summary>Whether the reset header of this bucket has been seen in milliseconds.</summary>
-    public bool UsesMilliseconds
-    {
-        get
-        {
-            lock (_lock)
-            {
-                return _milliseconds;
-            }
-        }
-    }
+    /// <summary>Whether reset headers are known to count in milliseconds (seen on this bucket or one sharing its evidence).</summary>
+    public bool UsesMilliseconds => unit.Milliseconds;
 
     public void Observe(RateLimitHeaders headers, DateTimeOffset nowUtc)
     {
@@ -125,12 +135,16 @@ internal sealed class RateBudget
             return;
         }
 
+        if (RateLimitHeaders.ShowsMilliseconds(headers.ResetRaw))
+        {
+            unit.SawMilliseconds();
+        }
+
         lock (_lock)
         {
-            _milliseconds |= RateLimitHeaders.ShowsMilliseconds(headers.ResetRaw);
             _limit = headers.Limit ?? _limit;
             _remaining = headers.Remaining;
-            _resetAt = RateLimitHeaders.ResetAfter(headers.ResetRaw, nowUtc, _milliseconds) is { } after ? nowUtc + after : null;
+            _resetAt = RateLimitHeaders.ResetAfter(headers.ResetRaw, nowUtc, unit.Milliseconds) is { } after ? nowUtc + after : null;
         }
     }
 
@@ -183,7 +197,10 @@ internal sealed class RateBudget
     }
 }
 
-/// <summary>The rate-limit buckets of one integration, by name.</summary>
+/// <summary>
+/// The rate-limit buckets of one integration, by name. They share the evidence of the reset unit, except the rooms
+/// bucket: its window is an hour, so a reset in seconds there can exceed 1000 and is no proof of milliseconds.
+/// </summary>
 internal sealed class RateLimitTracker
 {
     public const string Devices = "devices";
@@ -194,6 +211,7 @@ internal sealed class RateLimitTracker
 
     private readonly Lock _lock = new();
     private readonly Dictionary<string, RateBudget> _budgets = new(StringComparer.Ordinal);
+    private readonly ResetUnitEvidence _unit = new();
 
     /// <summary>The bucket of one device's status and commands.</summary>
     public static string Device(string deviceId) => "device:" + deviceId;
@@ -206,7 +224,7 @@ internal sealed class RateLimitTracker
             {
                 if (!_budgets.TryGetValue(bucket, out var budget))
                 {
-                    budget = new RateBudget();
+                    budget = bucket == Rooms ? new RateBudget() : new RateBudget(_unit);
                     _budgets[bucket] = budget;
                 }
 

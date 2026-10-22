@@ -27,6 +27,15 @@ internal sealed class OAuthClient(HttpClient http, TimeProvider time, TimeSpan t
     /// <summary>Access tokens live about 24 h; used when the answer has no <c>expires_in</c>.</summary>
     public static readonly TimeSpan DefaultLifetime = TimeSpan.FromHours(24);
 
+    /// <summary>
+    /// The shortest lifetime believed: a token "valid" for seconds would otherwise be refreshed (rotating the single-use
+    /// refresh token) on every call. If it really expires sooner, the 401 refreshes it.
+    /// </summary>
+    public static readonly TimeSpan MinLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>The longest lifetime believed (the weekly keep-alive refreshes long before anyway).</summary>
+    public static readonly TimeSpan MaxLifetime = TimeSpan.FromDays(30);
+
     public Task<TokenSet> ExchangeCodeAsync(OAuthApp app, string code, string redirectUri, CancellationToken cancellationToken) =>
         PostAsync(
             app,
@@ -116,7 +125,11 @@ internal sealed class OAuthClient(HttpClient http, TimeProvider time, TimeSpan t
                     "The SmartThings token endpoint answered without a refresh token.");
             }
 
-            var lifetime = document.Num("expires_in") is { } seconds and > 0 ? TimeSpan.FromSeconds(seconds) : DefaultLifetime;
+            // Clamped before it becomes a TimeSpan: an absurd expires_in must never throw here, after the refresh token
+            // was already spent (the new pair would be lost).
+            var lifetime = document.Num("expires_in") is { } seconds and > 0
+                ? TimeSpan.FromSeconds(Math.Clamp(seconds, MinLifetime.TotalSeconds, MaxLifetime.TotalSeconds))
+                : DefaultLifetime;
             return new TokenSet(access, refresh, now + lifetime, now, document.Str("scope"), document.Str("installed_app_id"));
         }
     }

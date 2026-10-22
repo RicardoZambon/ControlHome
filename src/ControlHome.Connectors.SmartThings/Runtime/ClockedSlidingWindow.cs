@@ -54,20 +54,30 @@ internal sealed class ClockedSlidingWindow : RateLimiter
     }
 
     /// <summary>Takes a permit if one is free while keeping <paramref name="reserve"/> spare.</summary>
-    public bool TryAcquire(int reserve = 0)
+    public bool TryAcquire(int reserve = 0) => TryAcquire(1, reserve);
+
+    /// <summary>
+    /// Takes <paramref name="permits"/> permits at once if they are free while keeping <paramref name="reserve"/> spare,
+    /// else none. Atomic: the check and the grant happen under one lock, so concurrent callers (hot polls, commands)
+    /// can never eat into the reserve or exceed the limit between them.
+    /// </summary>
+    public bool TryAcquire(int permits, int reserve)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(permits);
+        ArgumentOutOfRangeException.ThrowIfNegative(reserve);
         lock (_lock)
         {
-            Prune(_time.GetUtcNow());
-            if (_permits - _granted.Count <= reserve)
+            var now = _time.GetUtcNow();
+            Prune(now);
+            if (_permits - _granted.Count - permits < reserve)
             {
                 _failed++;
                 return false;
             }
-        }
 
-        using var lease = AttemptAcquire(1);
-        return lease.IsAcquired;
+            Grant(permits, now);
+            return true;
+        }
     }
 
     public override RateLimiterStatistics? GetStatistics()
@@ -99,19 +109,25 @@ internal sealed class ClockedSlidingWindow : RateLimiter
                 return new Lease(false, retryAfter);
             }
 
-            for (var i = 0; i < permitCount; i++)
-            {
-                _granted.Enqueue(now);
-            }
-
-            if (permitCount > 0)
-            {
-                _lastGranted = now;
-            }
-
-            _successful++;
+            Grant(permitCount, now);
             return new Lease(true, null);
         }
+    }
+
+    /// <summary>Records <paramref name="permitCount"/> granted permits (under the lock).</summary>
+    private void Grant(int permitCount, DateTimeOffset now)
+    {
+        for (var i = 0; i < permitCount; i++)
+        {
+            _granted.Enqueue(now);
+        }
+
+        if (permitCount > 0)
+        {
+            _lastGranted = now;
+        }
+
+        _successful++;
     }
 
     protected override ValueTask<RateLimitLease> AcquireAsyncCore(int permitCount, CancellationToken cancellationToken) =>

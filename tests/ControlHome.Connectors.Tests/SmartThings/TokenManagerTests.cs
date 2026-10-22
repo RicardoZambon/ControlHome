@@ -158,21 +158,78 @@ public sealed class TokenManagerTests : IDisposable
         _fake.Requests("/oauth/token").Count.ShouldBe(1);
     }
 
-    private TokenManager Manager(TimeSpan validFor, MemorySecretStore secrets, TimeSpan? age = null)
+    [Fact]
+    public async Task A_short_lived_token_is_refreshed_at_half_its_life_not_on_every_call()
     {
-        var tokens = new TokenSet("access-token-0001", "refresh-token-0001", StFixtures.Now + validFor, StFixtures.Now - (age ?? TimeSpan.FromHours(1)), null, null);
-        var app = new OAuthApp(FakeSmartThings.ClientId, FakeSmartThings.ClientSecret, _fake.Options().DocumentedEndpoints);
-        return new TokenManager(new OAuthClient(FakeSmartThings.Http(), _time, TimeSpan.FromSeconds(30)), app, tokens, secrets, _time, NullLogger.Instance, TimeSpan.FromHours(3), TimeSpan.FromDays(7));
+        // Should SmartThings ever hand out tokens shorter than the 3-hour margin, refreshing "when less than 3 h are left"
+        // would rotate the single-use refresh token on every call.
+        TokenEndpoint(expiresIn: 3600);
+        var manager = Manager(validFor: TimeSpan.FromHours(1), new MemorySecretStore(), age: TimeSpan.Zero);
+
+        (await manager.GetAccessTokenAsync(Ct)).ShouldBe("access-token-0001");
+        _fake.Requests("/oauth/token").ShouldBeEmpty();
+
+        _time.Advance(TimeSpan.FromMinutes(31));
+        (await manager.GetAccessTokenAsync(Ct)).ShouldBe("access-token-0002");
+
+        // The fresh one-hour pair is used as is.
+        (await manager.GetAccessTokenAsync(Ct)).ShouldBe("access-token-0002");
+        _time.Advance(TimeSpan.FromMinutes(10));
+        (await manager.GetAccessTokenAsync(Ct)).ShouldBe("access-token-0002");
+        _fake.Requests("/oauth/token").Count.ShouldBe(1);
     }
 
-    private void TokenEndpoint(TimeSpan? delay = null)
+    [Fact]
+    public async Task No_refresh_is_started_once_the_integration_is_stopping()
+    {
+        // The host refuses secret writes from the moment a run's stop is requested: a refresh started then would spend
+        // the single-use refresh token and lose the rotated pair.
+        TokenEndpoint();
+        using var stopping = new CancellationTokenSource();
+        var manager = Manager(validFor: TimeSpan.FromHours(1), new MemorySecretStore(), stopping: stopping);
+        await stopping.CancelAsync();
+
+        // A caller that is not cancelled itself (a command) gets a transient failure, not a refresh.
+        var failure = await Should.ThrowAsync<SmartThingsApiException>(() => manager.GetAccessTokenAsync(Ct).AsTask());
+        failure.Kind.ShouldBe(ConnectorErrorKind.Transient);
+        await Should.ThrowAsync<SmartThingsApiException>(() => manager.RefreshAfterRejectionAsync("access-token-0001", Ct).AsTask());
+
+        _fake.Requests("/oauth/token").ShouldBeEmpty();
+        manager.Current.RefreshToken.ShouldBe("refresh-token-0001");
+    }
+
+    [Theory]
+    [InlineData(1e20, 30 * 24 * 3600)] // would overflow a TimeSpan: the answer must still be used and saved
+    [InlineData(1, 10 * 60)] // a token "valid" for a second would be refreshed on every call
+    public async Task An_absurd_lifetime_in_the_answer_never_loses_the_rotated_pair(double expiresIn, int usedSeconds)
+    {
+        TokenEndpoint(expiresIn: expiresIn);
+        var secrets = new MemorySecretStore();
+        var manager = Manager(validFor: TimeSpan.FromHours(1), secrets);
+
+        (await manager.GetAccessTokenAsync(Ct)).ShouldBe("access-token-0002");
+
+        var saved = TokenSet.Deserialize(secrets.Values[SecretKeys.Tokens]).ShouldNotBeNull();
+        saved.RefreshToken.ShouldBe("refresh-token-0002");
+        saved.ExpiresAtUtc.ShouldBe(StFixtures.Now.AddSeconds(usedSeconds));
+    }
+
+    /// <param name="age">How long ago the pair was issued; by default a 24-hour token with <paramref name="validFor"/> left.</param>
+    private TokenManager Manager(TimeSpan validFor, MemorySecretStore secrets, TimeSpan? age = null, CancellationTokenSource? stopping = null)
+    {
+        var tokens = new TokenSet("access-token-0001", "refresh-token-0001", StFixtures.Now + validFor, StFixtures.Now - (age ?? StHarness.DefaultAge(validFor)), null, null);
+        var app = new OAuthApp(FakeSmartThings.ClientId, FakeSmartThings.ClientSecret, _fake.Options().DocumentedEndpoints);
+        return new TokenManager(new OAuthClient(FakeSmartThings.Http(), _time, TimeSpan.FromSeconds(30)), app, tokens, secrets, _time, NullLogger.Instance, TimeSpan.FromHours(3), TimeSpan.FromDays(7), stopping?.Token ?? CancellationToken.None);
+    }
+
+    private void TokenEndpoint(TimeSpan? delay = null, double expiresIn = 86399)
     {
         var body = new JsonObject
         {
             ["access_token"] = "access-token-0002",
             ["token_type"] = "bearer",
             ["refresh_token"] = "refresh-token-0002",
-            ["expires_in"] = 86399,
+            ["expires_in"] = expiresIn,
             ["scope"] = "r:locations:* r:devices:* x:devices:*",
             ["installed_app_id"] = "00000000-0000-4000-8000-00000000a990",
         }.ToJsonString();

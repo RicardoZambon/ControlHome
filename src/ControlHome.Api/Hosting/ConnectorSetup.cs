@@ -21,8 +21,7 @@ public static class ConnectorSetup
         services.AddConnector<MqttConnectorFactory>();
 
         // SmartThings: the household's own OAuth-In app (or a dev token), adaptive polling of the cloud API per location.
-        services.AddSmartThingsHttpClient();
-        services.AddConnector<SmartThingsConnectorFactory>();
+        services.AddSmartThingsHttpClient().AddConnector<SmartThingsConnectorFactory>();
 
         return services;
     }

@@ -61,7 +61,9 @@ internal static class StCapabilities
 
     /// <summary>
     /// Plumbing, diagnostics and sensitive capabilities: never mapped and never exposed as generic attributes
-    /// (<c>lockCodes</c> carries the names of the people with codes).
+    /// (<c>lockCodes</c>, <c>lockUsers</c>, <c>lockCredentials</c> and <c>lockSchedules</c> carry the names of the people
+    /// with access; camera stream, clip and image URLs can carry credentials or signed tokens — camera credentials never
+    /// leave the server).
     /// </summary>
     public static IReadOnlySet<string> Ignored { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -73,6 +75,14 @@ internal static class StCapabilities
         "bridge",
         FirmwareUpdate,
         LockCodes,
+        "lockUsers",
+        "lockCredentials",
+        "lockSchedules",
+        "videoStream",
+        "videoCapture",
+        "videoCapture2",
+        "imageCapture",
+        "webrtc",
         DisabledCapabilities,
         DisabledComponents,
         "samsungce.unavailableCapabilities",

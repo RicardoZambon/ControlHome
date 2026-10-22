@@ -1,5 +1,6 @@
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Connectors.SmartThings.Api;
+using ControlHome.Domain.Devices;
 using Microsoft.Extensions.Logging;
 
 namespace ControlHome.Connectors.SmartThings.Auth;
@@ -35,10 +36,14 @@ internal sealed class PersonalAccessToken(string token) : IAccessTokenSource
 
 /// <summary>
 /// The OAuth tokens of one integration. Refreshes when less than <see cref="RefreshBefore"/> of the access token is left
-/// and at least every <see cref="KeepAlive"/> (an unused refresh token dies after about 30 days). Refreshes are
-/// single-flight (one at a time, re-checked after waiting, so concurrent callers share one refresh) and the rotated pair
-/// is persisted as one secret before anyone uses it. A refresh is never cancelled half-way by a caller: once the request
-/// is sent its answer is read and saved (a lost answer would spend the single-use refresh token for nothing).
+/// (or less than half of its lifetime, for tokens shorter than twice that margin: never on every call) and at least every
+/// <see cref="KeepAlive"/> (an unused refresh token dies after about 30 days). Refreshes are single-flight (one at a
+/// time, re-checked after waiting, so concurrent callers share one refresh) and the rotated pair is persisted as one
+/// secret before anyone uses it. A refresh is never cancelled half-way by a caller: once the request is sent its answer
+/// is read and saved (a lost answer would spend the single-use refresh token for nothing). None is started once the
+/// integration is stopping (<c>stopping</c>): the host then refuses secret writes. Every rotation is also recorded in the
+/// factory's <see cref="TokenLineage"/>, so a pair that could not be saved (a refresh in flight while the run is stopped,
+/// a database outage) is carried on by the integration's next run instead of being lost with this one.
 /// </summary>
 internal sealed partial class TokenManager : IAccessTokenSource
 {
@@ -47,12 +52,34 @@ internal sealed partial class TokenManager : IAccessTokenSource
     private readonly ISecretStore _secrets;
     private readonly TimeProvider _time;
     private readonly ILogger _logger;
+    private readonly CancellationToken _stopping;
+    private readonly TokenLineage? _lineage;
+    private readonly Guid _integrationId;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private TokenSet _current;
     private bool _unsaved;
     private int _refreshes;
 
-    public TokenManager(OAuthClient client, OAuthApp app, TokenSet tokens, ISecretStore secrets, TimeProvider time, ILogger logger, TimeSpan refreshBefore, TimeSpan keepAlive)
+    /// <param name="stopping">The run's stop: once it is requested no refresh is started.</param>
+    /// <param name="lineage">Where the integration's rotations are remembered for its next run, or <c>null</c>.</param>
+    /// <param name="integrationId">The integration (the key in <paramref name="lineage"/>).</param>
+    /// <param name="unsaved">
+    /// <paramref name="tokens"/> is newer than the stored pair (taken over from a run that could not save it): it is
+    /// saved before anything else (<see cref="SaveUnsavedAsync"/>, or the next call).
+    /// </param>
+    public TokenManager(
+        OAuthClient client,
+        OAuthApp app,
+        TokenSet tokens,
+        ISecretStore secrets,
+        TimeProvider time,
+        ILogger logger,
+        TimeSpan refreshBefore,
+        TimeSpan keepAlive,
+        CancellationToken stopping,
+        TokenLineage? lineage = null,
+        Guid integrationId = default,
+        bool unsaved = false)
     {
         _client = client;
         _app = app;
@@ -60,6 +87,10 @@ internal sealed partial class TokenManager : IAccessTokenSource
         _secrets = secrets;
         _time = time;
         _logger = logger;
+        _stopping = stopping;
+        _lineage = lineage;
+        _integrationId = integrationId;
+        _unsaved = unsaved;
         RefreshBefore = refreshBefore;
         KeepAlive = keepAlive;
     }
@@ -97,7 +128,9 @@ internal sealed partial class TokenManager : IAccessTokenSource
     public bool IsDue(TokenSet tokens)
     {
         var now = _time.GetUtcNow();
-        return tokens.ExpiresAtUtc - now < RefreshBefore || now - tokens.ObtainedAtUtc >= KeepAlive;
+        var lifetime = tokens.ExpiresAtUtc - tokens.ObtainedAtUtc;
+        var margin = lifetime > TimeSpan.Zero && lifetime / 2 < RefreshBefore ? lifetime / 2 : RefreshBefore;
+        return tokens.ExpiresAtUtc - now < margin || now - tokens.ObtainedAtUtc >= KeepAlive;
     }
 
     /// <param name="rejectedToken">A token SmartThings rejected (refresh unless it was replaced meanwhile), or <c>null</c> to refresh only when due.</param>
@@ -121,11 +154,27 @@ internal sealed partial class TokenManager : IAccessTokenSource
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            if (_stopping.IsCancellationRequested)
+            {
+                // The rotated pair could not be saved any more: keep the current one for the next run.
+                throw new SmartThingsApiException(
+                    new ConnectorError(ConnectorErrorKind.Transient, IntegrationStatus.Degraded, null),
+                    null,
+                    null,
+                    "The SmartThings integration is stopping; its token is refreshed by the next run.");
+            }
+
             LogRefreshing(_logger, current.ExpiresAtUtc);
 
             // Not the caller's token: once sent, the answer must be read and saved even if the caller gives up.
             var next = await _client.RefreshAsync(_app, current.RefreshToken, CancellationToken.None).ConfigureAwait(false);
             Interlocked.Increment(ref _refreshes);
+            if (!string.Equals(next.RefreshToken, current.RefreshToken, StringComparison.Ordinal))
+            {
+                // Before the save, which may fail: the next run must be able to carry the new pair on.
+                _lineage?.Rotated(_integrationId, current.RefreshToken, next);
+            }
+
             Volatile.Write(ref _current, next);
             Volatile.Write(ref _unsaved, true);
             if (await TrySaveAsync(next).ConfigureAwait(false))
@@ -135,6 +184,20 @@ internal sealed partial class TokenManager : IAccessTokenSource
 
             // Even unsaved, the new pair is the only valid one: use it (and keep trying to save it).
             return next;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Saves the current pair now if it is newer than the stored one; <c>false</c> when that failed (retried later).</summary>
+    public async Task<bool> SaveUnsavedAsync()
+    {
+        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            return !_unsaved || await TrySaveAsync(_current).ConfigureAwait(false);
         }
         finally
         {

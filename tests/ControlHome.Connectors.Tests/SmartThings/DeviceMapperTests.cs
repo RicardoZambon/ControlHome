@@ -277,6 +277,46 @@ public sealed class DeviceMapperTests
     }
 
     [Fact]
+    public void Camera_stream_and_image_urls_and_lock_users_are_never_exposed()
+    {
+        // A Mibo-style camera (Works with SmartThings) and a Matter lock: stream and image URLs can carry credentials or
+        // signed tokens, lock users carry people's names. None of it may reach the generic capability (UI, history).
+        var camera = Build(
+            """{"deviceId":"cam-1","label":"Camera","components":[{"id":"main","capabilities":[{"id":"switch","version":1},{"id":"videoStream","version":1},{"id":"videoCapture","version":1},{"id":"videoCapture2","version":1},{"id":"imageCapture","version":1},{"id":"motionSensor","version":1}],"categories":[{"name":"Camera","categoryType":"manufacturer"}]}]}""",
+            """{"components":{"main":{"switch":{"switch":{"value":"on"}},"motionSensor":{"motion":{"value":"inactive"}},"videoStream":{"stream":{"value":{"InHomeURL":"rtsp://<user>:<password>@192.0.2.10:554/live","OutHomeURL":"https://media.example.test/s?token=stream-token-0001"}},"supportedFeatures":{"value":["liveStreaming"]}},"videoCapture":{"clip":{"value":{"clipPath":"https://media.example.test/clip?token=clip-token-0001"}},"stream":{"value":{"url":"https://media.example.test/v?token=video-token-0001"}}},"videoCapture2":{"clip":{"value":{"url":"https://media.example.test/c2?token=clip2-token-0001"}}},"imageCapture":{"image":{"value":"https://media.example.test/i?token=image-token-0001"},"captureTime":{"value":"2026-10-21T11:00:00Z"}}}}}""");
+        var doorLock = Build(
+            """{"deviceId":"lock-1","label":"Front door","components":[{"id":"main","capabilities":[{"id":"lock","version":1},{"id":"lockUsers","version":1},{"id":"lockCredentials","version":1},{"id":"lockSchedules","version":1}],"categories":[{"name":"SmartLock","categoryType":"manufacturer"}]}]}""",
+            """{"components":{"main":{"lock":{"lock":{"value":"locked"}},"lockUsers":{"users":{"value":[{"userIndex":1,"userName":"Maria Example"}]}},"lockCredentials":{"credentials":{"value":[{"credentialIndex":1,"userIndex":1}]}},"lockSchedules":{"weekDaySchedules":{"value":[{"userIndex":1}]}}}}}""");
+
+        foreach (var device in (MappedDevice[])[camera, doorLock])
+        {
+            var text = string.Join('\n', device.Readings.Select(r => r.Value.ToString()))
+                + CapabilityJson.Serialize(device.Device);
+            foreach (var secret in (string[])["<password>", "stream-token", "clip-token", "video-token", "clip2-token", "image-token", "rtsp://", "Maria Example"])
+            {
+                text.ShouldNotContain(secret, Case.Insensitive);
+            }
+        }
+
+        Value(camera, CapabilityIds.Switch, "on").ShouldBe(StateValue.True);
+        Value(camera, CapabilityIds.Motion, "motion").ShouldBe(StateValue.False);
+        Value(doorLock, CapabilityIds.Lock, "lockState").ShouldBe(StateValue.String("locked"));
+    }
+
+    [Fact]
+    public void A_generic_value_holding_a_url_with_credentials_or_a_token_is_unknown()
+    {
+        var device = Build(
+            """{"deviceId":"v-1","label":"Gadget","components":[{"id":"main","capabilities":[{"id":"vendor.cloudLink","version":1}],"categories":[]}]}""",
+            """{"components":{"main":{"vendor.cloudLink":{"link":{"value":"https://cloud.example.test/feed?access_token=link-token-0001"},"source":{"value":{"url":"rtsp://<user>:<password>@192.0.2.20/stream"}},"page":{"value":"https://www.example.test/help"},"mode":{"value":"eco"}}}}}""");
+
+        Value(device, CapabilityIds.Generic, "cloudLink").ShouldBe(StateValue.Null);
+        Value(device, CapabilityIds.Generic, "cloudLinkSource").ShouldBe(StateValue.Null);
+        Value(device, CapabilityIds.Generic, "cloudLinkPage").ShouldBe(StateValue.String("https://www.example.test/help"));
+        Value(device, CapabilityIds.Generic, "cloudLinkMode").ShouldBe(StateValue.String("eco"));
+    }
+
+    [Fact]
     public void Timestamps_from_the_future_are_clamped_to_now()
     {
         var device = Build(
@@ -306,6 +346,20 @@ public sealed class DeviceMapperTests
         var device = SmartThingsDevice.Parse(StFixtures.Parse("""{"deviceId":"hub","components":[{"id":"main","capabilities":[{"id":"bridge","version":1},{"id":"refresh","version":1}]}]}"""))!;
 
         SmartThingsDeviceMapper.Map(device, DeviceStatus.Empty, StFixtures.Context()).ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_device_of_undefined_capabilities_only_names_the_definitions_it_waits_for()
+    {
+        // A community Edge driver's device: custom capabilities only. Until their definitions arrive it has nothing to
+        // show, but it must say which ones it waits for, or they would never be fetched (and the device never appear).
+        var device = SmartThingsDevice.Parse(StFixtures.Parse(
+            """{"deviceId":"edge-1","components":[{"id":"main","capabilities":[{"id":"partyvoice.counter","version":1},{"id":"refresh","version":1}]},{"id":"extra","capabilities":[{"id":"partyvoice.mode","version":2}]}]}"""))!;
+
+        var mapped = SmartThingsDeviceMapper.Map(device, DeviceStatus.Empty, StFixtures.Context(_ => DefinitionLookup.Pending), out var missing);
+
+        mapped.ShouldBeNull();
+        missing.ShouldBe([new CapabilityRef("partyvoice.counter", 1), new CapabilityRef("partyvoice.mode", 2)]);
     }
 
     [Fact]

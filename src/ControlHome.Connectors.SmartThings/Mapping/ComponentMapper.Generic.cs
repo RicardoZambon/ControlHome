@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ControlHome.Connectors.SmartThings.Model;
 using ControlHome.Domain.Capabilities;
 
@@ -249,8 +250,19 @@ internal sealed partial class ComponentMapper
         _ => null,
     };
 
-    /// <summary>A generic attribute's state value, checked against its schema (anything that does not fit is unknown).</summary>
+    /// <summary>
+    /// A generic attribute's state value, checked against its schema (anything that does not fit is unknown). A text or
+    /// JSON value holding a URL with credentials or an access token is unknown too: it would reach the UI and the history.
+    /// </summary>
     private static StateValue GenericValue(StAttribute? state, ValueSchema schema, UnitConversion conversion)
+    {
+        var value = SchemaValue(state, schema, conversion);
+        return value.Kind is StateValueKind.String or StateValueKind.Json && CredentialUrl().IsMatch(value.ToString())
+            ? StateValue.Null
+            : value;
+    }
+
+    private static StateValue SchemaValue(StAttribute? state, ValueSchema schema, UnitConversion conversion)
     {
         if (state is not { HasValue: true })
         {
@@ -275,4 +287,8 @@ internal sealed partial class ComponentMapper
     }
 
     private static string Truncate(string value, int? maxLength) => maxLength is { } max && value.Length > max ? value[..max] : value;
+
+    /// <summary>A URL with user info (<c>scheme://user:password@host</c>) or a query parameter naming a token, key, signature or password.</summary>
+    [GeneratedRegex(@"[a-z][a-z0-9+.\-]*://[^\s/""'@?#]+@|[?&][a-z0-9_\-]*(token|key|sig|signature|auth|password|passwd|pwd|secret|credential)[a-z0-9_\-]*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex CredentialUrl();
 }

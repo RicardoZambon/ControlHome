@@ -109,6 +109,12 @@ internal static class StFixtures
     public static DeviceCommandBatch Batch(string device, string key, params DeviceCommand[] commands) => new(device, commands, key);
 }
 
+/// <summary>Randomness that always draws the same number (pins the jitter of a delay in tests).</summary>
+internal sealed class FixedRandom(double value) : Random
+{
+    public override double NextDouble() => value;
+}
+
 /// <summary>An in-memory secret store recording every write; <see cref="FailWrites"/> simulates a database outage.</summary>
 internal sealed class MemorySecretStore(IReadOnlyDictionary<string, string>? values = null) : ISecretStore
 {
@@ -210,7 +216,16 @@ internal sealed class StHarness : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
     private Task? _run;
 
-    public StHarness(FakeSmartThings fake, MemorySecretStore secrets, string configJson, Func<SmartThingsOptions, SmartThingsOptions>? configure = null, ILogger? logger = null)
+    /// <param name="factory">A factory shared with another harness (two integrations of one process), or <c>null</c> for a new one.</param>
+    /// <param name="integrationId">The integration's id (a later run of the same integration), or <c>null</c> for a new one.</param>
+    public StHarness(
+        FakeSmartThings fake,
+        MemorySecretStore secrets,
+        string configJson,
+        Func<SmartThingsOptions, SmartThingsOptions>? configure = null,
+        ILogger? logger = null,
+        SmartThingsConnectorFactory? factory = null,
+        Guid? integrationId = null)
     {
         Fake = fake;
         Time = new FakeTimeProvider(StFixtures.Now);
@@ -218,9 +233,12 @@ internal sealed class StHarness : IAsyncDisposable
         Secrets = secrets;
         var options = fake.Options(Time);
         Options = configure?.Invoke(options) ?? options;
-        Factory = new SmartThingsConnectorFactory(FakeSmartThings.Http, null, Options);
-        Runtime = (SmartThingsRuntime)Factory.CreateRuntime(new IntegrationInstance(Context.IntegrationId, "SmartThings", StFixtures.Parse(configJson), secrets));
+        Factory = factory ?? new SmartThingsConnectorFactory(FakeSmartThings.Http, null, Options);
+        IntegrationId = integrationId ?? Context.IntegrationId;
+        Runtime = (SmartThingsRuntime)Factory.CreateRuntime(new IntegrationInstance(IntegrationId, "SmartThings", StFixtures.Parse(configJson), secrets));
     }
+
+    public Guid IntegrationId { get; }
 
     public FakeSmartThings Fake { get; }
 
@@ -263,12 +281,15 @@ internal sealed class StHarness : IAsyncDisposable
         ["patIssuedAtUtc"] = "2026-10-21T08:00:00.0000000+00:00",
     }.ToJsonString();
 
-    /// <summary>Secrets of an authorized OAuth integration whose access token is valid for <paramref name="validFor"/>.</summary>
+    /// <summary>Secrets of an authorized OAuth integration whose (24-hour) access token is valid for <paramref name="validFor"/>.</summary>
     public static MemorySecretStore OAuthSecrets(TimeSpan validFor, string access = "access-token-0001", string refresh = "refresh-token-0001", TimeSpan? age = null)
     {
-        var tokens = new TokenSet(access, refresh, StFixtures.Now + validFor, StFixtures.Now - (age ?? TimeSpan.FromHours(1)), "r:devices:*", null);
+        var tokens = new TokenSet(access, refresh, StFixtures.Now + validFor, StFixtures.Now - (age ?? DefaultAge(validFor)), "r:devices:*", null);
         return new MemorySecretStore(new Dictionary<string, string>(tokens.ToSecrets()) { [SecretKeys.ClientSecret] = FakeSmartThings.ClientSecret });
     }
+
+    /// <summary>The age of a 24-hour SmartThings access token with <paramref name="validFor"/> left (1 h for longer ones).</summary>
+    public static TimeSpan DefaultAge(TimeSpan validFor) => validFor < TimeSpan.FromHours(23) ? TimeSpan.FromHours(24) - validFor : TimeSpan.FromHours(1);
 
     public void Start() => _run = Runtime.RunAsync(Context, _stop.Token);
 

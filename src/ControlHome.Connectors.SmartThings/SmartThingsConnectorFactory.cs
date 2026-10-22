@@ -1,4 +1,5 @@
 using ControlHome.Connectors.Abstractions;
+using ControlHome.Connectors.SmartThings.Auth;
 using ControlHome.Connectors.SmartThings.Flow;
 using ControlHome.Connectors.SmartThings.Runtime;
 using ControlHome.Domain.Capabilities;
@@ -36,15 +37,21 @@ public sealed class SmartThingsConnectorFactory : IConnectorFactory
         _definitions = new CapabilityDefinitionCache(_options);
     }
 
+    /// <summary>Which integration runs each (app, location) pair (shared by the runtimes and setup flows of this factory).</summary>
+    internal LocationClaims Locations { get; } = new();
+
+    /// <summary>Each integration's token rotations, carried from one run to the next (see <see cref="TokenLineage"/>).</summary>
+    internal TokenLineage Lineage { get; } = new();
+
     public IConnectorDescriptor Descriptor => SmartThingsConnectorDescriptor.Instance;
 
-    public IConnectorFlow? CreateSetupFlow() => new SmartThingsSetupFlow(_http, _options, SetupInstructions.Default);
+    public IConnectorFlow? CreateSetupFlow() => new SmartThingsSetupFlow(_http, _options, SetupInstructions.Default, Locations);
 
     /// <exception cref="ArgumentException">The config does not match <see cref="IConnectorDescriptor.ConfigFields"/>.</exception>
     public IConnectorRuntime CreateRuntime(IntegrationInstance instance)
     {
         ArgumentNullException.ThrowIfNull(instance);
-        return new SmartThingsRuntime(instance, SmartThingsSettings.Parse(instance.Config, _options), _http, _quotas, _options, _definitions);
+        return new SmartThingsRuntime(instance, SmartThingsSettings.Parse(instance.Config, _options), _http, _quotas, _options, _definitions, Locations, Lineage);
     }
 }
 

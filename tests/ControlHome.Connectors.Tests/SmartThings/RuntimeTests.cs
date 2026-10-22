@@ -174,6 +174,81 @@ public sealed class RuntimeTests : IDisposable
     }
 
     [Fact]
+    public async Task A_jittered_wait_just_short_of_the_interval_still_polls_every_interval()
+    {
+        Rooms();
+        Listing(StFixtures.ListingItem(StFixtures.Light, Location));
+
+        // Every wait is 9 % shorter than the 30 s interval (the default 10 % jitter, pinned).
+        await using var st = new StHarness(
+            _fake,
+            StHarness.OAuthSecrets(validFor: TimeSpan.FromHours(20)),
+            StHarness.OAuthConfig(),
+            o => o with { Jitter = 0.1, Random = new FixedRandom(0.05) });
+        st.Start();
+        await st.WaitUntilAsync(() => st.Runtime.Polls == 1, "the first poll");
+
+        await AdvanceAsync(st, TimeSpan.FromSeconds(27.3));
+        await st.WaitUntilAsync(() => st.Runtime.Polls == 2, "the next poll one jittered interval later (not two)");
+
+        await AdvanceAsync(st, TimeSpan.FromSeconds(27.3));
+        await st.WaitUntilAsync(() => st.Runtime.Polls == 3, "the third poll");
+        _fake.Requests("/v1/devices").Count.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_429_without_retry_after_waits_for_the_window_reset_of_its_headers()
+    {
+        Rooms();
+        _fake.Server.Given(Request.Create().WithPath("/v1/devices").UsingGet()).InScenario("limit").WillSetStateTo("ok")
+            .RespondWith(Response.Create().WithStatusCode(429).WithHeader("X-RateLimit-Limit", "12").WithHeader("X-RateLimit-Remaining", "0")
+                .WithHeader("X-RateLimit-Reset", "50000").WithBody("""{"error":{"code":"TooManyRequestError"}}"""));
+        _fake.Server.Given(Request.Create().WithPath("/v1/devices").UsingGet()).InScenario("limit").WhenStateIs("ok")
+            .RespondWith(Json(StFixtures.Listing([StFixtures.ListingItem(StFixtures.Light, Location)])));
+        await using var st = Harness();
+        st.Start();
+        await st.WaitUntilAsync(() => st.Context.Statuses.Any(s => s.Status == IntegrationStatus.Degraded), "rate limited");
+        st.Context.Statuses.Last().Message!.ShouldContain("waiting 50 s");
+
+        await AdvanceAsync(st, TimeSpan.FromSeconds(45));
+        _fake.Requests("/v1/devices").Count.ShouldBe(1);
+
+        await AdvanceAsync(st, TimeSpan.FromSeconds(6));
+        await st.WaitUntilAsync(() => st.Context.Statuses.Last().Status == IntegrationStatus.Ok, "recovered after the reset");
+        _fake.Requests("/v1/devices").Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_second_integration_of_the_same_location_and_app_never_runs_next_to_the_first()
+    {
+        Rooms();
+        Listing(StFixtures.ListingItem(StFixtures.Light, Location));
+        TokenEndpoint();
+        var first = Harness();
+        first.Start();
+        await first.WaitUntilAsync(() => first.Runtime.Polls == 1, "the first integration polls");
+        var calls = _fake.Server.LogEntries.Count;
+
+        // The same location authorized again with the same app shares the first one's single-use refresh token: the two
+        // must never refresh (or poll) side by side. This one's token is due for a refresh.
+        await using var second = new StHarness(_fake, StHarness.OAuthSecrets(validFor: TimeSpan.FromHours(1)), StHarness.OAuthConfig(), factory: first.Factory);
+        second.Start();
+        await second.WaitUntilAsync(() => second.Context.Statuses.Any(s => s.Status == IntegrationStatus.Error), "the duplicate is refused");
+
+        second.Context.Statuses.Last().Message!.ShouldContain("already connected");
+        await StHarness.SettleAsync();
+        _fake.Server.LogEntries.Count.ShouldBe(calls);
+        (await second.Runtime.ExecuteAsync(StFixtures.Batch(StFixtures.DeviceId(StFixtures.Light), "k-9", StFixtures.Command("main", CapabilityIds.Switch, "turnOn")), Ct))
+            .ShouldBeOfType<CommandOutcome.Rejected>().Code.ShouldBe(CommandRejectionCodes.Unavailable);
+
+        // Once the first one stops, the location is free again.
+        await first.DisposeAsync();
+        await using var third = new StHarness(_fake, StHarness.OAuthSecrets(validFor: TimeSpan.FromHours(20)), StHarness.OAuthConfig(), factory: first.Factory);
+        third.Start();
+        await third.WaitUntilAsync(() => third.Runtime.Polls == 1, "a later run polls");
+    }
+
+    [Fact]
     public async Task A_plan_error_sets_plan_required_and_refuses_commands()
     {
         _fake.Server.Given(Request.Create().WithPath("/v1/devices").UsingGet())
@@ -344,6 +419,137 @@ public sealed class RuntimeTests : IDisposable
     }
 
     [Fact]
+    public async Task A_command_that_may_have_run_despite_a_server_error_is_not_repeated_and_the_device_is_re_read()
+    {
+        Rooms();
+        Listing(StFixtures.ListingItem(StFixtures.Lock, Location));
+        var doorLock = StFixtures.DeviceId(StFixtures.Lock);
+        _fake.Server.Given(Request.Create().WithPath($"/v1/devices/{doorLock}/commands").UsingPost()).RespondWith(Response.Create().WithStatusCode(503));
+        await using var st = Harness();
+        st.Start();
+        await st.WaitUntilAsync(() => st.Runtime.Polls == 1, "the first poll");
+
+        var outcome = await st.Runtime.ExecuteAsync(StFixtures.Batch(doorLock, "k-5", StFixtures.Command("main", CapabilityIds.Lock, "unlock")), Ct);
+
+        // A 5xx (or a timeout) does not say whether the door unlocked: never sent again, but its real state is read
+        // closely, as after an accepted command, instead of waiting for the next bulk poll.
+        var rejected = outcome.ShouldBeOfType<CommandOutcome.Rejected>();
+        rejected.Code.ShouldBe(CommandRejectionCodes.Unavailable);
+        rejected.Message.ShouldContain("may have reached SmartThings");
+        await AdvanceAsync(st, TimeSpan.FromSeconds(5));
+        await st.WaitUntilAsync(() => _fake.Requests($"/v1/devices/{doorLock}/status").Count > 0, "the lock's status is read");
+        _fake.Requests($"/v1/devices/{doorLock}/commands").Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_capability_whose_definition_cannot_be_read_does_not_hold_back_the_others()
+    {
+        Rooms();
+        const string Gadget1 = "00000000-0000-4000-8000-0000000d0001";
+        Listing(Gadget(Gadget1, ("vendor.broken", """{"level":{"value":3}}"""), ("vendor.good", """{"mode":{"value":"eco"}}""")));
+        _fake.Server.Given(Request.Create().WithPath("/v1/capabilities/vendor.broken/1").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(400).WithHeader("Content-Type", "application/json").WithBody("""{"error":{"code":"ConstraintViolationError"}}"""));
+        _fake.Server.Given(Request.Create().WithPath("/v1/capabilities/vendor.good/1").UsingGet()).RespondWith(Json(
+            """{"id":"vendor.good","version":1,"status":"proposed","attributes":{"mode":{"schema":{"type":"object","properties":{"value":{"type":"string","enum":["eco","boost"]}}}}},"commands":{}}"""));
+        await using var st = Harness();
+        st.Start();
+        await st.WaitUntilAsync(() => st.Runtime.Polls == 1, "the first poll");
+        await NextPollAsync(st);
+
+        // The one SmartThings refuses to describe is given up on for now (asked again hours later, not on every poll) …
+        _fake.Requests("/v1/capabilities/vendor.broken/1").Count.ShouldBe(1);
+
+        // … and the others are read and mapped meanwhile.
+        _fake.Requests("/v1/capabilities/vendor.good/1").Count.ShouldBe(1);
+        var generic = st.Context.Devices.Last(d => d.ExternalId == Gadget1).Endpoints.Single().Capabilities.Single(c => c.CapabilityId == CapabilityIds.Generic);
+        generic.GenericDefinition!.Attributes.Select(a => a.Key).ShouldContain("goodMode");
+        st.Context.Latest(Gadget1, CapabilityIds.Generic, "goodMode")!.Value.ShouldBe(StateValue.String("eco"));
+    }
+
+    [Fact]
+    public async Task A_rotated_pair_the_previous_run_could_not_save_is_taken_over_by_the_next_run()
+    {
+        Rooms();
+        Listing(StFixtures.ListingItem(StFixtures.Light, Location));
+        SingleUseTokenEndpoint();
+        var integration = Guid.NewGuid();
+        var secrets = StHarness.OAuthSecrets(validFor: TimeSpan.FromHours(1)); // due: refreshed before the first call
+
+        // The rotated pair cannot be saved: the database is down, or the run is being stopped (the host refuses a stopping
+        // run's secret writes) while its refresh is in flight.
+        secrets.FailWrites = true;
+        var first = new StHarness(_fake, secrets, StHarness.OAuthConfig(), integrationId: integration);
+        first.Start();
+        await first.WaitUntilAsync(() => first.Runtime.Polls == 1, "the first run polls with the rotated token");
+        await first.DisposeAsync();
+        TokenSet.Deserialize(secrets.Values[SecretKeys.Tokens])!.RefreshToken.ShouldBe("refresh-token-0001");
+
+        // The next run of the integration (the supervisor restarts it) reads the spent pair: it goes on with the rotated one.
+        secrets.FailWrites = false;
+        await using var second = new StHarness(_fake, secrets, StHarness.OAuthConfig(), factory: first.Factory, integrationId: integration);
+        second.Start();
+        await second.WaitUntilAsync(() => second.Runtime.Polls == 1, "the next run polls");
+
+        second.Context.Statuses.ShouldNotContain(s => s.Status == IntegrationStatus.NeedsReauth);
+        _fake.Requests("/oauth/token").Count.ShouldBe(1);
+        _fake.Requests("/v1/devices").Last().RequestMessage!.Headers!["Authorization"].ShouldHaveSingleItem().ShouldBe("Bearer access-token-0002");
+        TokenSet.Deserialize(secrets.Values[SecretKeys.Tokens])!.RefreshToken.ShouldBe("refresh-token-0002");
+    }
+
+    [Fact]
+    public async Task A_re_authorization_that_hands_out_the_pair_a_refresh_just_spent_goes_on_with_the_rotated_one()
+    {
+        Rooms();
+        Listing(StFixtures.ListingItem(StFixtures.Light, Location));
+        SingleUseTokenEndpoint();
+        var integration = Guid.NewGuid();
+        var secrets = StHarness.OAuthSecrets(validFor: TimeSpan.FromHours(1));
+        var signedIn = secrets.Values[SecretKeys.Tokens];
+        var first = new StHarness(_fake, secrets, StHarness.OAuthConfig(), integrationId: integration);
+        first.Start();
+        await first.WaitUntilAsync(() => first.Runtime.Polls == 1, "the first run refreshes and polls");
+        await first.DisposeAsync();
+        TokenSet.Deserialize(secrets.Values[SecretKeys.Tokens])!.RefreshToken.ShouldBe("refresh-token-0002");
+
+        // "Sign in again" got the location's current pair from SmartThings (it hands out the same tokens to an already
+        // authorized location) just before the running integration spent it on a refresh; the flow then saved it.
+        await secrets.SetAsync(SecretKeys.Tokens, signedIn, Ct);
+        await using var second = new StHarness(_fake, secrets, StHarness.OAuthConfig(), factory: first.Factory, integrationId: integration);
+        second.Start();
+        await second.WaitUntilAsync(() => second.Runtime.Polls == 1, "the next run polls");
+
+        second.Context.Statuses.ShouldNotContain(s => s.Status == IntegrationStatus.NeedsReauth);
+        _fake.Requests("/oauth/token").Count.ShouldBe(1);
+        TokenSet.Deserialize(secrets.Values[SecretKeys.Tokens])!.RefreshToken.ShouldBe("refresh-token-0002");
+    }
+
+    [Fact]
+    public async Task New_tokens_from_a_re_authorization_win_over_a_pair_an_earlier_run_could_not_save()
+    {
+        Rooms();
+        Listing(StFixtures.ListingItem(StFixtures.Light, Location));
+        SingleUseTokenEndpoint();
+        var integration = Guid.NewGuid();
+        var secrets = StHarness.OAuthSecrets(validFor: TimeSpan.FromHours(1));
+        secrets.FailWrites = true;
+        var first = new StHarness(_fake, secrets, StHarness.OAuthConfig(), integrationId: integration);
+        first.Start();
+        await first.WaitUntilAsync(() => first.Runtime.Polls == 1, "the first run polls with an unsaved rotated pair");
+        await first.DisposeAsync();
+
+        // Signing in again (with new tokens) replaced the integration's secrets meanwhile: they win.
+        secrets.FailWrites = false;
+        var fresh = new TokenSet("access-token-0009", "refresh-token-0009", StFixtures.Now.AddHours(20), StFixtures.Now.AddHours(-4), null, null);
+        await secrets.SetAsync(SecretKeys.Tokens, fresh.Serialize(), Ct);
+        await using var second = new StHarness(_fake, secrets, StHarness.OAuthConfig(), factory: first.Factory, integrationId: integration);
+        second.Start();
+        await second.WaitUntilAsync(() => second.Runtime.Polls == 1, "the next run polls");
+
+        _fake.Requests("/v1/devices").Last().RequestMessage!.Headers!["Authorization"].ShouldHaveSingleItem().ShouldBe("Bearer access-token-0009");
+        TokenSet.Deserialize(secrets.Values[SecretKeys.Tokens])!.RefreshToken.ShouldBe("refresh-token-0009");
+    }
+
+    [Fact]
     public async Task Development_mode_warns_that_the_token_expires()
     {
         Rooms();
@@ -426,6 +632,40 @@ public sealed class RuntimeTests : IDisposable
             ["refresh_token"] = "refresh-token-0002",
             ["expires_in"] = 86399,
         }.ToJsonString()));
+
+    /// <summary>Like SmartThings: refresh-token-0001 can be spent once (→ the 0002 pair); any later refresh is invalid_grant.</summary>
+    private void SingleUseTokenEndpoint()
+    {
+        _fake.Server.Given(Request.Create().WithPath("/oauth/token").UsingPost()).InScenario("single-use").WillSetStateTo("spent")
+            .RespondWith(Json(new JsonObject
+            {
+                ["access_token"] = "access-token-0002",
+                ["refresh_token"] = "refresh-token-0002",
+                ["expires_in"] = 86399,
+            }.ToJsonString()));
+        _fake.Server.Given(Request.Create().WithPath("/oauth/token").UsingPost()).InScenario("single-use").WhenStateIs("spent")
+            .RespondWith(Response.Create().WithStatusCode(400).WithHeader("Content-Type", "application/json").WithBody("""{"error":"invalid_grant"}"""));
+    }
+
+    /// <summary>A listing item of a device whose main component has only the given (vendor) capabilities with their status.</summary>
+    private static JsonObject Gadget(string deviceId, params (string Capability, string Status)[] capabilities) => new()
+    {
+        ["deviceId"] = deviceId,
+        ["label"] = "Gadget",
+        ["locationId"] = Location,
+        ["healthState"] = new JsonObject { ["state"] = "ONLINE" },
+        ["components"] = new JsonArray(new JsonObject
+        {
+            ["id"] = "main",
+            ["capabilities"] = new JsonArray([.. capabilities.Select(c => (JsonNode)new JsonObject
+            {
+                ["id"] = c.Capability,
+                ["version"] = 1,
+                ["status"] = JsonNode.Parse(c.Status),
+            })]),
+            ["categories"] = new JsonArray(),
+        }),
+    };
 
     private static IResponseBuilder Json(string body) =>
         Response.Create().WithStatusCode(HttpStatusCode.OK).WithHeader("Content-Type", "application/json").WithBody(body);

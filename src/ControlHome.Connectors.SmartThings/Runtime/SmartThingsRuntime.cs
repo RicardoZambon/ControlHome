@@ -29,6 +29,8 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
     private readonly IQuotaCounter? _quotas;
     private readonly SmartThingsOptions _options;
     private readonly CapabilityDefinitionCache _definitions;
+    private readonly LocationClaims _locations;
+    private readonly TokenLineage _lineage;
     private readonly Lock _lock = new();
     private readonly Dictionary<string, MappedDevice> _devices = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DeviceStatus> _statuses = new(StringComparer.Ordinal);
@@ -67,7 +69,9 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
         Func<HttpClient> http,
         IQuotaCounter? quotas,
         SmartThingsOptions options,
-        CapabilityDefinitionCache definitions)
+        CapabilityDefinitionCache definitions,
+        LocationClaims locations,
+        TokenLineage lineage)
     {
         _instance = instance;
         _settings = settings;
@@ -75,6 +79,8 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
         _quotas = quotas;
         _options = options;
         _definitions = definitions;
+        _locations = locations;
+        _lineage = lineage;
     }
 
     public SmartThingsSettings Settings => _settings;
@@ -107,6 +113,7 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
         }
 
         using var http = _httpFactory();
+        var claimed = false;
         try
         {
             SetStatus(context, IntegrationStatus.Connecting, null);
@@ -120,6 +127,18 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
                 return;
             }
 
+            // Two integrations of one location and app hold the same single-use refresh token: only one may run.
+            if (tokens.CanRefresh)
+            {
+                claimed = _locations.TryClaim(_settings.ClientId!, _settings.LocationId, _instance.Id, owner: this);
+                if (!claimed)
+                {
+                    LogDuplicateLocation(context.Logger);
+                    await ParkAsync(context, IntegrationStatus.Error, DuplicateLocationMessage, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+            }
+
             _tokens = tokens;
             _api = new SmartThingsApi(http, _options, tokens, context.Time, new RateLimitTracker());
             await LoopAsync(context, cancellationToken).ConfigureAwait(false);
@@ -128,6 +147,10 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
         {
             // Stopped.
         }
+        catch (SmartThingsApiException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Stopped while a call was failing (e.g. no token refresh is started while stopping).
+        }
         finally
         {
             lock (_lock)
@@ -135,6 +158,11 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
                 _context = null;
                 _api = null;
                 _hot.Clear();
+            }
+
+            if (claimed)
+            {
+                _locations.Release(_settings.ClientId!, _settings.LocationId, owner: this);
             }
 
             _listLimiter?.Dispose();
@@ -198,7 +226,8 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
                 return CommandOutcome.Reject(CommandRejectionCodes.Duplicate, "This command was already executed.");
             }
 
-            if (limiter.Available < requests.Count)
+            // Every request of the batch at once (atomic: a hot poll cannot take a permit in between).
+            if (!limiter.TryAcquire(requests.Count, reserve: 0))
             {
                 return CommandOutcome.Reject(
                     CommandRejectionCodes.Unavailable,
@@ -214,7 +243,6 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
 
         for (var i = 0; i < requests.Count; i++)
         {
-            limiter.TryAcquire();
             IReadOnlyList<string> statuses;
             try
             {
@@ -225,12 +253,22 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
                 LogCommandFailed(context.Logger, batch.ExternalDeviceId, exception.Kind, exception.Status is { } status ? (int)status : 0);
                 Block(context, exception);
                 var sent = i == 0 ? string.Empty : string.Create(CultureInfo.InvariantCulture, $" Only the first {i * CommandPlanner.MaxCommandsPerRequest} commands reached SmartThings.");
+
+                // No answer, or a server error: the request may have been carried out (an unlock too). It is never sent
+                // again, but the device is read closely so its real state shows up now rather than at the next bulk poll.
+                var unknown = MayHaveRun(exception);
+                if (unknown || i > 0)
+                {
+                    NotifyHot(batch.ExternalDeviceId, context.Time.GetUtcNow());
+                }
+
+                var maybe = unknown ? " It may have reached SmartThings; the device's state is being read again." : string.Empty;
                 return exception.Kind switch
                 {
                     ConnectorErrorKind.Permanent when exception.Status is System.Net.HttpStatusCode.BadRequest =>
                         CommandOutcome.Reject(CommandRejectionCodes.InvalidArguments, "SmartThings rejected the command's arguments." + sent),
                     ConnectorErrorKind.Permanent => CommandOutcome.Reject(CommandRejectionCodes.Refused, exception.Message + sent),
-                    _ => CommandOutcome.Reject(CommandRejectionCodes.Unavailable, exception.Message + sent),
+                    _ => CommandOutcome.Reject(CommandRejectionCodes.Unavailable, exception.Message + maybe + sent),
                 };
             }
 
@@ -466,10 +504,10 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
         }
 
         var ids = parsed.Select(p => p.Device.DeviceId).ToHashSet(StringComparer.Ordinal);
-        var mapped = MapAll(context, parsed, ids, now);
-        if (await FetchDefinitionsAsync(context, api, mapped, now, cancellationToken).ConfigureAwait(false))
+        var mapped = MapAll(context, parsed, ids, now, out var missing);
+        if (await FetchDefinitionsAsync(context, api, missing, parsed.Select(p => p.Device), now, cancellationToken).ConfigureAwait(false))
         {
-            mapped = MapAll(context, parsed, ids, now);
+            mapped = MapAll(context, parsed, ids, now, out _);
         }
 
         // A device the mapper failed on is not "gone": the listing then only adds and updates (nothing is orphaned).
@@ -498,19 +536,31 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
             interval = _settings.PollInterval;
         }
 
-        _nextBulkAt = now + interval;
+        // The loop wakes after the poller's jittered delay (± Jitter): the next poll is due from the earliest wake-up, or
+        // a wait that ends just short of the interval would skip a whole interval (30 s polls turning into 60 s ones).
+        var slack = TimeSpan.FromTicks((long)(interval.Ticks * _options.Jitter)) + TimeSpan.FromSeconds(1);
+        _nextBulkAt = now + interval - slack;
         SetStatus(context, IntegrationStatus.Ok, OkMessage());
     }
 
-    private List<MappedDevice> MapAll(IConnectorContext context, IReadOnlyList<(SmartThingsDevice Device, DeviceStatus Status)> devices, IReadOnlySet<string> ids, DateTimeOffset now)
+    /// <param name="missing">The capability definitions the devices wait for (also those of devices with nothing to show yet).</param>
+    private List<MappedDevice> MapAll(
+        IConnectorContext context,
+        IReadOnlyList<(SmartThingsDevice Device, DeviceStatus Status)> devices,
+        IReadOnlySet<string> ids,
+        DateTimeOffset now,
+        out List<CapabilityRef> missing)
     {
         var mapContext = new MapContext(now, _rooms, _definitions.Lookup, ids);
         var mapped = new List<MappedDevice>();
+        missing = [];
         foreach (var (device, status) in devices)
         {
             try
             {
-                if (SmartThingsDeviceMapper.Map(device, status, mapContext) is { } result)
+                var result = SmartThingsDeviceMapper.Map(device, status, mapContext, out var waiting);
+                missing.AddRange(waiting);
+                if (result is not null)
                 {
                     mapped.Add(result);
                 }
@@ -529,12 +579,19 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
     }
 
     /// <summary>Fetches a few missing capability definitions; <c>true</c> when any arrived (the devices are mapped again).</summary>
-    private async Task<bool> FetchDefinitionsAsync(IConnectorContext context, SmartThingsApi api, IReadOnlyList<MappedDevice> devices, DateTimeOffset now, CancellationToken cancellationToken)
+    /// <param name="missing">Definitions devices wait for.</param>
+    /// <param name="devices">Every listed device (cached definitions of their capabilities are refreshed when they expire).</param>
+    private async Task<bool> FetchDefinitionsAsync(
+        IConnectorContext context,
+        SmartThingsApi api,
+        IEnumerable<CapabilityRef> missing,
+        IEnumerable<SmartThingsDevice> devices,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         // Missing definitions first, then cached ones that expired (only capabilities that went the generic way are cached).
-        var due = devices
-            .SelectMany(d => d.MissingDefinitions)
-            .Concat(devices.SelectMany(d => d.Source.Components.SelectMany(c => c.Capabilities)).Where(c => _definitions.Lookup(c).State != DefinitionState.Pending))
+        var due = missing
+            .Concat(devices.SelectMany(d => d.Components.SelectMany(c => c.Capabilities)).Where(c => _definitions.Lookup(c).State != DefinitionState.Pending))
             .DistinctBy(c => (c.Id, c.Version))
             .Where(c => _definitions.IsDue(c, now))
             .Take(_options.DefinitionFetchesPerPoll)
@@ -549,7 +606,15 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
                 fetched = true;
                 LogDefinition(context.Logger, capability.Id, capability.Version, document is not null);
             }
-            catch (SmartThingsApiException exception) when (exception.Kind is ConnectorErrorKind.RateLimited or ConnectorErrorKind.Transient or ConnectorErrorKind.Permanent)
+            catch (SmartThingsApiException exception) when (exception.Kind == ConnectorErrorKind.Permanent)
+            {
+                // SmartThings refuses to describe this one (400, 422, …): it would come first again in every poll and hold
+                // back all the others. Its attributes are inferred from their values for now; asked again much later.
+                _definitions.Store(capability, null, now);
+                fetched = true;
+                LogDefinitionFailed(context.Logger, capability.Id, exception.Kind);
+            }
+            catch (SmartThingsApiException exception) when (exception.Kind is ConnectorErrorKind.RateLimited or ConnectorErrorKind.Transient)
             {
                 // Try again in a later poll; the devices work without these capabilities meanwhile.
                 LogDefinitionFailed(context.Logger, capability.Id, exception.Kind);
@@ -762,7 +827,7 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
             return;
         }
 
-        var mapped = MapAll(context, [(previous.Source, status)], ids, context.Time.GetUtcNow());
+        var mapped = MapAll(context, [(previous.Source, status)], ids, context.Time.GetUtcNow(), out _);
         if (mapped.Count == 0)
         {
             return;
@@ -881,14 +946,17 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
             return string.IsNullOrEmpty(pat) ? null : new PersonalAccessToken(pat);
         }
 
-        var tokens = TokenSet.Deserialize(await _instance.Secrets.GetAsync(SecretKeys.Tokens, cancellationToken).ConfigureAwait(false));
+        var stored = TokenSet.Deserialize(await _instance.Secrets.GetAsync(SecretKeys.Tokens, cancellationToken).ConfigureAwait(false));
         var secret = await _instance.Secrets.GetAsync(SecretKeys.ClientSecret, cancellationToken).ConfigureAwait(false);
+
+        // A stored pair whose refresh token an earlier run of this process already spent is stale: go on with the newest.
+        var tokens = _lineage.Resolve(_instance.Id, stored);
         if (tokens is null || string.IsNullOrEmpty(secret) || _settings.ClientId is null || _settings.Endpoints is null)
         {
             return null;
         }
 
-        return new TokenManager(
+        var manager = new TokenManager(
             new OAuthClient(http, context.Time, _options.RequestTimeout),
             new OAuthApp(_settings.ClientId, secret, _settings.Endpoints),
             tokens,
@@ -896,8 +964,27 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
             context.Time,
             context.Logger,
             _options.RefreshBeforeExpiry,
-            _options.KeepAlive);
+            _options.KeepAlive,
+            stopping: cancellationToken,
+            _lineage,
+            _instance.Id,
+            unsaved: !ReferenceEquals(tokens, stored));
+        if (manager.HasUnsavedTokens)
+        {
+            LogTokensCarriedOn(context.Logger);
+            await manager.SaveUnsavedAsync().ConfigureAwait(false);
+        }
+
+        return manager;
     }
+
+    /// <summary>
+    /// Whether a failed command request may still have been carried out: no answer (network error, timeout) or a server
+    /// error (408, 5xx). A refusal (4xx), a rate-limit block or a rejected token means it was not.
+    /// </summary>
+    private static bool MayHaveRun(SmartThingsApiException exception) =>
+        exception.Kind == ConnectorErrorKind.Transient
+        && exception.Status is null or System.Net.HttpStatusCode.RequestTimeout or >= System.Net.HttpStatusCode.InternalServerError;
 
     private ClockedSlidingWindow DeviceLimiter(string deviceId, TimeProvider time)
     {
@@ -916,6 +1003,9 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
     private string NeedsReauthMessage() => _settings.Mode == SmartThingsAuthMode.PersonalAccessToken
         ? "SmartThings rejected the personal access token (they expire 24 h after they were created). Sign in again."
         : "SmartThings rejected the sign-in (revoked, expired after 30 days unused, or the app's secret changed). Sign in again.";
+
+    private const string DuplicateLocationMessage =
+        "Another SmartThings integration is already connected to this location with the same app (SmartThings gives both the same single-use tokens, so only one can run). Remove one of them; to use this one, disable and enable it afterwards.";
 
     private const string PlanRequiredMessage =
         "SmartThings asks for a paid plan (the Personal Plan) for API access. Subscribe in your Samsung account; ControlHome tries again every 30 minutes.";
@@ -957,6 +1047,12 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
     }
 
     private sealed record HotDevice(DateTimeOffset Until, DateTimeOffset LastPoll);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "SmartThings: another integration already runs this location with the same app; this one stays stopped")]
+    private static partial void LogDuplicateLocation(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "SmartThings: the stored tokens were already spent by an earlier run; continuing with the rotated pair it could not save")]
+    private static partial void LogTokensCarriedOn(ILogger logger);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "SmartThings poll failed ({Kind}, HTTP {Status})")]
     private static partial void LogPollFailed(ILogger logger, ConnectorErrorKind kind, int status);

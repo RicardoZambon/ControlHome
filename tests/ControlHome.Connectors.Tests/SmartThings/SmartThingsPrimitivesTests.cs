@@ -110,6 +110,25 @@ public sealed class SmartThingsPrimitivesTests
     }
 
     [Fact]
+    public void Milliseconds_seen_on_one_bucket_hold_for_every_bucket_of_the_integration_but_the_hourly_rooms()
+    {
+        var tracker = new RateLimitTracker();
+        tracker[RateLimitTracker.Devices].Observe(Headers(limit: 1000, remaining: 900, reset: "45000"), _now);
+
+        // A device bucket's first answer with its window used up and 500 left: 500 ms (the API counts in milliseconds),
+        // not 500 s — that would keep the device from being read or commanded for minutes.
+        var device = tracker[RateLimitTracker.Device("d-1")];
+        device.UsesMilliseconds.ShouldBeTrue();
+        device.Observe(Headers(limit: 12, remaining: 0, reset: "500"), _now);
+        device.AvailableAt(_now).ShouldBe(_now.AddMilliseconds(500));
+
+        // The rooms window is an hour: a reset of 3000 s there is no proof of milliseconds for the others.
+        var other = new RateLimitTracker();
+        other[RateLimitTracker.Rooms].Observe(Headers(limit: 50, remaining: 10, reset: "3000"), _now);
+        other[RateLimitTracker.Devices].UsesMilliseconds.ShouldBeFalse();
+    }
+
+    [Fact]
     public void Missing_or_garbled_headers_change_nothing()
     {
         var headers = Headers(limit: null, remaining: null, reset: null);
@@ -221,6 +240,43 @@ public sealed class SmartThingsPrimitivesTests
         limiter.TryAcquire(reserve: 11).ShouldBeFalse(); // keeps the reserve
     }
 
+    [Fact]
+    public void Permits_for_a_batch_are_taken_all_or_nothing()
+    {
+        var time = new FakeTimeProvider(_now);
+        using var limiter = new ClockedSlidingWindow(12, TimeSpan.FromMinutes(1), time);
+
+        limiter.TryAcquire(permits: 10, reserve: 0).ShouldBeTrue();
+        limiter.TryAcquire(permits: 3, reserve: 0).ShouldBeFalse();
+        limiter.Available.ShouldBe(2); // the refused request took nothing
+        limiter.TryAcquire(permits: 2, reserve: 0).ShouldBeTrue();
+        limiter.Available.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Concurrent_callers_never_take_the_reserve()
+    {
+        var time = new FakeTimeProvider(_now);
+        for (var round = 0; round < 200; round++)
+        {
+            using var limiter = new ClockedSlidingWindow(12, TimeSpan.FromMinutes(1), time);
+            using var start = new ManualResetEventSlim();
+            var granted = 0;
+            var callers = Enumerable.Range(0, 16).Select(_ => Task.Run(() =>
+            {
+                start.Wait(TestContext.Current.CancellationToken);
+                if (limiter.TryAcquire(reserve: 2))
+                {
+                    Interlocked.Increment(ref granted);
+                }
+            })).ToArray();
+            start.Set();
+            await Task.WhenAll(callers);
+
+            granted.ShouldBe(10, $"round {round}");
+        }
+    }
+
     // ---- token bundle ------------------------------------------------------------------------------------------------
 
     [Fact]
@@ -234,6 +290,30 @@ public sealed class SmartThingsPrimitivesTests
         tokens.ToString().ShouldNotContain("access-1");
         tokens.ToString().ShouldNotContain("refresh-1");
         tokens.ToSecrets().Keys.ShouldBe([SecretKeys.Tokens, SecretKeys.AccessToken, SecretKeys.RefreshToken], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void The_lineage_carries_on_from_any_spent_pair_and_yields_to_new_tokens()
+    {
+        var lineage = new TokenLineage();
+        var integration = Guid.NewGuid();
+        TokenSet Pair(int n) => new($"access-{n}", $"refresh-{n}", _now.AddHours(24), _now, null, null);
+        lineage.Resolve(integration, Pair(1)).ShouldBe(Pair(1)); // nothing known yet
+
+        lineage.Rotated(integration, "refresh-1", Pair(2));
+        lineage.Rotated(integration, "refresh-2", Pair(3)); // the first rotation was not even saved
+
+        lineage.Resolve(integration, Pair(1)).ShouldBe(Pair(3));
+        lineage.Resolve(integration, Pair(2)).ShouldBe(Pair(3));
+        lineage.Resolve(integration, Pair(3)).ShouldBe(Pair(3));
+        lineage.Resolve(integration, null).ShouldBeNull(); // no tokens at all: sign in again
+        lineage.Resolve(Guid.NewGuid(), Pair(1)).ShouldBe(Pair(1)); // another integration's pair is its own business
+        lineage.Resolve(integration, Pair(1)).ShouldBe(Pair(3));
+
+        // Tokens from a re-authorization win, and the old lineage is forgotten.
+        lineage.Rotated(integration, "refresh-3", Pair(4));
+        lineage.Resolve(integration, Pair(9)).ShouldBe(Pair(9));
+        lineage.Resolve(integration, Pair(3)).ShouldBe(Pair(3));
     }
 
     private static RateLimitHeaders Headers(long? limit, long? remaining, string? reset)
