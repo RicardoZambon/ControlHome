@@ -1,6 +1,9 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/ControlHome.Domain/ControlHome.Domain.csproj" />
+    <Project Path="src/ControlHome.Connectors.Abstractions/ControlHome.Connectors.Abstractions.csproj" />
+    <Project Path="src/ControlHome.Connectors.Simulated/ControlHome.Connectors.Simulated.csproj" />
+    <Project Path="src/ControlHome.Connectors.Mqtt/ControlHome.Connectors.Mqtt.csproj" />
     <Project Path="src/ControlHome.Application/ControlHome.Application.csproj" />
     <Project Path="src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj" />
     <Project Path="src/ControlHome.Api/ControlHome.Api.csproj" />
@@ -8,6 +11,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/ControlHome.Architecture.Tests/ControlHome.Architecture.Tests.csproj" />
     <Project Path="tests/ControlHome.Domain.Tests/ControlHome.Domain.Tests.csproj" />
+    <Project Path="tests/ControlHome.Connectors.Tests/ControlHome.Connectors.Tests.csproj" />
     <Project Path="tests/ControlHome.Infrastructure.Tests/ControlHome.Infrastructure.Tests.csproj" />
     <Project Path="tests/ControlHome.Api.IntegrationTests/ControlHome.Api.IntegrationTests.csproj" />
     <Project Path="tests/ControlHome.TestSupport/ControlHome.TestSupport.csproj" />

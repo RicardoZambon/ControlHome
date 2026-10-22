@@ -203,7 +203,8 @@ IntegrationSupervisor.cs, ConnectorContext.cs, DeviceInventoryService.cs, Runtim
   Arguments, string? IdempotencyKey)` → 202 `CommandAcceptedDto(Guid CommandId)` | 400 `commands.invalid_arguments` |
   403 `safety.step_up_required` | 403 `safety.locked` | 404 | 409 `commands.duplicate`. Status updates via hub
   `CommandStatus(Guid CommandId, string Status /*pending|confirmed|failed|timed_out*/, string? Code)`.
-- Safety: `PUT /api/auth/me/pin` (`SetPinRequest(string? CurrentPin, string NewPin)`, 4–8 digits, hashed with
+- Safety: `PUT /api/auth/me/pin` (`SetPinRequest(string? CurrentPin, string NewPin, string? CurrentPassword)`: the first
+  PIN, or a forgotten one, needs the account password; 4–8 digits, hashed with
   `IPasswordHasher<AppUser>`, stored on AppUser `SafetyPinHash`), `POST /api/auth/step-up` (`StepUpRequest(string Pin)` →
   204, grants 60 s step-up for this user in memory; 5 failures/15 min → 423 `safety.locked`). Safety-critical commands from
   users require an active grant (consumed per command); Viewer never; System principals need `allowSafetyCritical` (1.x: none);
@@ -292,7 +293,8 @@ pages/DeviceDetailPage.vue}`, `features/profile` (safety PIN section), `componen
   from watermark); EnergyHourly from energy counters, else integrated power (trapezoid, `Estimated=1`); retention purge job
   (`DELETE TOP (5000)` loops below min(retention, watermark)); settings `GET/PUT /api/settings/retention` (Admin).
 - `GET /api/attributes/{id}/history?from&to&resolution=auto|raw|5m|1h` → `HistorySeriesDto(int AttributeId, string Resolution,
-  IReadOnlyList<HistoryPointDto> Points)`; `GET /api/energy/hourly?from&to&endpointId?`.
+  string? Unit, IReadOnlyList<HistoryPointDto> Points)` with `HistoryPointDto(DateTimeOffset T, double? V, double? Min,
+  double? Max, string? S)`; `GET /api/energy/hourly?from&to&endpointId?` → `EnergyHourlyDto[]`.
 - Tests with FakeTimeProvider: time-weighted mean correctness, counter reset, watermark catch-up after downtime, idempotency,
   purge respects watermark.
 

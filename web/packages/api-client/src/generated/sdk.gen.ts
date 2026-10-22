@@ -2,7 +2,7 @@
 
 import { type Client, type ClientMeta, formDataBodySerializer, type Options as Options2, type RequestResult, type TDataShape } from './client';
 import { client } from './client.gen';
-import type { ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CompleteSetupData, CompleteSetupErrors, CompleteSetupResponses, ConfigureDatabaseData, ConfigureDatabaseErrors, ConfigureDatabaseResponses, CreateFloorData, CreateFloorErrors, CreateFloorResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteFloorData, DeleteFloorErrors, DeleteFloorResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, GetFileData, GetFileErrors, GetFileResponses, GetFloorData, GetFloorErrors, GetFloorResponses, GetHomeData, GetHomeErrors, GetHomeResponses, GetMeData, GetMeErrors, GetMeResponses, GetSetupStatusData, GetSetupStatusResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListFloorsData, ListFloorsErrors, ListFloorsResponses, ListRoomsData, ListRoomsErrors, ListRoomsResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, ResetPasswordWithTokenData, ResetPasswordWithTokenErrors, ResetPasswordWithTokenResponses, ResetUserPasswordData, ResetUserPasswordErrors, ResetUserPasswordResponses, SaveFloorLayoutData, SaveFloorLayoutErrors, SaveFloorLayoutResponses, UpdateFloorData, UpdateFloorErrors, UpdateFloorResponses, UpdateHomeData, UpdateHomeErrors, UpdateHomeResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, UploadFileData, UploadFileErrors, UploadFileResponses } from './types.gen';
+import type { CancelIntegrationFlowData, CancelIntegrationFlowErrors, CancelIntegrationFlowResponses, ChangePasswordData, ChangePasswordErrors, ChangePasswordResponses, CompleteSetupData, CompleteSetupErrors, CompleteSetupResponses, ConfigureDatabaseData, ConfigureDatabaseErrors, ConfigureDatabaseResponses, ContinueIntegrationFlowData, ContinueIntegrationFlowErrors, ContinueIntegrationFlowResponses, CreateFloorData, CreateFloorErrors, CreateFloorResponses, CreateIntegrationData, CreateIntegrationErrors, CreateIntegrationResponses, CreateUserData, CreateUserErrors, CreateUserResponses, DeleteFloorData, DeleteFloorErrors, DeleteFloorResponses, DeleteIntegrationData, DeleteIntegrationErrors, DeleteIntegrationResponses, DeletePlacementData, DeletePlacementErrors, DeletePlacementResponses, DeleteUserData, DeleteUserErrors, DeleteUserResponses, ExportBackupData, ExportBackupErrors, ExportBackupResponses, ExportBackupWithSecretsData, ExportBackupWithSecretsErrors, ExportBackupWithSecretsResponses, GetAttributeHistoryData, GetAttributeHistoryErrors, GetAttributeHistoryResponses, GetCameraSnapshotData, GetCameraSnapshotErrors, GetCameraSnapshotResponses, GetDashboardData, GetDashboardErrors, GetDashboardResponses, GetDeviceData, GetDeviceErrors, GetDeviceResponses, GetFileData, GetFileErrors, GetFileResponses, GetFloorData, GetFloorErrors, GetFloorResponses, GetHomeData, GetHomeErrors, GetHomeResponses, GetMeData, GetMeErrors, GetMeResponses, GetRetentionSettingsData, GetRetentionSettingsErrors, GetRetentionSettingsResponses, GetSafetyPinData, GetSafetyPinErrors, GetSafetyPinResponses, GetScheduledBackupData, GetScheduledBackupErrors, GetScheduledBackupResponses, GetSetupStatusData, GetSetupStatusResponses, GetStateData, GetStateErrors, GetStateResponses, GetSystemStatusData, GetSystemStatusErrors, GetSystemStatusResponses, ImportBackupData, ImportBackupErrors, ImportBackupResponses, ListAuditData, ListAuditErrors, ListAuditResponses, ListCapabilitiesData, ListCapabilitiesErrors, ListCapabilitiesResponses, ListConnectorsData, ListConnectorsErrors, ListConnectorsResponses, ListDevicesData, ListDevicesErrors, ListDevicesResponses, ListEnergyHourlyData, ListEnergyHourlyErrors, ListEnergyHourlyResponses, ListFloorsData, ListFloorsErrors, ListFloorsResponses, ListIntegrationsData, ListIntegrationsErrors, ListIntegrationsResponses, ListPlacementsData, ListPlacementsErrors, ListPlacementsResponses, ListRoomsData, ListRoomsErrors, ListRoomsResponses, ListScheduledBackupsData, ListScheduledBackupsErrors, ListScheduledBackupsResponses, ListUsersData, ListUsersErrors, ListUsersResponses, LoginData, LoginErrors, LoginResponses, LogoutData, LogoutResponses, PlaceOnFloorData, PlaceOnFloorErrors, PlaceOnFloorResponses, ReplaceDeviceData, ReplaceDeviceErrors, ReplaceDeviceResponses, ResetPasswordWithTokenData, ResetPasswordWithTokenErrors, ResetPasswordWithTokenResponses, ResetUserPasswordData, ResetUserPasswordErrors, ResetUserPasswordResponses, ResetUserSafetyPinData, ResetUserSafetyPinErrors, ResetUserSafetyPinResponses, RunScheduledBackupData, RunScheduledBackupErrors, RunScheduledBackupResponses, SaveFloorLayoutData, SaveFloorLayoutErrors, SaveFloorLayoutResponses, SendCommandData, SendCommandErrors, SendCommandResponses, SetEndpointFavoriteData, SetEndpointFavoriteErrors, SetEndpointFavoriteResponses, SetSafetyPinData, SetSafetyPinErrors, SetSafetyPinResponses, StartIntegrationFlowData, StartIntegrationFlowErrors, StartIntegrationFlowResponses, StartIntegrationReauthFlowData, StartIntegrationReauthFlowErrors, StartIntegrationReauthFlowResponses, StepUpData, StepUpErrors, StepUpResponses, UpdateDeviceData, UpdateDeviceErrors, UpdateDeviceResponses, UpdateEndpointData, UpdateEndpointErrors, UpdateEndpointResponses, UpdateFloorData, UpdateFloorErrors, UpdateFloorResponses, UpdateHomeData, UpdateHomeErrors, UpdateHomeResponses, UpdateIntegrationData, UpdateIntegrationErrors, UpdateIntegrationResponses, UpdateProfileData, UpdateProfileErrors, UpdateProfileResponses, UpdateRetentionSettingsData, UpdateRetentionSettingsErrors, UpdateRetentionSettingsResponses, UpdateUserData, UpdateUserErrors, UpdateUserResponses, UploadFileData, UploadFileErrors, UploadFileResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -79,6 +79,20 @@ export const resetPasswordWithToken = <ThrowOnError extends boolean = false>(opt
 });
 
 /**
+ * Confirms the safety PIN: allows one safety-critical command (unlock, open the gate, disarm) within 60 s.
+ *
+ * 409 safety.pin_not_set; 400 safety.pin_incorrect; 423 safety.locked (retryAfterSeconds) after 5 wrong PINs within 15 minutes, which also blocks safety-critical commands for 15 minutes.
+ */
+export const stepUp = <ThrowOnError extends boolean = false>(options: Options<StepUpData, ThrowOnError>): RequestResult<StepUpResponses, StepUpErrors, ThrowOnError> => (options.client ?? client).post<StepUpResponses, StepUpErrors, ThrowOnError>({
+    url: '/api/auth/step-up',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * The signed-in user.
  */
 export const getMe = <ThrowOnError extends boolean = false>(options?: Options<GetMeData, ThrowOnError>): RequestResult<GetMeResponses, GetMeErrors, ThrowOnError> => (options?.client ?? client).get<GetMeResponses, GetMeErrors, ThrowOnError>({ url: '/api/auth/me', ...options });
@@ -100,6 +114,25 @@ export const updateProfile = <ThrowOnError extends boolean = false>(options: Opt
  */
 export const changePassword = <ThrowOnError extends boolean = false>(options: Options<ChangePasswordData, ThrowOnError>): RequestResult<ChangePasswordResponses, ChangePasswordErrors, ThrowOnError> => (options.client ?? client).post<ChangePasswordResponses, ChangePasswordErrors, ThrowOnError>({
     url: '/api/auth/me/password',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Whether the signed-in user has a safety PIN, and any lockout.
+ */
+export const getSafetyPin = <ThrowOnError extends boolean = false>(options?: Options<GetSafetyPinData, ThrowOnError>): RequestResult<GetSafetyPinResponses, GetSafetyPinErrors, ThrowOnError> => (options?.client ?? client).get<GetSafetyPinResponses, GetSafetyPinErrors, ThrowOnError>({ url: '/api/auth/me/pin', ...options });
+
+/**
+ * Sets the safety PIN (4–8 digits) for safety-critical commands: the first one with the account password (currentPassword), a change with the current PIN (currentPin) or, if forgotten, the account password.
+ *
+ * 400 validation.failed; safety.password_required (no PIN set yet, or neither currentPin nor currentPassword); safety.pin_incorrect (wrong currentPin; counts as a failed attempt); auth.password_incorrect (wrong currentPassword; counts towards the account lockout); 423 safety.locked (retryAfterSeconds) after 5 wrong PINs within 15 minutes, or auth.locked_out.
+ */
+export const setSafetyPin = <ThrowOnError extends boolean = false>(options: Options<SetSafetyPinData, ThrowOnError>): RequestResult<SetSafetyPinResponses, SetSafetyPinErrors, ThrowOnError> => (options.client ?? client).put<SetSafetyPinResponses, SetSafetyPinErrors, ThrowOnError>({
+    url: '/api/auth/me/pin',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -154,6 +187,11 @@ export const resetUserPassword = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
+ * Clears the account's safety PIN and any safety lockout; the user sets a new PIN with their password.
+ */
+export const resetUserSafetyPin = <ThrowOnError extends boolean = false>(options: Options<ResetUserSafetyPinData, ThrowOnError>): RequestResult<ResetUserSafetyPinResponses, ResetUserSafetyPinErrors, ThrowOnError> => (options.client ?? client).delete<ResetUserSafetyPinResponses, ResetUserSafetyPinErrors, ThrowOnError>({ url: '/api/users/{id}/safety-pin', ...options });
+
+/**
  * The home's settings.
  */
 export const getHome = <ThrowOnError extends boolean = false>(options?: Options<GetHomeData, ThrowOnError>): RequestResult<GetHomeResponses, GetHomeErrors, ThrowOnError> => (options?.client ?? client).get<GetHomeResponses, GetHomeErrors, ThrowOnError>({ url: '/api/home', ...options });
@@ -194,6 +232,8 @@ export const createFloor = <ThrowOnError extends boolean = false>(options: Optio
 
 /**
  * Deletes the floor and its rooms.
+ *
+ * 404 floors.not_found; 409 floors.not_empty while devices are placed on it (take them off the plan first).
  */
 export const deleteFloor = <ThrowOnError extends boolean = false>(options: Options<DeleteFloorData, ThrowOnError>): RequestResult<DeleteFloorResponses, DeleteFloorErrors, ThrowOnError> => (options.client ?? client).delete<DeleteFloorResponses, DeleteFloorErrors, ThrowOnError>({ url: '/api/floors/{id}', ...options });
 
@@ -205,7 +245,7 @@ export const getFloor = <ThrowOnError extends boolean = false>(options: Options<
 /**
  * Changes name, level, size, grid and background.
  *
- * 409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed, also when the new size would cut a room (errors.widthCm / errors.heightCm = geometry.out_of_bounds) or the background file does not exist (errors['background.fileId'] = files.not_found).
+ * 409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed, also when the new size would cut a room or a placed device (errors.widthCm / errors.heightCm = geometry.out_of_bounds) or the background file does not exist (errors['background.fileId'] = files.not_found).
  */
 export const updateFloor = <ThrowOnError extends boolean = false>(options: Options<UpdateFloorData, ThrowOnError>): RequestResult<UpdateFloorResponses, UpdateFloorErrors, ThrowOnError> => (options.client ?? client).put<UpdateFloorResponses, UpdateFloorErrors, ThrowOnError>({
     url: '/api/floors/{id}',
@@ -219,7 +259,7 @@ export const updateFloor = <ThrowOnError extends boolean = false>(options: Optio
 /**
  * Replaces the floor's rooms atomically (rooms not listed are deleted).
  *
- * 409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed with field errors; geometry problems are codes under rooms[i].polygon: geometry.too_few_points, geometry.too_many_points, geometry.out_of_bounds, geometry.zero_area, geometry.self_intersecting; rooms[i].id = rooms.not_found for a room that is not on this floor.
+ * Placed devices whose point ends up in another room (or in none) move to that room. 409 floors.concurrency when rowVersion is not the floor's current one (reload it). 400 validation.failed with field errors; geometry problems are codes under rooms[i].polygon: geometry.too_few_points, geometry.too_many_points, geometry.out_of_bounds, geometry.zero_area, geometry.self_intersecting; rooms[i].id = rooms.not_found for a room that is not on this floor.
  */
 export const saveFloorLayout = <ThrowOnError extends boolean = false>(options: Options<SaveFloorLayoutData, ThrowOnError>): RequestResult<SaveFloorLayoutResponses, SaveFloorLayoutErrors, ThrowOnError> => (options.client ?? client).put<SaveFloorLayoutResponses, SaveFloorLayoutErrors, ThrowOnError>({
     url: '/api/floors/{id}/layout',
@@ -234,6 +274,32 @@ export const saveFloorLayout = <ThrowOnError extends boolean = false>(options: O
  * All rooms of all floors, by floor level and room order.
  */
 export const listRooms = <ThrowOnError extends boolean = false>(options?: Options<ListRoomsData, ThrowOnError>): RequestResult<ListRoomsResponses, ListRoomsErrors, ThrowOnError> => (options?.client ?? client).get<ListRoomsResponses, ListRoomsErrors, ThrowOnError>({ url: '/api/rooms', ...options });
+
+/**
+ * Every endpoint and device on the floor plans (optionally of one floor), with the room each is in.
+ */
+export const listPlacements = <ThrowOnError extends boolean = false>(options?: Options<ListPlacementsData, ThrowOnError>): RequestResult<ListPlacementsResponses, ListPlacementsErrors, ThrowOnError> => (options?.client ?? client).get<ListPlacementsResponses, ListPlacementsErrors, ThrowOnError>({ url: '/api/placements', ...options });
+
+/**
+ * Places an endpoint or a whole device on a floor (or moves it); its room becomes the room at that point.
+ *
+ * Exactly one of endpointId and deviceId. The target's room is set to the room whose outline contains the point, or cleared when it is outside every room (an endpoint then shows in its device's room). 400 validation.failed with errors.floorId = floors.not_found, errors.endpointId = endpoints.not_found, errors.deviceId = devices.not_found, or errors.xCm / errors.yCm = geometry.out_of_bounds.
+ */
+export const placeOnFloor = <ThrowOnError extends boolean = false>(options: Options<PlaceOnFloorData, ThrowOnError>): RequestResult<PlaceOnFloorResponses, PlaceOnFloorErrors, ThrowOnError> => (options.client ?? client).put<PlaceOnFloorResponses, PlaceOnFloorErrors, ThrowOnError>({
+    url: '/api/placements',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Takes an endpoint or device off the plan (its room is kept).
+ *
+ * 404 placements.not_found.
+ */
+export const deletePlacement = <ThrowOnError extends boolean = false>(options: Options<DeletePlacementData, ThrowOnError>): RequestResult<DeletePlacementResponses, DeletePlacementErrors, ThrowOnError> => (options.client ?? client).delete<DeletePlacementResponses, DeletePlacementErrors, ThrowOnError>({ url: '/api/placements/{id}', ...options });
 
 /**
  * Uploads an image (multipart: file, purpose=floor-background); it is stored re-encoded as WebP.
@@ -254,3 +320,289 @@ export const uploadFile = <ThrowOnError extends boolean = false>(options: Option
  * The file's bytes (cacheable for a year: files never change).
  */
 export const getFile = <ThrowOnError extends boolean = false>(options: Options<GetFileData, ThrowOnError>): RequestResult<GetFileResponses, GetFileErrors, ThrowOnError> => (options.client ?? client).get<GetFileResponses, GetFileErrors, ThrowOnError>({ url: '/api/files/{id}', ...options });
+
+/**
+ * Every capability definition: attributes (schemas, units, state classes) and commands (arguments, safety flags).
+ */
+export const listCapabilities = <ThrowOnError extends boolean = false>(options?: Options<ListCapabilitiesData, ThrowOnError>): RequestResult<ListCapabilitiesResponses, ListCapabilitiesErrors, ThrowOnError> => (options?.client ?? client).get<ListCapabilitiesResponses, ListCapabilitiesErrors, ThrowOnError>({ url: '/api/capabilities', ...options });
+
+/**
+ * Devices with their endpoints, capabilities, attribute ids and current values, by name.
+ *
+ * Filters (all optional, combined): roomId, integrationId, capability (e.g. switch), q (name, manufacturer or model).
+ */
+export const listDevices = <ThrowOnError extends boolean = false>(options?: Options<ListDevicesData, ThrowOnError>): RequestResult<ListDevicesResponses, ListDevicesErrors, ThrowOnError> => (options?.client ?? client).get<ListDevicesResponses, ListDevicesErrors, ThrowOnError>({ url: '/api/devices', ...options });
+
+/**
+ * A device with its vendor details, endpoints and child devices.
+ */
+export const getDevice = <ThrowOnError extends boolean = false>(options: Options<GetDeviceData, ThrowOnError>): RequestResult<GetDeviceResponses, GetDeviceErrors, ThrowOnError> => (options.client ?? client).get<GetDeviceResponses, GetDeviceErrors, ThrowOnError>({ url: '/api/devices/{id}', ...options });
+
+/**
+ * Renames a device and sets its icon and room.
+ *
+ * 400 validation.failed (errors.roomId = rooms.not_found for an unknown room); 404 devices.not_found.
+ */
+export const updateDevice = <ThrowOnError extends boolean = false>(options: Options<UpdateDeviceData, ThrowOnError>): RequestResult<UpdateDeviceResponses, UpdateDeviceErrors, ThrowOnError> => (options.client ?? client).put<UpdateDeviceResponses, UpdateDeviceErrors, ThrowOnError>({
+    url: '/api/devices/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Replaces this device by another: the new one takes over its settings, placements and history.
+ *
+ * Moves name, room, icon, endpoint names/rooms/icons/hidden/favorites (endpoints matched by key, or the only one of each), placements and history (state log, events, statistics, energy) to newDeviceId, then deletes this device. Typically for an orphaned device after re-pairing, or a likely duplicate (possibleDuplicateIds). Returns the new device. 404 devices.not_found; 400 validation.failed with errors.newDeviceId = devices.not_found or devices.replace_same; 409 runtime.standby (this instance is a read-only standby); 503 runtime.starting (still deciding whether it runs the devices).
+ */
+export const replaceDevice = <ThrowOnError extends boolean = false>(options: Options<ReplaceDeviceData, ThrowOnError>): RequestResult<ReplaceDeviceResponses, ReplaceDeviceErrors, ThrowOnError> => (options.client ?? client).post<ReplaceDeviceResponses, ReplaceDeviceErrors, ThrowOnError>({
+    url: '/api/devices/{id}/replace',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Changes an endpoint's name, icon, room and hidden flag.
+ *
+ * 400 validation.failed (errors.roomId = rooms.not_found for an unknown room); 404 endpoints.not_found.
+ */
+export const updateEndpoint = <ThrowOnError extends boolean = false>(options: Options<UpdateEndpointData, ThrowOnError>): RequestResult<UpdateEndpointResponses, UpdateEndpointErrors, ThrowOnError> => (options.client ?? client).put<UpdateEndpointResponses, UpdateEndpointErrors, ThrowOnError>({
+    url: '/api/endpoints/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Adds the endpoint to the dashboard's favorites, or removes it.
+ */
+export const setEndpointFavorite = <ThrowOnError extends boolean = false>(options: Options<SetEndpointFavoriteData, ThrowOnError>): RequestResult<SetEndpointFavoriteResponses, SetEndpointFavoriteErrors, ThrowOnError> => (options.client ?? client).put<SetEndpointFavoriteResponses, SetEndpointFavoriteErrors, ThrowOnError>({
+    url: '/api/endpoints/{id}/favorite',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * The camera's latest still image (an endpoint with the camera capability).
+ *
+ * Not cached (Cache-Control: no-store). 404 endpoints.not_found, or cameras.no_snapshot (not a camera, or no picture right now); 503 commands.unavailable (its integration is not running).
+ */
+export const getCameraSnapshot = <ThrowOnError extends boolean = false>(options: Options<GetCameraSnapshotData, ThrowOnError>): RequestResult<GetCameraSnapshotResponses, GetCameraSnapshotErrors, ThrowOnError> => (options.client ?? client).get<GetCameraSnapshotResponses, GetCameraSnapshotErrors, ThrowOnError>({ url: '/api/endpoints/{id}/camera/snapshot', ...options });
+
+/**
+ * Sends a command to an endpoint; progress arrives as hub CommandStatus messages.
+ *
+ * 202 with the command id. 400 commands.unsupported (no such capability or command on this endpoint) or commands.invalid_arguments (errors['arguments.<key>'] = commands.argument_*); 403 safety.step_up_required (safety-critical: POST /api/auth/step-up first, then resend with the same idempotencyKey) or safety.not_allowed; 404 endpoints.not_found; 409 commands.duplicate (idempotency key already used) or commands.gate_closed; 423 safety.locked (retryAfterSeconds); 503 commands.unavailable (integration not running).
+ */
+export const sendCommand = <ThrowOnError extends boolean = false>(options: Options<SendCommandData, ThrowOnError>): RequestResult<SendCommandResponses, SendCommandErrors, ThrowOnError> => (options.client ?? client).post<SendCommandResponses, SendCommandErrors, ThrowOnError>({
+    url: '/api/endpoints/{id}/commands',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Every attribute's current value (resync after a hub reconnect).
+ */
+export const getState = <ThrowOnError extends boolean = false>(options?: Options<GetStateData, ThrowOnError>): RequestResult<GetStateResponses, GetStateErrors, ThrowOnError> => (options?.client ?? client).get<GetStateResponses, GetStateErrors, ThrowOnError>({ url: '/api/state', ...options });
+
+/**
+ * The connectors of this build (descriptors: names, icon, config forms, features).
+ */
+export const listConnectors = <ThrowOnError extends boolean = false>(options?: Options<ListConnectorsData, ThrowOnError>): RequestResult<ListConnectorsResponses, ListConnectorsErrors, ThrowOnError> => (options?.client ?? client).get<ListConnectorsResponses, ListConnectorsErrors, ThrowOnError>({ url: '/api/connectors', ...options });
+
+/**
+ * All integrations with their status and device count, by name.
+ */
+export const listIntegrations = <ThrowOnError extends boolean = false>(options?: Options<ListIntegrationsData, ThrowOnError>): RequestResult<ListIntegrationsResponses, ListIntegrationsErrors, ThrowOnError> => (options?.client ?? client).get<ListIntegrationsResponses, ListIntegrationsErrors, ThrowOnError>({ url: '/api/integrations', ...options });
+
+/**
+ * Creates an integration from a connector key and its config; its runtime starts right away.
+ *
+ * 400 validation.failed (errors.connectorKey = connectors.not_found for an unknown connector) or integrations.invalid_config (errors['config.<key>'] = commands.argument_* codes); 409 runtime.standby (this instance is a read-only standby: make the change on the active one); 503 runtime.starting (this instance is still deciding whether it runs the devices: try again in a moment). Secret config fields are stored encrypted and never returned.
+ */
+export const createIntegration = <ThrowOnError extends boolean = false>(options: Options<CreateIntegrationData, ThrowOnError>): RequestResult<CreateIntegrationResponses, CreateIntegrationErrors, ThrowOnError> => (options.client ?? client).post<CreateIntegrationResponses, CreateIntegrationErrors, ThrowOnError>({
+    url: '/api/integrations',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Stops the integration and deletes it with all its devices and their state.
+ *
+ * 404 integrations.not_found; 409 runtime.standby (this instance is a read-only standby); 503 runtime.starting (still deciding whether it runs the devices).
+ */
+export const deleteIntegration = <ThrowOnError extends boolean = false>(options: Options<DeleteIntegrationData, ThrowOnError>): RequestResult<DeleteIntegrationResponses, DeleteIntegrationErrors, ThrowOnError> => (options.client ?? client).delete<DeleteIntegrationResponses, DeleteIntegrationErrors, ThrowOnError>({ url: '/api/integrations/{id}', ...options });
+
+/**
+ * Renames an integration and enables or disables it.
+ *
+ * Disabling stops its runtime (status Stopped; devices are kept, availability Unknown); enabling starts it. 404 integrations.not_found; 409 runtime.standby; 503 runtime.starting.
+ */
+export const updateIntegration = <ThrowOnError extends boolean = false>(options: Options<UpdateIntegrationData, ThrowOnError>): RequestResult<UpdateIntegrationResponses, UpdateIntegrationErrors, ThrowOnError> => (options.client ?? client).put<UpdateIntegrationResponses, UpdateIntegrationErrors, ThrowOnError>({
+    url: '/api/integrations/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Starts a connector's setup flow and returns its first step.
+ *
+ * Answer each step with POST /api/integrations/flows/{flowId} until a done (the integration was created: integrationId) or abort step. Connectors without a flow of their own get one form with their config fields. Flows are kept in memory for 15 minutes after their last step and belong to the admin who started them. 400 validation.failed (errors.connectorKey = connectors.not_found); 409 runtime.standby; 503 runtime.starting.
+ */
+export const startIntegrationFlow = <ThrowOnError extends boolean = false>(options: Options<StartIntegrationFlowData, ThrowOnError>): RequestResult<StartIntegrationFlowResponses, StartIntegrationFlowErrors, ThrowOnError> => (options.client ?? client).post<StartIntegrationFlowResponses, StartIntegrationFlowErrors, ThrowOnError>({
+    url: '/api/integrations/flows',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Abandons a flow (nothing is created or changed).
+ *
+ * An answer still being processed finishes first. 404 flows.not_found (also when that answer finished the flow: then its done step is what happened).
+ */
+export const cancelIntegrationFlow = <ThrowOnError extends boolean = false>(options: Options<CancelIntegrationFlowData, ThrowOnError>): RequestResult<CancelIntegrationFlowResponses, CancelIntegrationFlowErrors, ThrowOnError> => (options.client ?? client).delete<CancelIntegrationFlowResponses, CancelIntegrationFlowErrors, ThrowOnError>({ url: '/api/integrations/flows/{flowId}', ...options });
+
+/**
+ * Answers the flow's current step and returns the next one.
+ *
+ * input: a form's values (secret fields are write-only), {"choice": key}, a pasted value, or {} to poll a progress step. A done step created (setup) or updated (reauth) the integration with its secrets encrypted and started its runtime. 404 flows.not_found (finished, cancelled, expired, or another admin's); 409 runtime.standby; 503 runtime.starting.
+ */
+export const continueIntegrationFlow = <ThrowOnError extends boolean = false>(options: Options<ContinueIntegrationFlowData, ThrowOnError>): RequestResult<ContinueIntegrationFlowResponses, ContinueIntegrationFlowErrors, ThrowOnError> => (options.client ?? client).post<ContinueIntegrationFlowResponses, ContinueIntegrationFlowErrors, ThrowOnError>({
+    url: '/api/integrations/flows/{flowId}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Starts the connector's flow for an existing integration: re-authorize it or change its settings.
+ *
+ * Its devices, names, rooms and history are kept; the done step updates the configuration and replaces the secrets, then restarts the integration. 404 integrations.not_found or connectors.not_found (the connector is not in this version); 409 runtime.standby; 503 runtime.starting.
+ */
+export const startIntegrationReauthFlow = <ThrowOnError extends boolean = false>(options: Options<StartIntegrationReauthFlowData, ThrowOnError>): RequestResult<StartIntegrationReauthFlowResponses, StartIntegrationReauthFlowErrors, ThrowOnError> => (options.client ?? client).post<StartIntegrationReauthFlowResponses, StartIntegrationReauthFlowErrors, ThrowOnError>({ url: '/api/integrations/{id}/flows/reauth', ...options });
+
+/**
+ * Runtime mode (Starting, Active, Standby), whether history is paused, and the app version.
+ */
+export const getSystemStatus = <ThrowOnError extends boolean = false>(options?: Options<GetSystemStatusData, ThrowOnError>): RequestResult<GetSystemStatusResponses, GetSystemStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetSystemStatusResponses, GetSystemStatusErrors, ThrowOnError>({ url: '/api/system/status', ...options });
+
+/**
+ * An attribute's history over a range, oldest point first (at most 5 000 points).
+ *
+ * resolution=auto (default) serves raw changes for ranges up to 6 h, 5-minute statistics up to 7 days and hourly statistics beyond (the finest that fits in 5 000 points and whose rows are still kept for `from`: raw history and 5-minute statistics are purged after their retention); attributes without statistics (states such as on/off or modes) always get raw changes. Raw series start with the value in effect at `from`. Statistics trail real time by the rollup (about a minute after a bucket ends). 400 history.invalid_resolution, history.invalid_range (from not before to) or history.range_too_large (over 366 days); 404 attributes.not_found.
+ */
+export const getAttributeHistory = <ThrowOnError extends boolean = false>(options: Options<GetAttributeHistoryData, ThrowOnError>): RequestResult<GetAttributeHistoryResponses, GetAttributeHistoryErrors, ThrowOnError> => (options.client ?? client).get<GetAttributeHistoryResponses, GetAttributeHistoryErrors, ThrowOnError>({ url: '/api/attributes/{id}/history', ...options });
+
+/**
+ * Energy used per endpoint and hour, by hour then endpoint.
+ *
+ * Hours overlapping [from, to) (default: the last 24 h). Each endpoint has one source: its energy meter (counter) or, without one, its power readings integrated (integratedPower, estimated). 400 history.invalid_range, history.range_too_large or energy.too_many_rows (over 20 000 rows: pick a shorter range or one endpoint — a year of one endpoint always fits); 404 endpoints.not_found.
+ */
+export const listEnergyHourly = <ThrowOnError extends boolean = false>(options?: Options<ListEnergyHourlyData, ThrowOnError>): RequestResult<ListEnergyHourlyResponses, ListEnergyHourlyErrors, ThrowOnError> => (options?.client ?? client).get<ListEnergyHourlyResponses, ListEnergyHourlyErrors, ThrowOnError>({ url: '/api/energy/hourly', ...options });
+
+/**
+ * How long history is kept (the defaults until saved).
+ */
+export const getRetentionSettings = <ThrowOnError extends boolean = false>(options?: Options<GetRetentionSettingsData, ThrowOnError>): RequestResult<GetRetentionSettingsResponses, GetRetentionSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetRetentionSettingsResponses, GetRetentionSettingsErrors, ThrowOnError>({ url: '/api/settings/retention', ...options });
+
+/**
+ * Changes how long history is kept; the hourly retention job applies it.
+ *
+ * Days: stateLogDays, shortTermStatsDays and deviceEventDays 1–365, auditLogDays 30–3650 (400 validation.failed otherwise). Hourly statistics and hourly energy are kept forever; nothing a rollup still needs is purged.
+ */
+export const updateRetentionSettings = <ThrowOnError extends boolean = false>(options: Options<UpdateRetentionSettingsData, ThrowOnError>): RequestResult<UpdateRetentionSettingsResponses, UpdateRetentionSettingsErrors, ThrowOnError> => (options.client ?? client).put<UpdateRetentionSettingsResponses, UpdateRetentionSettingsErrors, ThrowOnError>({
+    url: '/api/settings/retention',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * The home at a glance: favorites, rooms (active devices, temperature, power), power now, offline devices, integrations.
+ *
+ * Values are current when served. Keep them live by applying hub StateChanged deltas to the listed attribute ids (rooms[].temperatureAttributeIds / powerAttributeIds / activityAttributes, power.attributeIds) and refetch on DevicesChanged and IntegrationStatusChanged.
+ */
+export const getDashboard = <ThrowOnError extends boolean = false>(options?: Options<GetDashboardData, ThrowOnError>): RequestResult<GetDashboardResponses, GetDashboardErrors, ThrowOnError> => (options?.client ?? client).get<GetDashboardResponses, GetDashboardErrors, ThrowOnError>({ url: '/api/dashboard', ...options });
+
+/**
+ * Downloads a backup of the home configuration (zip) without the integrations' secrets.
+ *
+ * Zip: manifest.json (schemaVersion), home.json, floors.json, files.json + files/<id>.<ext>, integrations.json, devices.json, endpoints.json, placements.json, users.json (no password hashes or PINs). History is not included. For a backup with secrets use POST /api/backup/export with a passphrase (kept out of URLs).
+ */
+export const exportBackup = <ThrowOnError extends boolean = false>(options?: Options<ExportBackupData, ThrowOnError>): RequestResult<ExportBackupResponses, ExportBackupErrors, ThrowOnError> => (options?.client ?? client).get<ExportBackupResponses, ExportBackupErrors, ThrowOnError>({ url: '/api/backup/export', ...options });
+
+/**
+ * Downloads a backup (zip); with a passphrase it includes the integrations' secrets, encrypted.
+ *
+ * Secrets are encrypted with AES-256-GCM, the key derived from the passphrase with PBKDF2-SHA256 (600 000 iterations); the same passphrase is needed to import them. 400 validation.failed (passphrase of 12–256 characters).
+ */
+export const exportBackupWithSecrets = <ThrowOnError extends boolean = false>(options: Options<ExportBackupWithSecretsData, ThrowOnError>): RequestResult<ExportBackupWithSecretsResponses, ExportBackupWithSecretsErrors, ThrowOnError> => (options.client ?? client).post<ExportBackupWithSecretsResponses, ExportBackupWithSecretsErrors, ThrowOnError>({
+    url: '/api/backup/export',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Restores a backup (multipart: file, optional passphrase) into an empty home.
+ *
+ * Only when the home has no floors, integrations or devices (409 backup.not_empty). Floors, rooms, files, integrations (started right away), devices, endpoints, placements and missing user accounts (without passwords: reset them) are restored in one transaction. 400 backup.invalid, backup.unsupported_version, backup.passphrase_required, backup.passphrase_incorrect; 409 runtime.standby; 413 request.too_large over 200 MB; 503 runtime.starting.
+ */
+export const importBackup = <ThrowOnError extends boolean = false>(options: Options<ImportBackupData, ThrowOnError>): RequestResult<ImportBackupResponses, ImportBackupErrors, ThrowOnError> => (options.client ?? client).post<ImportBackupResponses, ImportBackupErrors, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/backup/import',
+    ...options,
+    headers: {
+        'Content-Type': null,
+        ...options.headers
+    }
+});
+
+/**
+ * The automatic backups: the schedule, whether the last attempt failed, and the files kept.
+ *
+ * The server writes a backup without credentials to its data folder on a schedule (daily, keeping seven by default). LastFailedAtUtc is set while the last attempt failed and none succeeded since.
+ */
+export const listScheduledBackups = <ThrowOnError extends boolean = false>(options?: Options<ListScheduledBackupsData, ThrowOnError>): RequestResult<ListScheduledBackupsResponses, ListScheduledBackupsErrors, ThrowOnError> => (options?.client ?? client).get<ListScheduledBackupsResponses, ListScheduledBackupsErrors, ThrowOnError>({ url: '/api/backup/scheduled', ...options });
+
+/**
+ * Writes an automatic backup now (whatever the schedule) and answers with it.
+ *
+ * Older backups beyond the number kept are deleted. 503 backup.write_failed when the data folder cannot be written.
+ */
+export const runScheduledBackup = <ThrowOnError extends boolean = false>(options?: Options<RunScheduledBackupData, ThrowOnError>): RequestResult<RunScheduledBackupResponses, RunScheduledBackupErrors, ThrowOnError> => (options?.client ?? client).post<RunScheduledBackupResponses, RunScheduledBackupErrors, ThrowOnError>({ url: '/api/backup/scheduled', ...options });
+
+/**
+ * Downloads one automatic backup (zip) by its name.
+ *
+ * Only the names listed by GET /api/backup/scheduled; any other name is 404 backup.not_found.
+ */
+export const getScheduledBackup = <ThrowOnError extends boolean = false>(options: Options<GetScheduledBackupData, ThrowOnError>): RequestResult<GetScheduledBackupResponses, GetScheduledBackupErrors, ThrowOnError> => (options.client ?? client).get<GetScheduledBackupResponses, GetScheduledBackupErrors, ThrowOnError>({ url: '/api/backup/scheduled/{name}', ...options });

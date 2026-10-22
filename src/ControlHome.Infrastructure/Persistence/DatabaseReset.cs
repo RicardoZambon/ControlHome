@@ -24,6 +24,21 @@ public sealed class DatabaseReset(ControlHomeDbContext db)
             await db.Users.ExecuteDeleteAsync(ct);
             await db.Roles.ExecuteDeleteAsync(ct);
             await db.AuditLog.ExecuteDeleteAsync(ct);
+
+            // History (no foreign keys to the device model).
+            await db.Database.ExecuteSqlRawAsync("DELETE FROM [ch].[StateLog]; DELETE FROM [ch].[DeviceEvent];", ct);
+            await db.ShortTermStatistics.ExecuteDeleteAsync(ct);
+            await db.HourlyStatistics.ExecuteDeleteAsync(ct);
+            await db.RollupProgress.ExecuteDeleteAsync(ct);
+            await db.EnergyHourly.ExecuteDeleteAsync(ct);
+            await db.EnergySourceSelections.ExecuteDeleteAsync(ct);
+            await db.RetentionSettings.ExecuteDeleteAsync(ct);
+
+            // Devices (and everything below them) go with their integration; placements of devices, parent links and rooms do
+            // not cascade.
+            await db.Placements.ExecuteDeleteAsync(ct);
+            await db.Devices.Where(d => d.ParentDeviceId != null).ExecuteUpdateAsync(s => s.SetProperty(d => d.ParentDeviceId, (Guid?)null), ct);
+            await db.Integrations.ExecuteDeleteAsync(ct);
             await db.Rooms.ExecuteDeleteAsync(ct);
             await db.Floors.ExecuteDeleteAsync(ct);
             await db.StoredFiles.ExecuteDeleteAsync(ct);

@@ -43,22 +43,22 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
 
 ## Phase 1 — Home model, devices core, floor plans → tag `v0.1`
 
-- [ ] **1.1 Floors, rooms and the floor-plan editor** *(in review)* (no devices yet). Spec: `floorplan-edit`.
-- [ ] **1.2 Devices core**
+- [x] **1.1 Floors, rooms and the floor-plan editor** (PR #9) (no devices yet). Spec: `floorplan-edit`.
+- [x] **1.2 Devices core** (PR #14, with the MQTT connector)
   - Capability catalogue, connector SDK, integration supervisor, Simulated connector (5 types).
   - StateProcessor + SignalR, single-runtime lock.
   - DeviceCommandService with the safety policy (step-up PIN) + audit.
   - Devices list and detail with the capability-control registry; shape-fixture mapper tests.
   - Specs: `device-control`, `realtime-two-clients`, `safety-pin`.
-- [ ] **1.3 Devices on the plan and integrations flow**
+- [x] **1.3 Devices on the plan and integrations flow**
   - Device placement and room auto-assign; dashboard v1 (favorites, rooms, power now, offline).
   - Integrations flow (catalog → flow → discover → import, with merge rules); the remaining Simulated types; demo seed.
   - Logical export / import (scheduled to `/data/backups`).
-  - Specs: `integration-import`, `plan-placement`, `export-import`.
-- [ ] **1.4 History and MQTT**
+  - Specs: `integration-import`, `plan-placement`, `export-import`, `dashboard`.
+- [x] **1.4 History and MQTT** (storage PR #15; charts with 1.3)
   - History with rollups, retention, `EnergyHourly` and ECharts history views; MQTT connector.
   - Spec: `history-chart`. Tag **`v0.1`**.
-- [ ] **1.5 Umbrel template + store-repo instructions** (non-blocking, `v0.1.x`).
+- [x] **1.5 Umbrel template + store-repo instructions** (`deploy/umbrel/`; the store repository itself is created by the owner).
 
 ## Phase 2 — Vendor connectors, wave 1 → tag `v0.2`
 

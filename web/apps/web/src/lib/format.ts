@@ -32,16 +32,49 @@ const RELATIVE_UNITS: readonly [Intl.RelativeTimeFormatUnit, number][] = [
 ]
 
 /**
- * "3 hours ago" / "há 3 horas". Under a minute: `justNow` when given ("Just now"), else Intl's "now" / "agora".
+ * "3 hours ago" / "há 3 horas". Under a minute: `justNow` when given ("Just now"), else Intl's "now" / "agora". Only
+ * ever the past: a time ahead of `now` (two clocks apart) is "just now" too, never "in 4 hours".
  */
 export function formatRelative(value: string | Date, now: Date, locale: string, justNow?: string): string {
   const date = typeof value === 'string' ? new Date(value) : value
-  const seconds = Math.round((date.getTime() - now.getTime()) / 1000)
+  const seconds = Math.min(0, Math.round((date.getTime() - now.getTime()) / 1000))
   const format = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
   for (const [unit, size] of RELATIVE_UNITS) {
     if (Math.abs(seconds) >= size) return format.format(Math.trunc(seconds / size), unit)
   }
   return justNow ?? format.format(0, 'second')
+}
+
+function dayKey(date: Date, timeZone?: string): string {
+  const format = (zone?: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: zone,
+    }).format(date)
+  try {
+    return format(timeZone)
+  } catch {
+    return format()
+  }
+}
+
+/**
+ * A moment as a clock shows it: the time of day when it is today ("06:40"), with the date on other days
+ * ("11 de out., 06:40"), in the home's time zone (the browser's for an unknown id).
+ */
+export function formatClock(value: string | Date, now: Date, locale: string, timeZone?: string): string {
+  const date = typeof value === 'string' ? new Date(value) : value
+  const today = dayKey(date, timeZone) === dayKey(now, timeZone)
+  const options: Intl.DateTimeFormatOptions = today
+    ? { hour: '2-digit', minute: '2-digit' }
+    : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }
+  try {
+    return new Intl.DateTimeFormat(locale, { ...options, timeZone }).format(date)
+  } catch {
+    return new Intl.DateTimeFormat(locale, options).format(date)
+  }
 }
 
 /** The text with its first letter in upper case ("yesterday" → "Yesterday", "há 3 horas" → "Há 3 horas"). */

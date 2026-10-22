@@ -53,7 +53,13 @@ public static class ErrorCodes
     // Floors and rooms
     public const string FloorsNotFound = "floors.not_found";
     public const string FloorsConcurrency = "floors.concurrency";
+
+    /// <summary>A floor with devices placed on it cannot be deleted (take them off the plan first).</summary>
+    public const string FloorsNotEmpty = "floors.not_empty";
     public const string RoomsNotFound = "rooms.not_found";
+
+    // Devices on the floor plans
+    public const string PlacementsNotFound = "placements.not_found";
 
     // Floor-plan geometry: field errors (e.g. errors["rooms[2].polygon"]) of a validation.failed problem
     public const string GeometryTooFewPoints = "geometry.too_few_points";
@@ -67,4 +73,78 @@ public static class ErrorCodes
     public const string FilesUnsupportedType = "files.unsupported_type";
     public const string FilesTooLarge = "files.too_large";
     public const string FilesInvalidImage = "files.invalid_image";
+
+    // Devices and integrations
+    public const string DevicesNotFound = "devices.not_found";
+
+    /// <summary>Field error of a device replace: a device cannot replace itself.</summary>
+    public const string DevicesReplaceSame = "devices.replace_same";
+    public const string EndpointsNotFound = "endpoints.not_found";
+
+    /// <summary>Not a camera, or the camera has no picture right now.</summary>
+    public const string CamerasNoSnapshot = "cameras.no_snapshot";
+    public const string IntegrationsNotFound = "integrations.not_found";
+
+    // Commands: 400 commands.invalid_arguments carries field errors errors["arguments.<key>"] with the commands.argument_* codes
+    public const string CommandsInvalidArguments = "commands.invalid_arguments";
+    public const string CommandsArgumentRequired = "commands.argument_required";
+    public const string CommandsArgumentUnknown = "commands.argument_unknown";
+    public const string CommandsArgumentInvalidType = "commands.argument_invalid_type";
+    public const string CommandsArgumentOutOfRange = "commands.argument_out_of_range";
+    public const string CommandsArgumentNotOnStep = "commands.argument_not_on_step";
+    public const string CommandsArgumentNotAllowed = "commands.argument_not_allowed";
+    public const string CommandsArgumentTooLong = "commands.argument_too_long";
+
+    // Commands: request failures (ProblemDetails) and CommandStatus failure codes (hub)
+    public const string CommandsUnsupported = "commands.unsupported";
+    public const string CommandsDuplicate = "commands.duplicate";
+    public const string CommandsGateClosed = "commands.gate_closed";
+    public const string CommandsUnavailable = "commands.unavailable";
+    public const string CommandsRefused = "commands.refused";
+    public const string CommandsTimedOut = "commands.timed_out";
+    public const string CommandsFailed = "commands.failed";
+
+    /// <summary>Hub CommandStatus: the device reported a state that means the command did not happen (e.g. a jammed lock).</summary>
+    public const string CommandsNotConfirmed = "commands.not_confirmed";
+
+    // Safety-critical commands (step-up PIN)
+    public const string SafetyStepUpRequired = "safety.step_up_required";
+    public const string SafetyLocked = "safety.locked";
+    public const string SafetyNotAllowed = "safety.not_allowed";
+    public const string SafetyPinNotSet = "safety.pin_not_set";
+    public const string SafetyPinIncorrect = "safety.pin_incorrect";
+    public const string SafetyPasswordRequired = "safety.password_required";
+
+    // Connectors and integrations
+    public const string ConnectorsNotFound = "connectors.not_found";
+    public const string IntegrationsInvalidConfig = "integrations.invalid_config";
+
+    /// <summary>A setup/reauth flow that does not exist (any more): finished, cancelled, or expired after 15 min.</summary>
+    public const string FlowsNotFound = "flows.not_found";
+
+    // Device runtime: this process is a read-only standby (another instance on the same database runs the devices), or is
+    // still deciding whether it runs them
+    public const string RuntimeStandby = "runtime.standby";
+    public const string RuntimeStarting = "runtime.starting";
+
+    // Demo home: loaded only into an empty home (no floors, integrations or devices)
+    public const string DemoNotEmpty = "demo.not_empty";
+
+    // Backup export / import (imports only into an empty home)
+    public const string BackupNotEmpty = "backup.not_empty";
+    public const string BackupInvalid = "backup.invalid";
+    public const string BackupUnsupportedVersion = "backup.unsupported_version";
+    public const string BackupPassphraseRequired = "backup.passphrase_required";
+    public const string BackupPassphraseIncorrect = "backup.passphrase_incorrect";
+
+    // Automatic backups: a name that is not a kept backup; writing one failed (the data folder, the disk)
+    public const string BackupNotFound = "backup.not_found";
+    public const string BackupWriteFailed = "backup.write_failed";
+
+    // History and energy
+    public const string AttributesNotFound = "attributes.not_found";
+    public const string HistoryInvalidRange = "history.invalid_range";
+    public const string HistoryRangeTooLarge = "history.range_too_large";
+    public const string HistoryInvalidResolution = "history.invalid_resolution";
+    public const string EnergyTooManyRows = "energy.too_many_rows";
 }

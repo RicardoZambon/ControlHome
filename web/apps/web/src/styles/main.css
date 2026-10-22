@@ -27,6 +27,22 @@
   }
 }
 
+/* A short horizontal shake: a refused safety PIN (`motion-safe:animate-[ch-shake_0.4s_ease-in-out]`). */
+@keyframes ch-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
 /* Draws an SVG stroke (`pathLength="1"` + `[stroke-dasharray:1]`), used by the floor-plan illustration. */
 @keyframes ch-draw {
   from {

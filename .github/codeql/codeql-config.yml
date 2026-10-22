@@ -1,0 +1,9 @@
+# CodeQL configuration: analyze shipped code only. Test projects deliberately mishandle secrets (canary connectors that
+# log tokens to prove redaction works) and would raise false alerts; they are not part of the image.
+name: ControlHome CodeQL config
+paths-ignore:
+  - tests/**
+  - web/tests/**
+  - '**/*.test.ts'
+  - '**/*.spec.ts'
+  - web/apps/web/src/test/**

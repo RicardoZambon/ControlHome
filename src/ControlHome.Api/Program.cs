@@ -1,23 +1,44 @@
 using ControlHome.Api.Features.Audit;
 using ControlHome.Api.Features.Auth;
+using ControlHome.Api.Features.HomeBackup;
+using ControlHome.Api.Features.Capabilities;
+using ControlHome.Api.Features.Dashboard;
+using ControlHome.Api.Features.Demo;
+using ControlHome.Api.Features.Devices;
 using ControlHome.Api.Features.Files;
 using ControlHome.Api.Features.Floors;
+using ControlHome.Api.Features.History;
 using ControlHome.Api.Features.Home;
+using ControlHome.Api.Features.Integrations;
+using ControlHome.Api.Features.Placements;
+using ControlHome.Api.Features.Settings;
 using ControlHome.Api.Features.Setup;
+using ControlHome.Api.Features.SystemStatus;
 using ControlHome.Api.Features.Testing;
 using ControlHome.Api.Features.Users;
 using ControlHome.Api.Hosting;
 using ControlHome.Api.Http;
+using ControlHome.Api.Realtime;
 using ControlHome.Api.Security;
 using ControlHome.Application.Abstractions;
 using ControlHome.Application.Auditing;
 using ControlHome.Application.Auth;
+using ControlHome.Application.HomeBackup;
+using ControlHome.Application.Dashboard;
+using ControlHome.Application.Demo;
+using ControlHome.Application.Devices;
 using ControlHome.Application.Files;
 using ControlHome.Application.Floors;
+using ControlHome.Application.History;
 using ControlHome.Application.Homes;
+using ControlHome.Application.Integrations;
+using ControlHome.Application.Placements;
+using ControlHome.Application.Security;
 using ControlHome.Application.Setup;
 using ControlHome.Application.Users;
 using ControlHome.Infrastructure;
+using ControlHome.Infrastructure.HomeBackup;
+using ControlHome.Infrastructure.Devices;
 using ControlHome.Infrastructure.Security;
 using ControlHome.Infrastructure.Setup;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -35,6 +56,11 @@ if (ResetAdminCommand.Matches(args))
     return await ResetAdminCommand.RunAsync(args, Console.Out, Console.Error);
 }
 
+if (SeedDemoCommand.Matches(args))
+{
+    return await SeedDemoCommand.RunAsync(args, Console.Out, Console.Error);
+}
+
 // Nothing before builder.Build() may open a database or network connection or touch the data folder: `dotnet build` runs
 // this file to generate the OpenAPI document, and `dotnet ef` runs it to find the DbContext.
 Log.Logger = LoggingSetup.CreateBootstrapLogger();
@@ -46,11 +72,21 @@ try
 
     builder.Services.AddControlHomeInfrastructure();
     builder.Services.AddSetupInfrastructure();
+    builder.Services.AddDeviceRuntime();
+    builder.Services.AddControlHomeConnectors();
+    builder.Services.AddControlHomeRealtime();
     if (!BuildContext.IsOpenApiGeneration)
     {
         builder.Services.AddDatabaseInitializer();
         builder.Services.AddControlHomeDataProtection();
         builder.Services.AddSetupCodeAnnouncer();
+        builder.Services.AddDeviceRuntimeHost();
+        builder.Services.AddBackupSchedule();
+    }
+
+    if (builder.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
+    {
+        builder.Services.AddTestingServices();
     }
 
     builder.Services.AddControlHomeJson();
@@ -72,7 +108,15 @@ try
     builder.Services.AddHomes();
     builder.Services.AddAuditing();
     builder.Services.AddFloors();
+    builder.Services.AddPlacements();
     builder.Services.AddFiles();
+    builder.Services.AddDevices();
+    builder.Services.AddIntegrations();
+    builder.Services.AddSafety();
+    builder.Services.AddHistory();
+    builder.Services.AddDashboard();
+    builder.Services.AddDemoHome();
+    builder.Services.AddBackup();
 
     var app = builder.Build();
 
@@ -85,6 +129,7 @@ try
 
     app.UseStatusCodePages();
     app.UseControlHomeRequestEdge(); // forwarded headers, security headers, network allowlist, origin/header checks
+    app.UseMiddleware<ServerTimeHeaderMiddleware>(); // X-ControlHome-Time: the runtime clock, for the UI's "now"
     app.UseControlHomeSpaStaticFiles();
     app.UseRouting();
     app.UseMiddleware<DatabaseGateMiddleware>();
@@ -105,7 +150,17 @@ try
     app.MapHomeEndpoints();
     app.MapAuditEndpoints();
     app.MapFloorEndpoints();
+    app.MapPlacementEndpoints();
     app.MapFileEndpoints();
+    app.MapCapabilityEndpoints();
+    app.MapDeviceEndpoints();
+    app.MapIntegrationEndpoints();
+    app.MapSystemEndpoints();
+    app.MapHistoryEndpoints();
+    app.MapSettingsEndpoints();
+    app.MapDashboardEndpoints();
+    app.MapBackupEndpoints();
+    app.MapHomeHub();
     if (app.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
     {
         app.MapTestingEndpoints();

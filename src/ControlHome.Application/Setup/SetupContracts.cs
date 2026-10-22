@@ -40,7 +40,11 @@ public sealed record DatabaseSetupRequest(
 
 /// <summary>Completes the first-run setup: creates the first Admin and the home, then signs the admin in.</summary>
 /// <param name="SetupCode">The one-time setup code from the server log or <c>setup-code.txt</c> (dashes/spaces ignored).</param>
-public sealed record CompleteSetupRequest(string SetupCode, AdminAccountInput Admin, HomeInput Home);
+/// <param name="LoadDemoHome">
+/// Also load the demo home (two floors, eight rooms, a Simulated integration with about 20 devices placed on the plans),
+/// named in the home's language. Skipped when the home already has floors, integrations or devices.
+/// </param>
+public sealed record CompleteSetupRequest(string SetupCode, AdminAccountInput Admin, HomeInput Home, bool? LoadDemoHome = null);
 
 /// <summary>The first administrator account.</summary>
 public sealed record AdminAccountInput(string UserName, string DisplayName, string Password);

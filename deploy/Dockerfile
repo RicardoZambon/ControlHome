@@ -46,24 +46,33 @@ RUN mkdir -p /rootfs/data
 # Restore from the project files only (layer reused until a project file or a package pin changes).
 COPY global.json nuget.config Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/ControlHome.Domain/ControlHome.Domain.csproj src/ControlHome.Domain/
+COPY src/ControlHome.Connectors.Abstractions/ControlHome.Connectors.Abstractions.csproj src/ControlHome.Connectors.Abstractions/
+COPY src/ControlHome.Connectors.Simulated/ControlHome.Connectors.Simulated.csproj src/ControlHome.Connectors.Simulated/
+COPY src/ControlHome.Connectors.Mqtt/ControlHome.Connectors.Mqtt.csproj src/ControlHome.Connectors.Mqtt/
 COPY src/ControlHome.Application/ControlHome.Application.csproj src/ControlHome.Application/
 COPY src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj src/ControlHome.Infrastructure/
 COPY src/ControlHome.Api/ControlHome.Api.csproj src/ControlHome.Api/
-RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing=locked \
-    dotnet restore src/ControlHome.Api/ControlHome.Api.csproj -a "$TARGETARCH"
+# No cache mount for NuGet: the packages must live in this layer. With CI layer caching (type=gha) a cached restore layer
+# comes back without a cache mount's contents, and `publish --no-restore` then fails with NETSDK1064.
+RUN dotnet restore src/ControlHome.Api/ControlHome.Api.csproj -a "$TARGETARCH"
 
 # The committed web/packages/api-client/openapi.json is the source of the API client: no build-time OpenAPI generation here
 # (it would run the freshly built app, which cannot work when cross-compiling).
 COPY src/ src/
-RUN --mount=type=cache,id=controlhome-nuget,target=/root/.nuget/packages,sharing=locked \
-    dotnet publish src/ControlHome.Api/ControlHome.Api.csproj \
+# Optional version override (release.yml): VERSION=0.1.0 for a tag, or VERSION_SUFFIX=edge.42 on main. Unset, the
+# version is Directory.Build.props' VersionPrefix.
+ARG VERSION=
+ARG VERSION_SUFFIX=
+RUN dotnet publish src/ControlHome.Api/ControlHome.Api.csproj \
         -c Release \
         -a "$TARGETARCH" \
         --no-restore \
         -o /out \
         -p:UseAppHost=false \
         -p:OpenApiGenerateDocuments=false \
-        -p:OpenApiGenerateDocumentsOnBuild=false
+        -p:OpenApiGenerateDocumentsOnBuild=false \
+        ${VERSION:+"-p:Version=$VERSION"} \
+        ${VERSION_SUFFIX:+"-p:VersionSuffix=$VERSION_SUFFIX"}
 
 # ---------------------------------------------------------------------------------------------------------------------
 # final: chiseled ASP.NET Core runtime (non-root, no shell or package manager; "extra" adds ICU and tzdata)

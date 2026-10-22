@@ -7,43 +7,76 @@
     "evening": "Boa noite, {name}",
     "night": "Boa noite, {name}"
   },
-  "welcome": "{home} está configurada e pronta para o que vem a seguir.",
+  "welcome": "Assim está {home} agora.",
   "localTime": "Hora local na casa",
+  "loadFailed": "Não foi possível carregar o resumo da casa.",
   "planTeaser": "A planta da sua casa vai ficar aqui",
-  "planTeaserDetail": "Desenhe seus andares e cômodos; os dispositivos chegam em breve.",
-  "start": {
-    "heading": "Deixe do seu jeito",
-    "floorsTitle": "Andares e cômodos",
-    "floorsDescription": "Desenhe cada andar, contorne os cômodos e dê uma cor a cada espaço.",
-    "profileTitle": "Seu perfil",
-    "profileDescription": "Seu nome, idioma, tema e senha.",
-    "usersTitle": "Usuários",
-    "usersDescription": "Adicione quem mora aqui e escolha o que cada pessoa pode fazer.",
-    "open": "Abrir"
-  },
-  "details": {
-    "heading": "Dados da casa",
-    "timeZone": "Fuso horário",
-    "location": "Localização",
-    "language": "Idioma",
-    "currency": "Moeda",
-    "price": "Preço da energia",
-    "perKwh": "{price} por kWh",
-    "loadFailed": "Não foi possível carregar os dados da casa."
-  },
-  "next": {
-    "heading": "Em breve",
-    "badge": "Próximo",
-    "planned": "Planejado",
-    "devicesTitle": "Dispositivos e integrações",
-    "devicesDescription": "Conecte luzes, tomadas e sensores e controle tudo ao vivo de qualquer tela.",
-    "energyTitle": "Energia e histórico",
-    "energyDescription": "Veja quanto cada dispositivo consome e quanto custa pelo preço da sua energia."
-  },
-  "planBanner": "Desenhe a planta da sua casa em Andares.",
+  "planTeaserDetail": "Desenhe seus andares e cômodos para ver sua casa de relance.",
   "plan": {
+    "heading": "Plantas",
     "open": "Abrir planta",
     "draw": "Desenhar um andar",
-    "openFloors": "Abrir Andares"
+    "openFloors": "Abrir Andares",
+    "switchFloor": "Mostrar um andar",
+    "legendOn": "Ligado",
+    "legendOff": "Desligado",
+    "legendOffline": "Offline"
+  },
+  "glance": {
+    "heading": "De relance",
+    "power": "Potência agora",
+    "powerHint": "Nenhum medidor | De 1 medidor | De {n} medidores",
+    "noPower": "Ainda sem leituras de potência",
+    "active": "Ligados agora",
+    "activeHint": "De nenhum dispositivo | De 1 dispositivo | De {total} dispositivos",
+    "offline": "Offline",
+    "offlineHint": "Ver quais",
+    "allReachable": "Todos online",
+    "integrations": "Integrações",
+    "noIntegrations": "Nenhuma conectada ainda",
+    "allConnected": "Todas funcionando",
+    "attention": "Nenhuma precisa de você | 1 precisa de atenção | {n} precisam de atenção"
+  },
+  "attention": {
+    "heading": "Precisa de atenção",
+    "backupFailed": "O último backup automático falhou. Abra Backup para ver os backups guardados e tentar de novo."
+  },
+  "nudge": {
+    "price": "Informe o preço da energia para ver quanto seus dispositivos custam"
+  },
+  "start": {
+    "heading": "Primeiros passos",
+    "intro": "Três passos para ver sua casa aqui: os andares, os dispositivos e onde cada um fica.",
+    "introMember": "Um admin configura a casa: os andares, os dispositivos e onde cada um fica.",
+    "step": "Passo {n}",
+    "done": "Feito",
+    "floorsTitle": "Desenhe seus andares",
+    "floorsDescription": "Cada andar em escala, com os cômodos contornados sobre uma grade ou uma foto da sua planta.",
+    "floorsAction": "Desenhar um andar",
+    "devicesTitle": "Traga seus dispositivos",
+    "devicesDescription": "Conecte o app de um fabricante, um hub ou MQTT — ou experimente a casa simulada.",
+    "devicesAction": "Adicionar integração",
+    "placeTitle": "Coloque os dispositivos na planta",
+    "placeDescription": "Arraste cada dispositivo para onde ele fica: toque nele na planta para controlá-lo.",
+    "placeAction": "Posicionar dispositivos"
+  },
+  "favorites": {
+    "heading": "Favoritos",
+    "all": "Todos os dispositivos",
+    "none": "Marque dispositivos como favoritos pela estrela na página deles para controlá-los daqui."
+  },
+  "rooms": {
+    "heading": "Cômodos",
+    "active": "{active} de {total} ligado | {active} de {total} ligados",
+    "noDevices": "Ainda sem dispositivos",
+    "temperature": "Temperatura",
+    "power": "Potência",
+    "offline": "{n} offline",
+    "empty": "Os cômodos aparecem aqui quando um admin desenhar os andares.",
+    "emptyAdmin": "Desenhe seus andares e cômodos para ver cada cômodo aqui."
+  },
+  "offline": {
+    "heading": "Dispositivos offline",
+    "since": "Offline desde {time}"
   }
 }

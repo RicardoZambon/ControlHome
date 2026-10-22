@@ -1,0 +1,36 @@
+manifestVersion: 1
+id: controlhome-app
+category: automation
+name: ControlHome
+version: "0.1.0"
+tagline: Control your home's devices, floor plans and energy in one place
+icon: https://raw.githubusercontent.com/RicardoZambon/ControlHome/main/deploy/umbrel/icon.svg
+description: >-
+  ControlHome is a self-hosted home control app for your local network. Add devices from several vendors (MQTT and
+  Zigbee2MQTT today; LG ThinQ, Intelbras cameras and access terminals, and Samsung SmartThings next), see their state
+  live, control them, and place them on floor plans of every level of your home. History and energy charts show what
+  each device did and used.
+
+
+  Requirements: a SQL Server 2025 database (another app on this Umbrel or a server on your network). The first-run
+  wizard asks for it; when SQL Server runs on this Umbrel, use 127.0.0.1 and its port as the host.
+
+
+  The setup code the wizard asks for is this app's password, shown by Umbrel. Household accounts have the roles Admin,
+  Member and Viewer. Available in English and Portuguese (Brazil).
+releaseNotes: >-
+  First release: devices with live state and control, floor plans, the dashboard, history and energy charts, backups,
+  and the MQTT connector.
+developer: Ricardo Zambon
+website: https://github.com/RicardoZambon/ControlHome
+dependencies: []
+repo: https://github.com/RicardoZambon/ControlHome
+support: https://github.com/RicardoZambon/ControlHome/issues
+port: 8711
+gallery: []
+path: ""
+defaultUsername: ""
+defaultPassword: ""
+deterministicPassword: true
+submitter: Ricardo Zambon
+submission: https://github.com/RicardoZambon/ControlHome

@@ -8,12 +8,22 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
   `ControlHome_Dev` created on umbrel SQL Server 2025 (compat 170, SIMPLE recovery); workflow-file push verified.
 - 2026-10-12 — Milestone 0.1 merged (PR #1): .NET skeleton, web workspace + @controlhome/ui tokens, CI, docs.
 - 2026-10-12 — Milestone 0.2 merged (PR #2): persistence, readiness, Data Protection, setup/auth/users/home/audit, request edge; adversarial review fixed 18 issues.
+- 2026-10-12 — Milestone 1.1 merged (PR #9): floors, rooms, SVG floor-plan editor. Hotfix PR #10 (multi-arch BuildKit cache lock, deterministic test). Tagged **v0.0.2** (ghcr.io/ricardozambon/controlhome:0.0.2, public, amd64+arm64).
 - 2026-10-12 — Tagged **v0.0.1** (Phase 0 complete); release workflow publishes ghcr.io/ricardozambon/controlhome (amd64 + arm64).
 - 2026-10-12 — Milestones 0.3 + 0.4 (PR #3): ui primitives, app shell + auth UI (en/pt-BR), Playwright E2E + screenshots + visual review, Docker image/compose/release/CodeQL/Dependabot, pre-DB setup mode.
+- 2026-10-20 — Security update PR #13 (.NET 10.0.13, Pkcs/Xml advisories), tagged **v0.0.3**.
+- 2026-10-21 — Milestone 1.2 merged (PR #14): capability catalogue, connector SDK, supervisor, Simulated + MQTT connectors (Zigbee2MQTT, HA discovery, Tasmota), StateProcessor + SignalR, runtime lease, safety-critical commands with step-up PIN, devices UI.
+- 2026-10-21 — Milestone 1.4-A merged (PR #15): StateLog, 5-minute/hourly stats, EnergyHourly, rollups, retention purge, history API.
+- 2026-10-21 — Milestone 1.3 + 1.4-B merged (PR #17): device placement + room auto-assign, integration flows + merge rules (orphaned, replace device), more Simulated types, demo home, backup export/import (passphrase), dashboard v1, history charts, settings pages (home, data retention, backup). 1558 .NET tests, 898 web tests, 83 E2E + 548 screenshots.
+- 2026-10-21 — Tagged **v0.1.0** (Phase 1 complete).
 
-## In progress
-- Milestone 1.1 — floors, rooms, SVG floor-plan editor (PR open from `milestone/1.1-floorplan`).
-- Milestone 1.2 — devices core backend (capability catalogue, connector SDK, Simulated, runtime pipeline, commands/safety, hub) running in isolated worktrees.
+## In progress (2026-10-21)
+- Branch `milestone/1.5-umbrel`: Umbrel community store template (`deploy/umbrel/`), Dockerfile NuGet layer fix (the main release after #15 failed with NETSDK1064), VersionPrefix 0.2.0.
+- Running `wayv3mbur` = Phase 2 wave A (run wf_ea0b675b-d0e, base c4a0238): LG ThinQ, DahuaHttp + go2rtc backend, SmartThings connectors, each implemented then adversarially reviewed in its own worktree. When done: merge the three review branches into a Phase 2 branch, add the catalogue Experimental flag, then a second workflow for UI (CameraPlayer, tiles, door open, flows), E2E, screenshots, visual review; HTTPS listener (2.1 optional) still to do.
+- 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans; footer shows v1.0.0 when the image is built without a version.
+- Next phases: Phase 2 (docs/plans/phase-2-vendor-connectors.md: LG ThinQ, DahuaHttp + go2rtc, SmartThings), Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
+- Usage guard: session cron every 10 min, pause at ≥ 90% of the 5-hour limit (TaskStop running tasks, one-shot resume after reset); no new workflows at ≥ 92% weekly.
+- Host notes: default node is now v22 — prepend C:/Users/samur/AppData/Local/nvm/v24.21.0 to PATH for web commands.
 
 ## Decisions taken (defaults chosen without the user)
 - Package pins: Microsoft.* 10.0.12 (local runtime is 10.0.10; servicing-compatible). TypeScript pinned `~6.0.3` (npm latest is 7.x, unsupported by vue-tsc).
@@ -32,7 +42,8 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 ## Needs you (non-blocking)
 - Live validation of each vendor connector with your own accounts (`docs/connectors/LIVE-VALIDATION.md`, from Phase 2).
 - Optional: enable branch protection on `main` + secret-scanning push protection (repo settings).
-- Later: create the `controlhome-umbrel-store` repo; create a least-privilege `ControlHome_App` SQL login for production.
+- Umbrel: create a public `controlhome-umbrel-store` repo and copy `deploy/umbrel/store/` into it (steps in `deploy/umbrel/README.md`); then add it in umbrelOS (App Store → Community App Stores).
+- Later: create a least-privilege `ControlHome_App` SQL login for production.
 - SmartThings may require the paid Personal Plan ($4.99/mo) — decide when we reach milestone 2.3.
 
 ## Known failures / environment notes

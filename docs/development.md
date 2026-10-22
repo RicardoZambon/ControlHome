@@ -161,8 +161,11 @@ drops the database (guarded name, via `sqlcmd`). Against an app you started your
 Every test starts with `POST /api/_test/reset`, and every page passes the global gates in `web/tests/e2e/fixtures.ts`:
 no console errors or uncaught exceptions (4xx answers from `/api/*` are part of the flows), no missing i18n keys (the
 app warns `[i18n] Missing key …`), no axe-core violation of impact serious or critical, and no horizontal scrolling at
-375 px (`gates.spec.ts` shows each gate failing a page that breaks it). `npm run screenshots` captures `/setup`, `/login`, `/`, `/users`, `/profile` and `/dev/ui-kit` at 1440/375 px
-× light/dark × en/pt-BR into `web/tests/e2e/screenshots/` (gitignored), running the same gates on each. Reports:
+375 px (`gates.spec.ts` shows each gate failing a page that breaks it). `npm run screenshots` (or
+`./scripts/e2e.ps1 -Screenshots`) captures every route, the floor editor's states, interaction states and the demo
+home (`demo-*`: dashboard, both floors, the integration, an offline device, a device's history, a second integration's
+setup flow) at 1440/375 px × light/dark × en/pt-BR into `web/tests/e2e/screenshots/` (gitignored), running the same
+gates on each. Reports:
 `web/tests/e2e/playwright-report/{e2e,screenshots}` (`npx playwright show-report <folder>`).
 
 ## Secret scanning

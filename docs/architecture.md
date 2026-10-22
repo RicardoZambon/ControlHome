@@ -64,7 +64,7 @@ The full rationale is in [ADR 0001](adr/0001-stack-and-architecture.md).
 ControlHome.slnx · global.json {sdk 10.0.302, rollForward latestFeature} · Directory.Build.props · Directory.Packages.props
 .config/dotnet-tools.json (dotnet-ef 10.0.x) · .editorconfig · CLAUDE.md · docs/STATUS.md
 src/ControlHome.Domain                   no deps: entities, CapabilityDefinition/ValueSchema, automation definition records
-src/ControlHome.Connectors.Abstractions  → Domain: descriptor/flow/runtime/context contracts, ICameraStreamRegistry, helpers   (later)
+src/ControlHome.Connectors.Abstractions  → Domain: descriptor/flow/runtime/context contracts, helpers (1.2); ICameraStreamRegistry (later)
 src/ControlHome.Automation               → Domain only: engine + ports (IStateReader, ICommandDispatcher, ISceneRunner,       (later)
                                            INotifier, IAutomationStore, TimeProvider); no EF
 src/ControlHome.Application              → Domain, Automation, Connectors.Abstractions: use-case services incl.
@@ -152,6 +152,18 @@ Device ─► Endpoint ─► EndpointCapability ─► Attribute (int Attribute
   attribute such as `remoteControlEnabled`.
 - **`Attribute`** has an **int `AttributeId`**, used by every state, history and energy table.
 
+Tables (1.2, schema `ch`): `Integrations` (config in a `json` column, secrets Data-Protection-encrypted in
+`SecretsProtected`), `Devices` (unique `(IntegrationId, ExternalId)`), `Endpoints` (unique `(DeviceId, Key)`, key `main`
+for single-endpoint devices), `EndpointCapabilities` (unique `(EndpointId, CapabilityId)`; `ConstraintsJson` and
+`GenericDefinitionJson` are `json`), `DeviceAttributes` (identity = `AttributeId`, unique `(EndpointCapabilityId, Key)`)
+and `AttributeState` (one row per attribute). Deleting an integration cascades down the chain. `Device.RoomId`,
+`Endpoint.RoomId` and `Device.ParentDeviceId` do **not** cascade in the database (SQL Server allows one cascade path per
+table): `FloorService` takes devices and endpoints out of rooms it deletes.
+
+`AttributeState` spreads a `StateValue` over typed columns by `Kind` (`tinyint`): booleans (as 1/0) and numbers in `Num`
+(`float`), strings up to 255 characters in `Str`, longer strings (as a one-element array `["…"]`: the `json` type
+holds objects and arrays only) and JSON objects/arrays in `Json` (`AttributeState.Encode/Decode`).
+
 ### Capability definitions
 
 - `CapabilityDefinition` is **defined in code** and served at `/api/capabilities`.
@@ -167,8 +179,25 @@ Device ─► Endpoint ─► EndpointCapability ─► Attribute (int Attribute
     battery, presence.
   - Other: camera, applianceCycle.
   - A **generic** capability reuses ValueSchema for any vendor property that has no mapping.
-- **ValueSchema types:** bool, number or int (min, max, step, scale, unit), enum, string, flags/bitmap, json
-  (read-only), momentary.
+- **ValueSchema types:** bool, number or int (min, max, step, unit), enum, string, flags/bitmap, json
+  (read-only), momentary. Polymorphic System.Text.Json with discriminator `type`; stored capability JSON uses
+  `CapabilityJson.Options` (camelCase, discriminator accepted anywhere in an object).
+- **Values** travel as `StateValue` = `{ kind: 'bool'|'number'|'string'|'json'|'null', b?, n?, s?, j? }`.
+- **Momentary attributes** (`MomentarySchema`, e.g. `button.press` with events `single|double|long`) are updated only by
+  connector events (`ReportEvent`); their value is the last event name.
+- **Constraints** narrow a capability per endpoint (`CapabilityConstraints`, JSON
+  `{"attributes": {"<key>": {min, max, step, values, dependsOn, cases}}}`): ranges, enum subsets, and ranges that depend
+  on another attribute's current value (an AC's target range per `mode`). They apply to the attribute and to every
+  command argument bound to it (`ArgumentDefinition.Attribute`). `CommandValidator.Validate(command, args, constraints,
+  currentState?)` checks required/unknown members, types, ranges, steps and allowed values; the API reports failures as
+  400 `commands.invalid_arguments` with `errors["arguments.<key>"]` = `commands.argument_*`.
+- **Writable** attributes are set by the command whose only required argument is bound to them
+  (`CapabilityDefinition.FindSetter`); a connector's `generic` definition must provide such setters.
+- **Gated commands:** `CommandDefinition.GateAttribute` names a boolean attribute that must be true
+  (`applianceCycle.start|pause|stop` need `remoteControlEnabled`).
+- **Safety flags:** `SafetyCritical` (`lock.unlock`, `doorOpener.open`, `alarmPanel.disarm`) or per device class
+  (`SafetyCriticalForDeviceClasses`: `cover.open` and `cover.setPosition` on `gate`/`garage`); ask
+  `IsSafetyCriticalFor(deviceClass)`. `FailSafe`: `lock.lock`, `cover.close`.
 - **Units:** connectors convert values to canonical units (W, Wh, °C, %) before reporting them.
 
 ### Endpoint or child device?
@@ -179,8 +208,23 @@ Device ─► Endpoint ─► EndpointCapability ─► Attribute (int Attribute
 
 ### Placement
 
-`Placement(EndpointId | DeviceId, FloorId, X, Y in cm)`. When a device is dropped onto the plan, its room is assigned by
-a point-in-polygon test.
+`Placement(EndpointId | DeviceId, FloorId, X, Y in cm)` (1.3, table `Placements`: exactly one target, each endpoint and
+each device placed at most once). `PUT /api/placements` places or moves a target and sets its room by a point-in-polygon
+test (`RoomLocator`: the first room in display order whose outline contains the point, edges included; none outside every
+room — an endpoint then shows in its device's room); `DELETE /api/placements/{id}` takes it off the plan (its room stays);
+`GET /api/floors/{id}` and `GET /api/placements` list them with the room each point is in. A layout save moves placed
+targets whose point ended up in another room; a floor cannot be resized below a placement nor deleted while it has any
+(409 `floors.not_empty`). Endpoint placements cascade with their endpoint; device placements do not cascade in the
+database (one cascade path per table), so integration delete, device replace and the test reset remove them first.
+
+### Dashboard summary
+
+`GET /api/dashboard` (1.3, `DashboardService`): favorite endpoint ids, every room with its device count, active devices
+(a switch on, a media player powered, an appliance running), mean temperature (a temperature sensor, else a
+thermostat's current temperature) and summed power, the home's power now (every `power.power`), offline devices and the
+integrations' health. Each aggregate lists the attribute ids it is computed from, so clients keep it live from hub
+`StateChanged` deltas and refetch on `DevicesChanged`. Endpoints count in their own room, else their device's; hidden
+endpoints and orphaned devices are left out of the rooms.
 
 ---
 
@@ -203,22 +247,84 @@ a point-in-polygon test.
   - `UpsertDevice` / `RemoveDevice` for connectors that push their own inventory.
   - `SetStatus(Ok | Connecting | Degraded | NeedsReauth | PlanRequired | QuotaExceeded | Error)`.
   - A per-device secret store, and quota counters persisted in the DB.
+- **Flow runtime** (1.3, `IntegrationFlowService`): `POST /api/integrations/flows` (`StartFlowRequest(connectorKey)`) and
+  `POST /api/integrations/flows/{flowId}` (`ContinueFlowRequest(input)`) answer with a flat `FlowStepDto` (`type` =
+  `form` | `externalUrl` | `progress` | `choose` | `done` | `abort`); `DELETE …/flows/{flowId}` abandons one;
+  `POST /api/integrations/{id}/flows/reauth` runs the connector's flow for an existing integration (`FlowContext.Existing`
+  with its secret store); `FlowContext.Language` is the home's language, for names the flow suggests in it (the
+  integration's, a virtual connector's devices). Config fields marked `FieldSchema.Advanced` (test switches, tuning) are
+  folded away under "Advanced settings" by the schema form. Flows live in memory (`IntegrationFlowStore`) 15 min after their last step, at most 10 per admin,
+  owned by the admin who started them (flow ids are random v4 GUIDs, never time-ordered), one answer at a time (a cancel
+  waits for the answer in progress); typed secret fields are registered with the log redactor before the connector sees
+  them, and form values never echo secrets. A connector without a flow gets one form with its config fields
+  (`ConfigFieldsFlow`; an empty secret — missing, `null` or `""` — keeps the stored one, and is missing when required for a
+  new integration). `done` creates the integration (secrets
+  encrypted) or updates the one being re-authorized — stopped first so its runtime cannot save a rotated token over the new
+  secrets, integration-level secrets replaced, per-device secrets kept, devices kept — and starts it. Flows follow the
+  standby / starting rules of every integration change. `PUT /api/integrations/{id}` renames, enables and disables.
 - **Merge rules**
   - Devices match on `(IntegrationId, ExternalId)`; `ExternalId` is a stable vendor id, **never an IP**.
   - Vendor fields update; user fields (name, room, icon, placement) are **never overwritten**.
   - A device that disappears becomes **Orphaned** and the automations that use it are flagged. Nothing is deleted
-    automatically.
-  - "Replace device" moves history and automations to the new device.
-  - Likely duplicates across integrations are flagged at import.
+    automatically: `RemoveDeviceAsync`, or a device missing from a full inventory (`IConnectorContext.SyncInventoryAsync`,
+    which upserts parents before children; the database compares external ids — case-insensitively, like the unique key
+    the upsert matched on — so a device reported in another letter case is merged, not orphaned).
+  - Capabilities (and endpoints) no longer reported are `Retired` (history kept) and come back when reported again.
+  - "Replace device" (`POST /api/devices/{id}/replace`, `ReplaceDeviceRequest(newDeviceId)`) moves name, room, icon,
+    endpoint settings and favorites (endpoints matched by key, or the only one of each), placements and history
+    (`StateLog`, `DeviceEvent`, statistics and energy re-keyed in one transaction; where the new device already has a
+    bucket its own row wins) to the new device and deletes the old one; automations follow in Phase 3. Like integration
+    changes it is refused on a standby (409 `runtime.standby`) and while the runtime starts (503 `runtime.starting`).
+  - Likely duplicates across integrations (the same MAC address or serial number, `DeviceIdentity`) are flagged on every
+    read: `DeviceSummaryDto` / `DeviceDetailDto.PossibleDuplicateIds`.
+- **Optional runtime/factory interfaces:** `ICameraSnapshotSource` (camera stills, served behind the app's auth as
+  `GET /api/endpoints/{id}/camera/snapshot`, image types only, `no-store`) and `IStaticInventorySource` (a virtual
+  connector's devices from its config alone: the demo seed imports and places them before the runtime first runs).
 - **Commands**
   - Each CommandDefinition sets its own timeout; defaults are about 5 s local, 30 s cloud, 90 s for a TV wake.
-  - Rapid writes to the same attribute are coalesced (about 300 ms, last one wins).
+  - Rapid writes to the same attribute are coalesced (about 300 ms, last one wins); any other command for the same
+    control (e.g. `cover.close` after `setPosition`) supersedes the setter still waiting.
   - A connector can batch commands.
 - **Availability:** while a runtime is down, the supervisor marks its devices Unknown. Each device class has a last-seen
   timeout so sleepy sensors aren't marked offline, and offline notifications are debounced by 2 min.
 - **Shared helpers:** HttpClient with Microsoft.Extensions.Http.Resilience, token buckets, an adaptive poller with
-  hot-poll after a command, and error classification (401 → `NeedsReauth`, 402 or a plan error → `PlanRequired`,
-  429 → backoff).
+  hot-poll after a command (`AdaptivePoller`), and error classification (`ConnectorErrorClassifier`: 401 →
+  `NeedsReauth`, 402 or a plan error → `PlanRequired`, 429 → backoff for `Retry-After`, 408/5xx → transient).
+  `IQuotaCounter` (per calendar period) is injected into connector factories by DI; `FieldSchemaValidator` checks
+  configuration forms with the command-argument rules.
+- **Command outcomes:** `CommandOutcome.Accepted | Completed | Rejected(code, message)`; standard codes in
+  `CommandRejectionCodes` (`duplicate`, `idempotency_required`, `unknown_device`, `unknown_endpoint`,
+  `unsupported_command`, `invalid_arguments`, `unavailable`, `refused`).
+- **Simulated connector** (`simulated`, config `{ "preset": "basic" | "demo", "language": "en" | "pt-BR", "seed": 42,
+  "simulateReauth": false }`, default seed from `Simulated:Seed`; the setup flow fills `language` with the home's, and
+  the devices, their controls and the rooms they suggest are named in it — `SimulatedNames`): `basic` is a dimmable light, a plug (power random walk, energy integrated over the
+  clock), an AC (room temperature drifting to the target; mode-dependent target range), a door contact with battery and a
+  smart lock; `demo` (1.3) adds a color lamp, a washer (`applianceCycle` counting down + phase power), a TV
+  (`mediaPlayer`), a sleepy motion sensor (reports only when it wakes), a 3-gang switch (endpoints `l1`–`l3`, each with
+  its own W), an NVR (`generic` storage use) with four camera children (bundled synthetic snapshots,
+  `ICameraSnapshotSource`), a gate (`cover` safety-critical on open + `contact`), blinds, a generic-only water tank
+  (`setPump` setter), a climate sensor and a second plug — 20 devices. Each run pushes its full inventory
+  (`SyncInventoryAsync`: switching presets orphans the devices left out). Setup is a flow (settings form → "press the
+  button on the hub" progress that completes on the first poll after 2 s → done with a `hubToken` secret); the same flow
+  re-authorizes. `simulateReauth` makes the hub "reject its token": status `NeedsReauth`, nothing reported, commands
+  `unavailable`. Ticks every 5 s of the context's `TimeProvider`; commands apply after 150 ms; idempotency keys are
+  remembered for 10 min (a repeated key → `duplicate`; a safety-critical batch without a key → `idempotency_required`).
+  Deterministic for a seed and clock.
+- **MQTT connector** (`mqtt`, 1.4; setup in [`docs/connectors/mqtt.md`](connectors/mqtt.md)): one MQTTnet 5.2 broker
+  connection per integration (password is a secret field) with its own reconnect loop — exponential back-off 1 s → 60 s
+  with ±20 % jitter, re-subscribing every adapter filter and device topic after each reconnect; devices are `Unknown`
+  while the broker is down (a lost broker never orphans them), rejected credentials → `NeedsReauth`. Only MQTT topic
+  names from discovery are subscribed or published to (wildcard/malformed topics are ignored, so no discovery payload
+  can get the connection dropped or subscribe it to everything), and retained messages (replays) never produce events.
+  Setup is a flow (form → connection test with a throw-away client id → done); for an existing integration the same
+  flow edits the settings (the stored password is reused only for the same host, port, TLS mode and user) or opens
+  Zigbee2MQTT's permit-join window (progress step). Three adapters share the connection:
+  Zigbee2MQTT native (retained `bridge/devices` → devices by IEEE address from `exposes` + access bits; the bridge is
+  their parent; renames via `bridge/event`), Home Assistant discovery as an intake format only (device-based and
+  single-component configs, abbreviations, `~`, a small `value_template` subset — unsupported templates are listed in a
+  diagnostic `unsupportedTemplates` attribute), and Tasmota native discovery (relays, `ENERGY`, sensors). A retained
+  empty config, or a device missing from a newer `bridge/devices`, orphans the device. Vendor properties without a
+  catalogue capability (illuminance, voltage, current, …) go to the endpoint's `generic` capability.
 
 ---
 
@@ -247,35 +353,125 @@ The `StateProcessor`, in order:
 - **DB outage:** StateLog rows are buffered and then dropped (never current state), and a "history paused" banner
   appears. Control and automations keep working.
 - **Startup and reconnect:** the cache is hydrated from the DB, with values flagged `restored` until a connector
-  confirms them. Clients resync over REST when they reconnect.
+  confirms them. Clients resync over REST when they reconnect: values from the cache and device availability /
+  last-seen from the live registry (`IDeviceStatusReader`), never the write-behind's older database copy.
 - **Single active runtime:** the app holds `sp_getapplock('ControlHome.Runtime', Exclusive, Session)` on a dedicated
   connection. A second process becomes a **read-only standby**: no connectors, no scheduler, and a banner. This
-  protects SmartThings' single-use refresh tokens and prevents automations from firing twice.
+  protects SmartThings' single-use refresh tokens and prevents automations from firing twice. The standby refuses what
+  only the active process could apply: creating or deleting an integration is 409 `runtime.standby`, commands are 503
+  `commands.unavailable`. While a process with a device runtime is still `Starting` (it may yet become the standby),
+  integration changes are 503 `runtime.starting`.
+
+How it is built (1.2, `Infrastructure/Devices`):
+
+- **Queue:** connector reports never block. They go into a coalescing queue keyed by attribute (the newest observation
+  wins while it waits; an older one arriving later counts as out of order) in front of a `Channel` bounded to
+  `DeviceRuntime:QueueCapacity` (10 000) distinct attributes with `DropOldest`; momentary events are never coalesced. One
+  loop (`StateProcessor`) resolves the `AttributeId` (`DeviceRegistry`; a new attribute of a known capability is created
+  through the inventory), drops values the schema rejects, out-of-order reports (older than the cached observation) and
+  duplicates (`StateCache.Apply`), then updates the cache, pushes `StateDelta`s (`RealtimeBatcher`: one hub message per
+  ≤ 50 ms window, latest per attribute), queues the write-behind and hands the batch to every `IStateChangeSubscriber`
+  (the command tracker today, automations later).
+- **The loop never waits on the database for long:** the inventory answers an unknown address from the registry
+  whenever it can (unbound endpoint or capability, a key its definition lacks); only a definition key without a row goes
+  to the database, never waiting behind an upsert. Each lookup is bounded (2 s); an unknown address is asked again after
+  1 min, a failed or timed-out lookup after 5 s doubling to 1 min — so an outage cannot stall every integration's reports.
+- **Orphaning** (`RemoveDeviceAsync`) sets `IsOrphaned` and `Unknown` in the database and reports `Unknown` through the
+  pipeline, in the device's availability slot, so an Online/Offline still waiting cannot land after it; the write-behind
+  never changes an orphaned device's availability, and drops availability left over from a failed final flush before
+  the runtime restarts.
+- **Write-behind** (`StateWriteBehind`, every `DeviceRuntime:FlushInterval` = 5 s): current values (coalesced, never
+  dropped) are `MERGE`d into `ch.AttributeState`, device availability / last-seen updated, and history rows kept in order
+  are appended in the same transaction — changes of `recorded` attributes to `StateLog`, momentary events (name + JSON
+  payload) to `DeviceEvent` — each with one set-based `INSERT` from a table-valued parameter (`ch.StateLogRow`,
+  `ch.DeviceEventRow`) that skips attributes deleted meanwhile. While SQL Server is down everything stays buffered;
+  beyond `MaxPendingHistoryRows` (50 000) the oldest history rows are dropped and `SystemStatusDto.HistoryPaused` is
+  raised until a flush succeeds.
+- **Lease and modes** (`RuntimeLease`, `DeviceRuntimeHost`): `Starting` until the database is ready, then `Active` (lease
+  held: registry and cache loaded, every device `Unknown` until its connector reports, pipeline and integrations
+  started) or `Standby` (retry every `LeaseRetryInterval`; reads come from the database). The lease is re-checked every
+  `LeaseCheckInterval`; a broken connection is re-acquired, and only losing it to another process stops the runtime (a
+  database outage does not). Mode changes are pushed as `SystemStatusChanged` and served at `GET /api/system/status`.
+- **Supervisor** (`IntegrationSupervisor`): one run loop per enabled integration; a failed or self-ended `RunAsync`
+  restarts after 1 s doubling to 5 min (reset after 5 min of running); devices are `Unknown` while it is down. It is
+  also the only command dispatcher (`ICommandDispatcher`): a batch reaches `ExecuteAsync` exactly once. Never two
+  runtimes of one integration: a run is fenced the moment its stop is requested (its context ignores reports, upserts
+  and statuses; its secret store refuses writes), one that does not finish within `DeviceRuntime:StopTimeout` (30 s)
+  stays "stopping" and its successor starts only once it has finished, and after `StopAllAsync` (lease lost, shutdown)
+  nothing starts until `StartAllAsync`.
+- **Clock:** connector contexts and report timestamps use `RuntimeClock` — the app's `TimeProvider`, or in the `Testing`
+  environment an `AdjustableTimeProvider` (real time that `POST /api/_test/clock` moves forward).
 
 ---
 
 ## 6. Storage: history and energy
 
-*Lands: schema rules in 0.2; StateLog in 1.2; rollups, retention and EnergyHourly in 1.4.*
+*Lands: schema rules in 0.2; write-behind in 1.2; StateLog, rollups, retention and EnergyHourly in 1.4.*
 
-- **`StateLog`**: `(AttributeId int, TsUtc datetime2(3), Num float NULL, Str nvarchar(255) NULL)`.
+The history tables (schema `ch`, migration `History`) have **no foreign keys** to the device model: appends stay cheap
+and deleting an integration never waits on years of history. Times are UTC `datetime2`. Domain types live in
+`Domain/History` (entities and the pure `RollupMath`), the jobs in `Infrastructure/History`.
+
+- **`StateLog`**: `(AttributeId int, TsUtc datetime2(3), Num float NULL, Str nvarchar(255) NULL)`, no key.
   - Clustered index on `(TsUtc, AttributeId)`; nonclustered on `(AttributeId, TsUtc) INCLUDE (Num, Str)`.
-  - PAGE compression.
-  - Only `recorded` attributes are stored. Diagnostics such as link quality and RSSI are off by default.
+  - PAGE compression (on both indexes; the statistics and energy primary keys are rebuilt with PAGE by the migration).
+  - Only `recorded` attributes are stored, and only **changes** (the pipeline drops duplicates): a value holds until the
+    attribute's next row. Numbers and booleans (1/0) in `Num`, strings (and JSON text) in `Str`, cut to 255 characters;
+    both `NULL` = unknown. Diagnostics such as link quality and RSSI are off by default.
+- **`DeviceEvent`** `(AttributeId, TsUtc datetime2(3), EventType nvarchar(64), Payload json NULL)`, no key, clustered on
+  `(TsUtc, AttributeId)`: momentary events (button presses, doorbell rings). The payload is stored as canonical JSON
+  (`DeviceEvent.StoredPayload`: a scalar wrapped as `{"value": …}`, numbers rewritten as plain decimals, comments and
+  trailing commas dropped) and left out when it is over 4 000 characters, nested deeper than 64 levels or holds a number
+  beyond `decimal`'s range: SQL Server's `json` type rejects numbers it cannot hold in 38 digits (even `1e37`), and one
+  rejected payload would fail the whole write-behind flush, current state included, on every retry.
 - **`StatShortTerm` (5-minute) and `StatHourly`**:
-  - Primary key `(AttributeId, BucketStartUtc)`.
-  - Measurements store a time-weighted mean plus min and max.
-  - Counters store `Sum` and `LastCounter`, with reset detection.
-  - Rollups resume from a `RollupProgress` watermark and are idempotent (`MERGE`).
-  - Purges only delete rows older than **both** the retention limit and the rollup watermark, using `DELETE TOP (5000)`
-    loops.
-- **`EnergyHourly(EndpointId, HourStartUtc, Wh, Source = counter|delta|vendorWindow|integratedPower, Estimated)`** is
-  the **single source for every energy view** and is in place from Phase 1.
-  - Vendor windows are spread across hours. LG daily-only data is flagged "not hourly".
-  - Power-only devices are integrated with the trapezoid rule and flagged estimated.
-  - Each endpoint has exactly one selected source, so energy is never counted twice.
-- **Retention defaults** (configurable): StateLog and 5-minute stats 10 days, DeviceEvent 30 days, AutomationRun 30 days
-  or the last 200, Notification 90 days, AuditLog 1 year, hourly stats forever.
+  - Primary key `(AttributeId, BucketStartUtc)`; buckets are aligned to UTC.
+  - Statistics exist for recorded numbers with a state class (`HistoryClassification`): `measurement` → time-weighted
+    `Mean` plus `Min`/`Max`; `total_increasing` / `total` → `Sum` (the increase in the bucket) and `LastCounter`.
+  - Time-weighted mean: each value lasts until the next row; the value in effect before a bucket is **carried into it**
+    (a bucket without any new row still gets the carried value), unknown time is left out, a bucket with no known value
+    has no row. Hourly = mean of the 5-minute means, min of mins, max of maxes, sum of sums.
+  - Counters: the first reading ever only sets the baseline; a `total_increasing` drop of more than 10 % is a **reset**
+    (the new reading counts from zero); a smaller dip is noise (the higher reading stays the baseline, kept as
+    `LastCounter` for the next bucket); `total` counts signed differences.
+  - Attributes of retired capabilities or orphaned devices are not rolled up (their last value would be carried forever).
+- **Rollups** (`HistoryRollup`, every minute of the runtime clock, only while `RuntimeMode = Active`):
+  `StateLog` → `StatShortTerm` → `StatHourly` → `EnergyHourly`, each resumed from its `RollupProgress` watermark (which
+  starts at the oldest `StateLog` row). A 5-minute bucket closes once it ended `History:SettleDelay` (1 min) ago and no
+  history row of it is still waiting in the write-behind. Each window is recomputed with one `MERGE` (rows of the
+  attributes involved that the computation no longer yields are deleted) and its watermark moved in the same
+  transaction, so re-running a window gives the same rows. After downtime each stage catches up in bounded windows
+  (`ShortTermBatch` 1 h, `HourlyBatch` 1 day, `EnergyBatch` 6 h), one transaction each. Readings that arrive for an
+  already closed bucket stay in the raw history only. An hour whose integrated energy is not finite (readings near
+  `double.MaxValue`) gets no row rather than stalling the energy stage, which would also stop the `StateLog` purge.
+- **`EnergyHourly(EndpointId, HourStartUtc, Wh, Source = counter|delta|vendorWindow|integratedPower, Estimated)`**,
+  unique `(EndpointId, HourStartUtc)`, is the **single source for every energy view** and is in place from Phase 1.
+  - Each endpoint has exactly one selected source (`EnergySourceSelection`, picked by the rollup: an energy counter in
+    Wh — the catalogue's `energy.energy` first — else vendor windows, else power readings in W; a user's choice,
+    `IsUserOverride`, is never changed), so energy is never counted twice.
+  - Counter: the hourly `Sum` of the counter (resets handled as above).
+  - Power-only devices: integrated with the **trapezoid rule between readings at most `PowerInterpolationLimit` (1 min)
+    apart**; across a longer gap the earlier reading is held (history keeps changes only, so the value did not change in
+    between — a plain trapezoid would smear an off → on step over the whole gap). Flagged `Estimated`.
+  - Vendor windows are spread across hours. LG daily-only data is flagged "not hourly" (Phase 2; until a connector
+    reports windows no endpoint selects them).
+- **Retention** (`RetentionPurge`, hourly on the active runtime, `DELETE TOP (5000)` loops): `StateLog` below
+  min(retention, 5-minute watermark, energy watermark) — keeping each existing attribute's last row before the cutoff,
+  which is the value carried into later buckets; `StatShortTerm` below min(retention, hourly watermark); `DeviceEvent`
+  and `AuditLog` by retention only; nothing before the first rollup. Hourly statistics and energy whose attribute or
+  endpoint is gone are removed (ids found by skip-scan seeks). Later tables (AutomationRun, Notification) plug in as
+  `IRetentionPurgeTarget`s. Batches of 5 000 never escalate to a table lock — a test checks SQL Server's lock-promotion
+  counter (one 12 000-row `DELETE` does escalate, and would block the write-behind's inserts while it runs).
+- **Retention defaults** (`GET/PUT /api/settings/retention`, Admin; single row `RetentionSettings`): StateLog and
+  5-minute stats 10 days, DeviceEvent 30 days, AuditLog 1 year (365), hourly stats and energy forever; AutomationRun
+  30 days or the last 200 and Notification 90 days when they land.
+- **Reading history** (Viewer): `GET /api/attributes/{id}/history?from&to&resolution=auto|raw|5m|1h` →
+  `HistorySeriesDto(AttributeId, Resolution, Unit, Points[T, V, Min, Max, S])`, oldest first, at most 5 000 points (the
+  most recent). `auto`: raw up to 6 h, 5-minute statistics up to 7 days, hourly beyond — the finest that fits and whose
+  retention still covers `from` (an older range gets the next coarser resolution, never an empty or cut series);
+  attributes without statistics always get raw changes, opened by the value in effect at `from`. Default range: the last
+  24 h of the runtime clock; at most 366 days. `GET /api/energy/hourly?from&to&endpointId?` → `EnergyHourlyDto[]`, at
+  most 20 000 rows (more: 400 `energy.too_many_rows`, never a silently cut list; a year of one endpoint always fits).
 - **Automation and scene definitions**
   - `Automation.Definition` is a single `json` column holding polymorphic System.Text.Json (`[JsonPolymorphic]`,
     discriminator `type`) with a `schemaVersion`. Golden-file tests cover the upgrade functions.
@@ -345,6 +541,35 @@ The `StateProcessor`, in order:
   - Delivery is **at-most-once**: no retry or hedging, an idempotency key, and the UI control is disabled while the
     command is pending.
   - A toggle relay that has no contact sensor shows "state unknown" and asks for confirmation.
+  - Implementation (1.2): `SafetyPolicy` decides (`Allowed` / `StepUpRequired` / `Forbidden`); `StepUpService` holds the
+    PIN (4–8 digits, Identity password hasher, `AppUser.SafetyPinHash`; `PUT /api/auth/me/pin`, `GET /api/auth/me/pin`)
+    and the step-up (`POST /api/auth/step-up` → one command within 60 s); `SafetyGrantStore` keeps grants, failures and
+    lockouts in memory (a restart clears them). Errors: 403 `safety.step_up_required` / `safety.not_allowed`, 423
+    `safety.locked` (`retryAfterSeconds`), 409 `safety.pin_not_set`, 400 `safety.pin_incorrect`. A refused command does
+    not use up its idempotency key, so the client resends the same key after the step-up.
+  - A session alone never gives safety-critical access: the **first PIN needs the account password**
+    (`currentPassword`, checked like a sign-in — under the user's sign-in lock, counting towards the account lockout:
+    400 `auth.password_incorrect`, 423 `auth.locked_out`; missing → 400 `safety.password_required`). A PIN is changed
+    with the current PIN, or replaced with the account password when forgotten. An Admin clears a user's PIN and safety
+    lockout with `DELETE /api/users/{id}/safety-pin` (audited `safety.pin.reset`); a password reset (Admin or
+    `reset-admin`) clears the PIN too.
+  - PIN checks of one user run **one at a time** (`SafetyGrantStore.BeginAttemptAsync`), so concurrent guesses cannot
+    slip past the lockout, and no grant is given while locked out. `PUT /api/auth/me/pin` and `POST /api/auth/step-up`
+    share the `login` rate limit.
+- **Commands** (`DeviceCommandService` → `CommandTracker`): `POST /api/endpoints/{id}/commands` validates against the
+  command definition and the endpoint's constraints (with the current state for mode-dependent ranges), checks the gate
+  attribute and the safety policy, refuses a repeated idempotency key (409 `commands.duplicate`, remembered 10 min) and
+  answers 202 with a command id. Progress arrives as hub `CommandStatus` (`pending`, then `confirmed` | `failed` |
+  `timed_out` | `superseded`, with a `commands.*` code); the outcome is audited as `commands.executed` (arguments
+  omitted for safety-critical commands). Setters (`setLevel`, `setVolume`, `setPosition`, `setTargetTemperature`,
+  `setColor*`) are throttled per endpoint capability: the first goes out at once, the last one waiting goes out when the
+  300 ms window ends, the ones it replaced report `superseded`; any other command for the same control supersedes the
+  setter still waiting. `awaitState` commands that the connector only accepted are confirmed when the device reports
+  the **target state** (`CommandConfirmation`): a setter's bound attribute reaching the sent value (within half a step),
+  or the command's `Expects` (`lock.lock` → `lockState` = `locked`, `cover.close` → `coverState` = `closed`, …); a failing
+  value (`jammed`) fails it with `commands.not_confirmed`; the old value never confirms it; commands without a target
+  (`toggle`) are confirmed by the first change of the capability. Timeouts come from the definition (default 5 s local,
+  30 s cloud).
 - **Inbound hooks:** `/api/hooks/{128-bit id}`, rotatable and masked in logs.
   - Optional source-IP allowlist, a 64 KB body limit and 30 requests/min.
   - Hooks only publish to the trigger bus and are marked `Unauthenticated`. They never call `DeviceCommandService`.
@@ -364,7 +589,12 @@ The `StateProcessor`, in order:
 - Cookie `ControlHome.Session`: HttpOnly, `SameSite=Strict`, Secure on HTTPS (`SameAsRequest`), 30-day sliding.
   Unauthenticated API calls get 401 / 403 ProblemDetails, never a redirect.
 - The security stamp is validated **every minute**. Disabling a user or changing their role updates the stamp and
-  aborts their SignalR connections.
+  aborts their SignalR connections: `HubConnectionRegistry` tracks every `/hubs/home` connection by user with the stamp
+  it was opened with; `UserAdminService` (disable, role change, password reset, delete) and `AuthService` (password
+  change, reset-token redemption) close the user's connections through `IUserSessionRevoker` once the change is
+  committed; a connection is re-validated against the user row when it opens; `HubSessionValidator` re-checks every open
+  connection every minute (any other stamp change); and a connection closes when its cookie expires. Logout ends only
+  the cookie (sessions have no server-side id): the SPA stops its hub connection when it logs out.
 - Passwords: at least 10 characters, no composition rules.
 - Authorization: fallback policy = authenticated; policies `Admin` (Admin), `Member` (Admin | Member), `Viewer` (any
   role). `Admin` also checks the database on every request (the user exists, is enabled, is in the Admin role and the
@@ -420,7 +650,8 @@ can't be removed, demoted or disabled (`users.last_admin`), and an admin can't d
 
 ### Login protection
 
-- Rate limits per client (`login`: 10/min per IPv4 address or IPv6 /64), one budget shared by sign-in, password change
+- Rate limits per client (`login`: 10/min per IPv4 address or IPv6 /64), one budget shared by sign-in, password change,
+  the safety PIN (`PUT /api/auth/me/pin`, `POST /api/auth/step-up`)
   and the reset-token redemption.
 - Lockout starts at 5 failures for 5 min and backs off (`5 min × 2^ConsecutiveLockouts`) up to 1 h; it is never
   permanent and resets on success. Responses: 401 `auth.invalid_credentials`, 423 `auth.locked_out`
@@ -459,10 +690,41 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   certificate** generated on first run at `/data/keys/dataprotection.pfx` (RSA 3072, mode 0600), so a DB leak alone
   exposes nothing.
 - Secret API fields are **write-only**.
-- Exports include secrets only when re-encrypted with a passphrase.
+- Exports include secrets only when re-encrypted with a passphrase (1.3, `BackupService` / `BackupCipher`): the key is
+  derived with PBKDF2-HMAC-SHA256 (600 000 iterations, random 16-byte salt) and each integration's secrets are sealed with
+  AES-256-GCM (random nonce, the integration id as associated data); the manifest carries a check value so a wrong
+  passphrase is refused before anything is written. The passphrase travels only in a POST body, never in a URL.
+- **Backups** (1.3): `GET /api/backup/export` (no secrets) and `POST /api/backup/export` (`ExportBackupRequest(passphrase)`)
+  return a zip — `manifest.json` (`schemaVersion` 1, counts, encryption parameters), `home.json`, `floors.json` (rooms),
+  `files.json` + `files/<id>.<ext>`, `integrations.json`, `devices.json`, `endpoints.json` (capabilities and attribute
+  keys), `placements.json`, `users.json` (no password hashes, no PINs); history is not included. `POST /api/backup/import`
+  (multipart `file` + optional `passphrase`, at most 200 MB) restores into an empty home only (no floors, integrations or
+  devices: 409 `backup.not_empty`), in one transaction under the `ControlHome.HomeContent` app lock (shared with the demo
+  home, so the two never both fill the home): ids of integrations, devices, endpoints and files are kept, floors and rooms
+  get new ids, user accounts that do not exist are created without a password (an admin resets it with
+  `POST /api/users/{id}/password`). Nothing is extracted to disk; every entry is read at most once (file records may not
+  repeat an entry), a file at most 10 MB and all entries together at most 256 MB decompressed (zip bombs), and everything
+  is checked before anything is written — lengths, references, uniqueness (case-insensitive, like the database's keys),
+  each target placed at most once and inside its floor, room geometry, file hashes, and the API's own rules for the home
+  (IANA time zone, language, currency) and accounts (user name characters, language, theme). Images are decoded and
+  re-encoded as WebP like uploads, so only pixels are stored. Errors: `backup.invalid`, `backup.unsupported_version`,
+  `backup.passphrase_required`, `backup.passphrase_incorrect`. A daily backup without secrets is written on the active
+  runtime to `{DataPath}/backups` (`BackupScheduler`, `Backup:Interval` 1 day, `Backup:Keep` 7 newest). Admins see them
+  (`GET /api/backup/scheduled`: the schedule, `LastFailedAtUtc` while the last attempt failed, the files kept), download
+  one by its exact listed name (`GET /api/backup/scheduled/{name}`, else 404 `backup.not_found`) and write one now
+  (`POST /api/backup/scheduled`, 503 `backup.write_failed`); the dashboard shows Admins a failed backup.
 - **Log redaction:** a `KnownSecretsRedactor` covers every Serilog event, HttpClient/YARP log levels are lowered, and
   request logs use route templates. A canary test checks that no secret appears in logs, responses or hub payloads.
   Never log connection strings or tokens.
+  - 1.2: integration secrets (config fields marked `Secret`, rotated tokens, per-device keys) are one JSON bag in
+    `Integration.SecretsProtected`, encrypted with the Data Protection purpose `ControlHome.Integrations.v1`
+    (`IntegrationSecretProtector`, `SecretStore`). Every value that passes through is registered with `KnownSecrets`;
+    the redactor (Serilog enricher, last in the chain, plus a destructuring policy for JSON values, rendered without
+    HTML-safe escaping so a secret with `+ ' < > &` still matches) masks them as `***` in every property. Integration
+    status messages and connector rejection messages are redacted before they are saved or pushed, and the supervisor
+    never logs a connector's exception object — only its type and redacted message. An enricher cannot rewrite an
+    event's exception, so connectors get a `RedactingLogger`: an exception they log reaches the sinks only as a
+    `RedactedException` (the original's text, inner exceptions and stack trace included, with secrets masked).
 - **HTTPS:** an optional HTTPS listener (the user's certificate, or self-signed on first run) lands in milestone 2.1.
   Passkeys, TOTP and web push come later, on HTTPS.
 
@@ -483,6 +745,12 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   text never leaves Development. The SPA maps `code` → i18n key `errors.<code>`.
 - **OpenAPI 3.1** is generated at build time into `web/packages/api-client/openapi.json` (committed); the TypeScript
   client is generated from it (`npm run gen:api`) and CI fails on drift. Scalar UI only in Development.
+- **Live updates** (1.2): SignalR hub `/hubs/home` (signed-in users, cookie), server → client only. Messages (one
+  argument each, names in `HomeHubMessages`): `StateChanged(StateDelta[])`, `AvailabilityChanged(AvailabilityChangedDto)`,
+  `DevicesChanged()`, `IntegrationStatusChanged(IntegrationStatusChangedDto)`, `CommandStatus(CommandStatusDto)`,
+  `SystemStatusChanged(SystemStatusDto)`. A document transformer adds the payload types to the OpenAPI components, so
+  the generated client has them. The negotiate POST needs `X-ControlHome: 1` like any mutation; the WebSocket
+  handshake needs the same-origin `Origin`. After a (re)connect clients resync with `GET /api/state`.
 - **Time:** inject `TimeProvider`; never `DateTime.Now`/`UtcNow` in logic.
 - **Logging:** Serilog structured templates; console + rolling file `{dataPath}/logs/controlhome-.log` (daily, 14
   files); no secrets, no PII beyond user names.
@@ -521,6 +789,10 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
 - **App structure:** features are folders `apps/web/src/features/<feature>/` (`routes.ts`, optional `nav.ts`,
   `locales/en.json`, `locales/pt-BR.json`, pages, components) auto-registered via `import.meta.glob`. API calls only
   through the generated `@controlhome/api-client`, which sends `X-ControlHome: 1` and same-origin credentials.
+- **Server time:** every `/api` response carries `X-ControlHome-Time` (the runtime clock, ISO 8601 UTC — the clock of
+  state timestamps, history and "last seen"). The client keeps its offset (`lib/serverClock.ts`), so relative times
+  ("3 minutes ago") and the end of a chart window follow the server, not a phone's clock; `formatRelative` never says
+  "in 4 hours" (a time ahead of now is "just now").
 - **App libraries:** Vue 3.5 (`<script setup lang="ts">`, Composition API), Vite 8, TS ~6.0, Pinia 4 (setup stores),
   Vue Router 5, VueUse, vue-i18n 11 (pt-BR and en; **a missing key throws in tests**), @microsoft/signalr, ECharts
   through vue-echarts, @lucide/vue plus mdi device icons.
@@ -548,6 +820,26 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
     re-encoded server-side with SkiaSharp 3 (`SkiaSharp.NativeAssets.Linux.NoDependencies` in the chiseled image) to
     WebP quality 85, ≤ 4096 px, EXIF orientation applied and all metadata dropped. **No SVG.**
   - View mode shows live state and a tap-to-control popover.
+  - Devices on the plan (1.3, `PlacedDevice` / `PlacementLayer`): an icon in a disc whose ring has the live state color
+    (dashed when unreachable, a soft halo while on), with a sensor's or meter's reading beside it when zoomed in. It
+    grows and shrinks with the zoom (`markerRadiusPx`: 28 cm on the floor, between 9 px and the full 15/18 px) while
+    its tap target stays 44 px; at a zoom where markers of one room would overlap they are one bubble with their count
+    (`clusterMarkers`; a tap zooms in on them). Plans open fitted to what is drawn (`planBounds`: rooms and devices),
+    not the whole floor sheet; on phones the zoom and scale sit in a bar under the plan; previews draw small dots.
+    View mode: a tap opens `DeviceQuickPanel` (the registry's controls; a sheet on phones). The editor's Devices tab lists what is on no
+    plan yet (a multi-control device as a whole or control by control), places by dragging a row's handle or by
+    "Place" + a tap (touch, keyboard), moves by dragging a marker and takes one off; placements are saved at once
+    (`PUT /api/placements`), outside the layout draft and its undo history.
+- **History charts** (1.4, `components/charts/*`): every card of a device's History tab covers the same window — the
+  range up to the server's now (`historyWindow`, asked for with explicit `from`/`to`) — and the part of it before the
+  device started recording is shaded ("Recording since 06:40"). `HistoryChart` draws numbers as a line (raw changes as
+  steps, statistics as the mean over a min–max band that follows the line point for point), held to now and ending on
+  the live value (the card's "Now" headline), with the unit named on the value axis (amounts from zero); enums as steps.
+  On/off states are a compact `StateTimeline` bar ("On since 06:34"). `EnergyBars` has a bar for every hour (day) of
+  the range up to the current one, which always has its label (`EnergyHourly`, estimated hours lighter). On vue-echarts
+  with ECharts tree-shaken to line and bar charts, mark areas and the SVG renderer, loaded only with a device's History
+  tab. Statistics end with their last closed bucket, so the device page also fetches the raw changes after it and
+  appends them (`withRawTail`).
 
 ---
 
@@ -597,7 +889,8 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
 - **Dev compose:** `docker-compose.dev.yml` overrides to a bridge network, published ports (`8080:8711`), local build
   and `bundled-db` with its own `ControlHome_Compose` database.
 - **Umbrel**
-  - On Umbrel, reuse its Mosquitto, Zigbee2MQTT and SQL Server through their host ports.
+  - On Umbrel, reuse its Mosquitto, Zigbee2MQTT and SQL Server through their host ports (MQTT: `127.0.0.1:1883`, see
+    `docs/connectors/mqtt.md`).
   - Umbrel packaging lives in a separate public `controlhome-umbrel-store` repo (created by the owner): app_proxy
     follows Umbrel's home-assistant app pattern; `PROXY_AUTH_ADD=false`, `user: 1000:1000`,
     `${APP_DATA_DIR}/data:/data`, `Setup__Code=${APP_PASSWORD}` with `deterministicPassword: true`; the port is chosen
@@ -708,9 +1001,35 @@ These protect a public repository and a real home; they apply to people and agen
 - **Test hooks**
   - Setup code override (`Setup__Code`).
   - `ASPNETCORE_ENVIRONMENT=Testing`-only endpoints `/api/_test/{reset, seed-demo, clock, devices/{id}/state,
-    connector-event}`, plus a test that they return 404 in Production.
-  - `FakeTimeProvider`; a seeded RNG for Simulated; `--seed-demo` (2 floors, 8 rooms, about 20 devices, fake
-    coordinates).
+    devices/{id}/availability, connector-event}`, plus a test that they return 404 in Production. Anonymous, but like every mutation they need
+    the same-origin `Origin` and `X-ControlHome: 1`. Landed in 1.2:
+    - `POST /api/_test/reset` → 204: stops every integration runtime, empties the database (roles kept), resets the setup
+      code, step-up grants/lockouts and command idempotency keys.
+    - `POST /api/_test/devices/{attributeId}/state` with `{ "value": StateValue, "observedAtUtc"?: string }` → 204 once
+      processed: the value goes through the state pipeline as if the attribute's connector had reported it (dedupe,
+      cache, hub `StateChanged`, write-behind). 404 unknown attribute; 409 when the runtime is not active.
+    - `POST /api/_test/clock` with `{ "advanceSeconds": number }` (omit to just read) → 200 `{ nowUtc, offsetSeconds }`:
+      moves the runtime clock forward (connector runtimes — the Simulated home ticks every 5 s of it —, report
+      timestamps, the history rollups and retention, and, later, the scheduler). It otherwise runs in real time, so E2E
+      tests work without touching it; timers that become due fire at once. The history API's default range ends at
+      this clock's now. Flows use it too (the Simulated "press the button" step completes 2 s of it after it starts).
+    - `POST /api/_test/seed-demo?locale=en|pt-BR` (1.3) → 204: loads the demo home into an empty home (409
+      `demo.not_empty` otherwise).
+    - `POST /api/_test/devices/{deviceId}/availability` with `{ "availability": "Online"|"Offline"|"Unknown" }` (1.3) →
+      204 once processed: the device's availability goes through the state pipeline as if its connector had reported it
+      (live status, hub `AvailabilityChanged`, write-behind) — the Simulated connector never reports a device offline, so
+      the dashboard's offline devices are exercised with it. 400 unknown value; 404 unknown device; 409 when the runtime
+      is not active.
+  - `History:MaintenanceEnabled=false` stops the background rollups and retention job; integration tests that need
+    exact timing call `HistoryRollup.RunOnceAsync` / `RetentionPurge.PurgeOnceAsync` themselves. Likewise
+    `Backup:ScheduleEnabled=false` (set by `ControlHomeApiFactory`) stops the daily backup; tests call
+    `BackupScheduler.RunOnceAsync`.
+  - `FakeTimeProvider`; a seeded RNG for Simulated; the demo home (`DemoHome`: 2 floors, 8 rooms, the Simulated `demo`
+    preset's 20 devices placed on the plans, six favorites, everything named in Portuguese for a pt-BR home), loaded by
+    `dotnet ControlHome.Api.dll --seed-demo [en|pt-BR]` (run and exit: 0 loaded, 3 the home is not empty, 1 no database),
+    the setup's `CompleteSetupRequest.LoadDemoHome` and the test hook above. The emptiness check and the first writes
+    (floors, integration) run together under the `ControlHome.HomeContent` app lock, so concurrent loads (and a backup
+    import) fill the home once.
 - **Per-milestone verification:** `dotnet build -warnaserror`, `dotnet test`, the web suite (`lint`, `typecheck`,
   `test`, `check:colors`, `build`), the milestone's Playwright specs, and a compose smoke
   (`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml --profile bundled-db up` →

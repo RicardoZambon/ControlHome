@@ -1,0 +1,399 @@
+[
+  {
+    "ieee_address": "0x00124b0000c0ffee",
+    "type": "Coordinator",
+    "network_address": 0,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "Coordinator",
+    "definition": null,
+    "power_source": null,
+    "interview_completed": true,
+    "interviewing": false
+  },
+  {
+    "ieee_address": "0x0017880100000001",
+    "type": "Router",
+    "network_address": 1001,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "living_room/ceiling",
+    "description": null,
+    "manufacturer": "Signify Netherlands B.V.",
+    "model_id": "LCA001",
+    "power_source": "Mains (single phase)",
+    "software_build_id": "1.104.2",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "9290022166",
+      "vendor": "Philips",
+      "description": "Hue white and color ambiance E26/E27",
+      "supports_ota": true,
+      "exposes": [
+        {
+          "type": "light",
+          "features": [
+            { "type": "binary", "name": "state", "property": "state", "access": 7, "value_on": "ON", "value_off": "OFF", "value_toggle": "TOGGLE", "description": "On/off state of this light" },
+            { "type": "numeric", "name": "brightness", "property": "brightness", "access": 7, "value_min": 0, "value_max": 254, "description": "Brightness of this light" },
+            { "type": "numeric", "name": "color_temp", "property": "color_temp", "access": 7, "unit": "mired", "value_min": 153, "value_max": 500, "description": "Color temperature of this light" },
+            {
+              "type": "composite", "name": "color_xy", "property": "color", "access": 7, "label": "Color (X/Y)",
+              "features": [
+                { "type": "numeric", "name": "x", "property": "x", "access": 7 },
+                { "type": "numeric", "name": "y", "property": "y", "access": 7 }
+              ]
+            }
+          ]
+        },
+        { "type": "enum", "name": "effect", "property": "effect", "access": 2, "values": ["blink", "breathe", "okay", "finish_effect", "stop_effect"] },
+        { "type": "enum", "name": "power_on_behavior", "property": "power_on_behavior", "access": 7, "category": "config", "values": ["off", "on", "toggle", "previous"] },
+        { "type": "numeric", "name": "linkquality", "property": "linkquality", "access": 1, "unit": "lqi", "category": "diagnostic", "value_min": 0, "value_max": 255 }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00124b0000000002",
+    "type": "Router",
+    "network_address": 1002,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "kitchen_plug",
+    "power_source": "Mains (single phase)",
+    "software_build_id": "2.1.0",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "S60ZBTPF",
+      "vendor": "SONOFF",
+      "description": "Zigbee smart plug with power monitoring",
+      "exposes": [
+        {
+          "type": "switch",
+          "features": [
+            { "type": "binary", "name": "state", "property": "state", "access": 7, "value_on": "ON", "value_off": "OFF", "value_toggle": "TOGGLE" }
+          ]
+        },
+        { "type": "numeric", "name": "power", "property": "power", "access": 5, "unit": "W" },
+        { "type": "numeric", "name": "energy", "property": "energy", "access": 5, "unit": "kWh" },
+        { "type": "numeric", "name": "voltage", "property": "voltage", "access": 5, "unit": "V" },
+        { "type": "numeric", "name": "current", "property": "current", "access": 5, "unit": "A" },
+        { "type": "numeric", "name": "linkquality", "property": "linkquality", "access": 1, "unit": "lqi", "category": "diagnostic" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d0000000003",
+    "type": "EndDevice",
+    "network_address": 1003,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "bedroom_climate",
+    "power_source": "Battery",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "WSDCGQ11LM",
+      "vendor": "Aqara",
+      "description": "Temperature, humidity and pressure sensor",
+      "exposes": [
+        { "type": "numeric", "name": "temperature", "property": "temperature", "access": 1, "unit": "°C" },
+        { "type": "numeric", "name": "humidity", "property": "humidity", "access": 1, "unit": "%" },
+        { "type": "numeric", "name": "pressure", "property": "pressure", "access": 1, "unit": "hPa" },
+        { "type": "numeric", "name": "battery", "property": "battery", "access": 1, "unit": "%", "category": "diagnostic", "value_min": 0, "value_max": 100 },
+        { "type": "numeric", "name": "voltage", "property": "voltage", "access": 1, "unit": "mV", "category": "diagnostic" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d0000000004",
+    "type": "EndDevice",
+    "network_address": 1004,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "front_door",
+    "power_source": "Battery",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "MCCGQ11LM",
+      "vendor": "Aqara",
+      "description": "Door and window sensor",
+      "exposes": [
+        { "type": "binary", "name": "contact", "property": "contact", "access": 1, "value_on": false, "value_off": true },
+        { "type": "numeric", "name": "battery", "property": "battery", "access": 1, "unit": "%" },
+        { "type": "binary", "name": "battery_low", "property": "battery_low", "access": 1, "value_on": true, "value_off": false }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d0000000005",
+    "type": "EndDevice",
+    "network_address": 1005,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "hallway_motion",
+    "power_source": "Battery",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "RTCGQ11LM",
+      "vendor": "Aqara",
+      "description": "Motion sensor",
+      "exposes": [
+        { "type": "binary", "name": "occupancy", "property": "occupancy", "access": 1, "value_on": true, "value_off": false },
+        { "type": "numeric", "name": "illuminance", "property": "illuminance", "access": 1, "unit": "lx" },
+        { "type": "numeric", "name": "battery", "property": "battery", "access": 1, "unit": "%" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d0000000006",
+    "type": "EndDevice",
+    "network_address": 1006,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "laundry_leak",
+    "power_source": "Battery",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "SJCGQ11LM",
+      "vendor": "Aqara",
+      "description": "Water leak sensor",
+      "exposes": [
+        { "type": "binary", "name": "water_leak", "property": "water_leak", "access": 1, "value_on": true, "value_off": false },
+        { "type": "binary", "name": "smoke", "property": "smoke", "access": 1, "value_on": true, "value_off": false },
+        { "type": "numeric", "name": "battery", "property": "battery", "access": 1, "unit": "%" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d0000000007",
+    "type": "EndDevice",
+    "network_address": 1007,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "front_door_lock",
+    "power_source": "Battery",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "YRD226HA2619",
+      "vendor": "Yale",
+      "description": "Assure lock",
+      "exposes": [
+        {
+          "type": "lock",
+          "features": [
+            { "type": "binary", "name": "state", "property": "state", "access": 7, "value_on": "LOCK", "value_off": "UNLOCK" },
+            { "type": "enum", "name": "lock_state", "property": "lock_state", "access": 1, "values": ["not_fully_locked", "locked", "unlocked"] }
+          ]
+        },
+        { "type": "numeric", "name": "battery", "property": "battery", "access": 5, "unit": "%" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d0000000008",
+    "type": "Router",
+    "network_address": 1008,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "office_blind",
+    "power_source": "Mains (single phase)",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "ZNCLDJ11LM",
+      "vendor": "Aqara",
+      "description": "Curtain controller",
+      "exposes": [
+        {
+          "type": "cover",
+          "features": [
+            { "type": "enum", "name": "state", "property": "state", "access": 7, "values": ["OPEN", "CLOSE", "STOP"] },
+            { "type": "numeric", "name": "position", "property": "position", "access": 7, "unit": "%", "value_min": 0, "value_max": 100 }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d0000000009",
+    "type": "EndDevice",
+    "network_address": 1009,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "bedroom_trv",
+    "power_source": "Battery",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "SPZB0001",
+      "vendor": "Eurotronic",
+      "description": "Spirit Zigbee wireless heater thermostat",
+      "exposes": [
+        {
+          "type": "climate",
+          "features": [
+            { "type": "numeric", "name": "occupied_heating_setpoint", "property": "occupied_heating_setpoint", "access": 7, "unit": "°C", "value_min": 5, "value_max": 30, "value_step": 0.5 },
+            { "type": "numeric", "name": "local_temperature", "property": "local_temperature", "access": 5, "unit": "°C" },
+            { "type": "enum", "name": "system_mode", "property": "system_mode", "access": 7, "values": ["off", "auto", "heat"] },
+            { "type": "enum", "name": "running_state", "property": "running_state", "access": 5, "values": ["idle", "heat"] },
+            { "type": "numeric", "name": "local_temperature_calibration", "property": "local_temperature_calibration", "access": 7, "unit": "°C", "value_min": -12.8, "value_max": 12.7, "value_step": 0.1 }
+          ]
+        },
+        { "type": "numeric", "name": "battery", "property": "battery", "access": 1, "unit": "%" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d000000000a",
+    "type": "EndDevice",
+    "network_address": 1010,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "desk_remote",
+    "power_source": "Battery",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "WXKG11LM",
+      "vendor": "Aqara",
+      "description": "Wireless mini switch",
+      "exposes": [
+        { "type": "enum", "name": "action", "property": "action", "access": 1, "values": ["single", "double", "triple", "quadruple", "hold", "release"] },
+        { "type": "numeric", "name": "battery", "property": "battery", "access": 1, "unit": "%" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d000000000b",
+    "type": "Router",
+    "network_address": 1011,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "hall_2gang",
+    "power_source": "Mains (single phase)",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "QBKG12LM",
+      "vendor": "Aqara",
+      "description": "Smart wall switch (with neutral, double rocker)",
+      "exposes": [
+        {
+          "type": "switch",
+          "endpoint": "left",
+          "features": [
+            { "type": "binary", "name": "state", "property": "state_left", "access": 7, "value_on": "ON", "value_off": "OFF", "value_toggle": "TOGGLE", "endpoint": "left" }
+          ]
+        },
+        {
+          "type": "switch",
+          "endpoint": "right",
+          "features": [
+            { "type": "binary", "name": "state", "property": "state_right", "access": 7, "value_on": "ON", "value_off": "OFF", "value_toggle": "TOGGLE", "endpoint": "right" }
+          ]
+        },
+        { "type": "numeric", "name": "power", "property": "power", "access": 5, "unit": "W" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d000000000c",
+    "type": "Router",
+    "network_address": 1012,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "led_strip",
+    "power_source": "Mains (single phase)",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "GL-C-008",
+      "vendor": "Gledopto",
+      "description": "Zigbee LED controller RGB + CCT",
+      "exposes": [
+        {
+          "type": "light",
+          "features": [
+            { "type": "binary", "name": "state", "property": "state", "access": 7, "value_on": "ON", "value_off": "OFF", "value_toggle": "TOGGLE" },
+            { "type": "numeric", "name": "brightness", "property": "brightness", "access": 7, "value_min": 0, "value_max": 254 },
+            {
+              "type": "composite", "name": "color_hs", "property": "color", "access": 7,
+              "features": [
+                { "type": "numeric", "name": "hue", "property": "hue", "access": 7 },
+                { "type": "numeric", "name": "saturation", "property": "saturation", "access": 7 }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "composite", "name": "schedule", "property": "schedule", "access": 1,
+          "features": [
+            { "type": "numeric", "name": "hour", "property": "hour", "access": 1 }
+          ]
+        },
+        { "type": "list", "name": "scenes", "property": "scenes", "access": 1, "item_type": { "type": "text", "name": "scene" } },
+        { "type": "fancy_future_type", "name": "mystery", "property": "mystery", "access": 1 }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d000000000d",
+    "type": "EndDevice",
+    "network_address": 1013,
+    "supported": true,
+    "disabled": true,
+    "friendly_name": "disabled_sensor",
+    "power_source": "Battery",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "WSDCGQ11LM",
+      "vendor": "Aqara",
+      "description": "Temperature, humidity and pressure sensor",
+      "exposes": [
+        { "type": "numeric", "name": "temperature", "property": "temperature", "access": 1, "unit": "°C" }
+      ]
+    }
+  },
+  {
+    "ieee_address": "0x00158d000000000e",
+    "type": "EndDevice",
+    "network_address": 1014,
+    "supported": false,
+    "disabled": false,
+    "friendly_name": "0x00158d000000000e",
+    "power_source": "Battery",
+    "interview_completed": false,
+    "interviewing": true,
+    "definition": null
+  },
+  {
+    "ieee_address": "0x00158d000000000f",
+    "type": "Router",
+    "network_address": 1015,
+    "supported": true,
+    "disabled": false,
+    "friendly_name": "garage_door",
+    "power_source": "Mains (single phase)",
+    "interview_completed": true,
+    "interviewing": false,
+    "definition": {
+      "model": "GDC-01",
+      "vendor": "Example",
+      "description": "Garage door opener",
+      "exposes": [
+        {
+          "type": "cover",
+          "features": [
+            { "type": "enum", "name": "state", "property": "state", "access": 7, "values": ["OPEN", "CLOSE", "STOP"] }
+          ]
+        }
+      ]
+    }
+  }
+]

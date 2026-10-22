@@ -39,6 +39,7 @@ function floor(patch: Partial<FloorDto> = {}): FloorDto {
     background: null,
     rooms: [living],
     rowVersion: 'v1',
+    placements: [],
     ...patch,
   }
 }

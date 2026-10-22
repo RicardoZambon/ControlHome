@@ -34,7 +34,12 @@ import { useProblem } from '../../../composables/useProblem'
 import { unwrap } from '../../../lib/problem'
 import { useSessionStore } from '../../../stores/session'
 import CreateFloorForm from '../components/CreateFloorForm.vue'
-import { floorEyebrow, loadFloorsWithRooms, totalAreaM2 } from '../../../components/floorplan/floors'
+import {
+  floorEyebrow,
+  loadFloorsWithRooms,
+  planBounds,
+  totalAreaM2,
+} from '../../../components/floorplan/floors'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -184,7 +189,7 @@ function onDeleteOpenChange(open: boolean): void {
         :key="card.floor.id"
         class="group relative flex flex-col overflow-hidden rounded-2xl border bg-card shadow-xs transition-[border-color,box-shadow] has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring has-[a:focus-visible]:ring-offset-2 has-[a:focus-visible]:ring-offset-background hover:border-ring/40 hover:shadow-md"
       >
-        <FloorPreview :floor="card.floor" class="border-b" />
+        <FloorPreview :floor="card.floor" :fit-to="planBounds(card.floor)" class="border-b" />
         <div class="flex items-start gap-3 p-5">
           <div class="grid min-w-0 flex-1 gap-1">
             <p v-if="card.level" class="eyebrow">{{ card.level }}</p>

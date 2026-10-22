@@ -46,8 +46,19 @@ public static class UserEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapDelete("/{id:guid}/safety-pin", ResetSafetyPinAsync)
+            .WithName("resetUserSafetyPin")
+            .WithSummary("Clears the account's safety PIN and any safety lockout; the user sets a new PIN with their password.")
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> ResetSafetyPinAsync(
+        Guid id,
+        UserAdminService users,
+        CancellationToken cancellationToken) =>
+        (await users.ResetSafetyPinAsync(id, cancellationToken)).ToHttpResult();
 
     private static async Task<Ok<UserDto[]>> ListAsync(UserAdminService users, CancellationToken cancellationToken) =>
         TypedResults.Ok(await users.ListAsync(cancellationToken));

@@ -4,6 +4,7 @@ using ControlHome.Application.Auditing;
 using ControlHome.Application.Auth;
 using ControlHome.Application.Common;
 using ControlHome.Application.Identity;
+using ControlHome.Application.Security;
 using ControlHome.Domain.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +16,8 @@ namespace ControlHome.Application.Users;
 /// last-active-Admin rule (<c>users.last_admin</c>) holds even when two admins act at the same time, and first re-checks in
 /// the database that the caller is still an enabled Admin (403 <c>auth.forbidden</c> otherwise): the role in a session
 /// cookie can be up to a minute old, and a demoted or disabled admin must not be able to undo that meanwhile. Disabling a
-/// user, changing their role or resetting their password updates their security stamp, which ends their existing sessions.
+/// user, changing their role or resetting their password updates their security stamp, which ends their existing sessions;
+/// those changes and deleting a user also close the user's live hub connections at once (<see cref="IUserSessionRevoker"/>).
 /// </summary>
 public sealed class UserAdminService(
     UserManager<AppUser> userManager,
@@ -24,6 +26,8 @@ public sealed class UserAdminService(
     ISessionSignIn session,
     IAuditLog auditLog,
     ICurrentActor actor,
+    SafetyGrantStore grants,
+    IUserSessionRevoker sessions,
     TimeProvider timeProvider)
 {
     public const string LockName = "ControlHome.Users";
@@ -105,6 +109,7 @@ public sealed class UserAdminService(
         ArgumentNullException.ThrowIfNull(request);
 
         var refreshOwnSession = false;
+        var revoke = false;
         AppUser? updatedUser = null;
         var result = await exclusive.RunAsync<UserDto>(
             LockName,
@@ -189,6 +194,7 @@ public sealed class UserAdminService(
                 }
 
                 refreshOwnSession = (roleChanged || disabledChanged) && !user.IsDisabled && user.Id == actor.UserId;
+                revoke = roleChanged || disabledChanged;
                 updatedUser = user;
                 return ToDto(user, request.Role);
             },
@@ -200,12 +206,19 @@ public sealed class UserAdminService(
             await session.RefreshAsync(updatedUser);
         }
 
+        if (result.IsSuccess && revoke)
+        {
+            // Their security stamp changed: close their live hub connections now (HTTP requests re-check the stamp).
+            await sessions.RevokeAsync(id, CancellationToken.None);
+        }
+
         return result;
     }
 
     /// <summary>
-    /// Sets a new password and clears any sign-in lockout in one write; the new security stamp ends the user's other
-    /// sessions (the caller's own session is re-issued when they reset their own password).
+    /// Sets a new password and clears any sign-in lockout and the safety PIN (the user sets a new one with the new password)
+    /// in one write; the new security stamp ends the user's other sessions (the caller's own session is re-issued when they
+    /// reset their own password).
     /// </summary>
     public async Task<Result> ResetPasswordAsync(Guid id, ResetPasswordRequest request, CancellationToken cancellationToken)
     {
@@ -227,8 +240,9 @@ public sealed class UserAdminService(
                     return NotFound();
                 }
 
-                // Cleared first, so ResetPasswordAsync saves the counters together with the new password and stamp.
+                // Cleared first, so ResetPasswordAsync saves the counters and the PIN together with the new password and stamp.
                 AuthService.ClearLockout(resetUser);
+                resetUser.SafetyPinHash = null;
                 var resetToken = await userManager.GeneratePasswordResetTokenAsync(resetUser);
                 var changed = await userManager.ResetPasswordAsync(resetUser, resetToken, request.NewPassword);
                 if (!changed.Succeeded)
@@ -254,6 +268,58 @@ public sealed class UserAdminService(
             await session.RefreshAsync(resetUser);
         }
 
+        grants.Forget(id);
+        await sessions.RevokeAsync(id, CancellationToken.None);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// Clears the user's safety PIN (forgotten, or set by someone else on their session) and any safety grant or lockout; the
+    /// user sets a new one with their account password. Audited <c>safety.pin.reset</c>; 404 <c>users.not_found</c>.
+    /// </summary>
+    public async Task<Result> ResetSafetyPinAsync(Guid id, CancellationToken cancellationToken)
+    {
+        AppUser? resetUser = null;
+        var result = await exclusive.RunAsync<bool>(
+            LockName,
+            async token =>
+            {
+                if (await DenyUnlessActiveAdminAsync() is { } denied)
+                {
+                    return denied;
+                }
+
+                resetUser = await FindAsync(id);
+                if (resetUser is null)
+                {
+                    return NotFound();
+                }
+
+                var hadPin = resetUser.SafetyPinHash is not null;
+                if (hadPin)
+                {
+                    resetUser.SafetyPinHash = null;
+                    var updated = await userManager.UpdateAsync(resetUser);
+                    if (!updated.Succeeded)
+                    {
+                        return updated.ToAppError("id");
+                    }
+                }
+
+                await auditLog.WriteAsync(
+                    new AuditEvent(AuditActions.SafetyPinReset, AuthService.UserTarget, IdOf(resetUser), new { resetUser.UserName, HadPin = hadPin }),
+                    token);
+                return true;
+            },
+            token => userManager.IsStoredAsync(resetUser, token),
+            cancellationToken);
+
+        if (result.IsFailure)
+        {
+            return result.Error;
+        }
+
+        grants.Forget(id);
         return Result.Success();
     }
 
@@ -301,7 +367,14 @@ public sealed class UserAdminService(
             async token => !await userManager.ExistsAsync(id, token),
             cancellationToken);
 
-        return result.IsSuccess ? Result.Success() : Result.Failure(result.Error);
+        if (result.IsFailure)
+        {
+            return Result.Failure(result.Error);
+        }
+
+        grants.Forget(id);
+        await sessions.RevokeAsync(id, CancellationToken.None);
+        return Result.Success();
     }
 
     private static UserDto ToDto(AppUser user, string role) =>

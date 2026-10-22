@@ -23,6 +23,7 @@ export interface TestUser {
 interface TestData {
   admin: TestUser
   member: TestUser
+  viewer: TestUser
   home: { name: string; timeZoneId: string; locale: string; currency: string }
 }
 
@@ -100,7 +101,316 @@ export async function savePreferences(
   expect(response.status(), `PUT /api/auth/me/profile: ${await response.text()}`).toBe(200)
 }
 
+// --- Devices ---------------------------------------------------------------------------------------------------------
+
+/** The parts of `GET /api/devices` the specs use. */
+export interface SimulatedDevice {
+  id: string
+  name: string
+  deviceClass: string | null
+  availability: string
+  endpoints: {
+    id: string
+    capabilities: {
+      capabilityId: string
+      attributes: {
+        attributeId: number
+        key: string
+        value: { kind: string; b?: boolean; n?: number; s?: string }
+      }[]
+    }[]
+  }[]
+}
+
+/** The Simulated connector's basic home (Task 1.2-B), by its device names. */
+export const SIMULATED = {
+  light: 'Living room light',
+  plug: 'Coffee maker plug',
+  ac: 'Bedroom air conditioner',
+  contact: 'Front door sensor',
+  lock: 'Front door lock',
+} as const
+
+export async function listDevices(request: APIRequestContext): Promise<SimulatedDevice[]> {
+  const response = await request.get('/api/devices')
+  expect(response.status(), `GET /api/devices: ${await response.text()}`).toBe(200)
+  return (await response.json()) as SimulatedDevice[]
+}
+
+/**
+ * Adds the Simulated connector's basic home (`POST /api/integrations`, the request context must be an Admin's) and waits
+ * until its five devices are in. Returns them by name.
+ */
+export async function createSimulatedHome(
+  request: APIRequestContext,
+): Promise<Record<keyof typeof SIMULATED, SimulatedDevice>> {
+  const response = await request.post('/api/integrations', {
+    headers: mutationHeaders(),
+    data: { connectorKey: 'simulated', name: 'Simulated home', config: { preset: 'basic' } },
+  })
+  expect(response.status(), `POST /api/integrations: ${await response.text()}`).toBe(201)
+  let devices: SimulatedDevice[] = []
+  await expect
+    .poll(
+      async () => {
+        devices = await listDevices(request)
+        return devices.length
+      },
+      { message: 'the simulated devices to appear', timeout: 30_000 },
+    )
+    .toBe(5)
+  const byName = (name: string) => devices.find((device) => device.name === name)!
+  return {
+    light: byName(SIMULATED.light),
+    plug: byName(SIMULATED.plug),
+    ac: byName(SIMULATED.ac),
+    contact: byName(SIMULATED.contact),
+    lock: byName(SIMULATED.lock),
+  }
+}
+
+/**
+ * The first-run setup with the demo home (`loadDemoHome`, what the wizard's "Load demo home" switch sends): two floors,
+ * eight rooms and the Simulated connector's twenty demo devices on the plans, named in `locale`. The admin is signed in
+ * on `request`. Waits until every device is online with its first values, and returns them.
+ */
+export async function setUpDemoHome(
+  request: APIRequestContext,
+  locale: 'en' | 'pt-BR' = 'en',
+): Promise<SimulatedDevice[]> {
+  const response = await request.post('/api/setup/complete', {
+    headers: mutationHeaders(),
+    data: {
+      setupCode: SETUP_CODE,
+      admin: testData.admin,
+      home: { latitude: null, longitude: null, pricePerKwh: null, ...testData.home, locale },
+      loadDemoHome: true,
+    },
+  })
+  expect(response.status(), `POST /api/setup/complete: ${await response.text()}`).toBe(200)
+  let devices: SimulatedDevice[] = []
+  await expect
+    .poll(
+      async () => {
+        devices = await listDevices(request)
+        return devices.length === 20 && devices.every((device) => device.availability === 'Online')
+      },
+      { message: 'the demo devices to come online', timeout: 30_000 },
+    )
+    .toBe(true)
+  return devices
+}
+
+/**
+ * `POST /api/_test/devices/{id}/availability` (Testing environment only): the device's availability goes through the
+ * state pipeline as if its connector had reported it (the Simulated connector never reports a device offline).
+ */
+export async function reportAvailability(
+  request: APIRequestContext,
+  device: Pick<SimulatedDevice, 'id'>,
+  availability: 'Online' | 'Offline',
+): Promise<void> {
+  const response = await request.post(`/api/_test/devices/${device.id}/availability`, {
+    headers: mutationHeaders(),
+    data: { availability },
+  })
+  expect(response.status(), `POST availability ${availability}: ${await response.text()}`).toBe(204)
+}
+
+/** `POST /api/_test/clock`: moves the server's runtime clock forward (connector ticks, history rollups). */
+export async function advanceClock(request: APIRequestContext, seconds: number): Promise<void> {
+  const response = await request.post('/api/_test/clock', {
+    headers: mutationHeaders(),
+    data: { advanceSeconds: seconds },
+  })
+  expect(response.status(), await response.text()).toBe(200)
+}
+
+/** The current value of `capability.attribute` of a device (`GET /api/devices`). */
+export async function attributeValue(
+  request: APIRequestContext,
+  deviceName: string,
+  capabilityId: string,
+  key: string,
+): Promise<boolean | number | string | undefined> {
+  const device = (await listDevices(request)).find((entry) => entry.name === deviceName)
+  const attribute = device?.endpoints
+    .flatMap((endpoint) => endpoint.capabilities)
+    .find((capability) => capability.capabilityId === capabilityId)
+    ?.attributes.find((entry) => entry.key === key)
+  const value = attribute?.value
+  return value?.b ?? value?.n ?? value?.s
+}
+
+/**
+ * Sends a command to a device's first endpoint (`POST /api/endpoints/{id}/commands`, as an automation or another app
+ * would) and expects it to be accepted (202). Returns the device's endpoint id.
+ */
+export async function sendCommand(
+  request: APIRequestContext,
+  device: SimulatedDevice,
+  capabilityId: string,
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<string> {
+  const endpointId = device.endpoints[0]!.id
+  const response = await request.post(`/api/endpoints/${endpointId}/commands`, {
+    headers: mutationHeaders(),
+    data: { capabilityId, command, arguments: args, idempotencyKey: null },
+  })
+  expect(response.status(), `POST ${capabilityId}.${command}: ${await response.text()}`).toBe(202)
+  return endpointId
+}
+
+/** The AttributeId of `capability.attribute` of a device. */
+export function attributeIdOf(device: SimulatedDevice, capabilityId: string, key: string): number {
+  const attribute = device.endpoints
+    .flatMap((endpoint) => endpoint.capabilities)
+    .find((capability) => capability.capabilityId === capabilityId)
+    ?.attributes.find((entry) => entry.key === key)
+  expect(attribute, `${device.name} has ${capabilityId}.${key}`).toBeDefined()
+  return attribute!.attributeId
+}
+
+// --- Floors and placements -------------------------------------------------------------------------------------------
+
+/** A room of a floor created by `createFloor`. */
+export interface SeededRoom {
+  id: number
+  name: string
+}
+
+export interface SeededFloor {
+  id: number
+  name: string
+  rooms: SeededRoom[]
+}
+
+/** An axis-aligned room outline (cm), clockwise from the top-left corner. */
+export function rectangle(x0: number, y0: number, x1: number, y1: number): { x: number; y: number }[] {
+  return [
+    { x: x0, y: y0 },
+    { x: x1, y: y0 },
+    { x: x1, y: y1 },
+    { x: x0, y: y1 },
+  ]
+}
+
+/**
+ * Creates a 2000 × 1500 cm floor with `rooms` (the request context must be an Admin's): by default a living room
+ * (100–1000 × 100–750), a kitchen (1000–1900 × 100–900) and a bedroom (100–1000 × 750–1400). The Simulated basic home
+ * suggests "Living room" and "Bedroom", so devices added afterwards land in those rooms.
+ */
+export async function createFloor(
+  request: APIRequestContext,
+  name = 'Ground floor',
+  rooms: { name: string; icon: string; colorToken: string; polygon: { x: number; y: number }[] }[] = [
+    { name: 'Living room', icon: 'sofa', colorToken: 'room-1', polygon: rectangle(100, 100, 1000, 750) },
+    { name: 'Kitchen', icon: 'cooking-pot', colorToken: 'room-2', polygon: rectangle(1000, 100, 1900, 900) },
+    { name: 'Bedroom', icon: 'bed-double', colorToken: 'room-3', polygon: rectangle(100, 750, 1000, 1400) },
+  ],
+): Promise<SeededFloor> {
+  const created = await request.post('/api/floors', {
+    headers: mutationHeaders(),
+    data: { name, level: 0, widthCm: 2000, heightCm: 1500 },
+  })
+  expect(created.status(), `POST /api/floors: ${await created.text()}`).toBe(201)
+  const floor = (await created.json()) as { id: number; rowVersion: string }
+  const layout = await request.put(`/api/floors/${floor.id}/layout`, {
+    headers: mutationHeaders(),
+    data: { rowVersion: floor.rowVersion, rooms: rooms.map((room) => ({ id: null, ...room })) },
+  })
+  expect(layout.status(), `PUT /api/floors/${floor.id}/layout: ${await layout.text()}`).toBe(200)
+  const saved = (await layout.json()) as { rooms: SeededRoom[] }
+  return { id: floor.id, name, rooms: saved.rooms.map((room) => ({ id: room.id, name: room.name })) }
+}
+
+/** A placement as `GET /api/placements` lists it. */
+export interface Placement {
+  id: number
+  floorId: number
+  endpointId: string | null
+  deviceId: string | null
+  xCm: number
+  yCm: number
+  roomId: number | null
+}
+
+export async function listPlacements(request: APIRequestContext): Promise<Placement[]> {
+  const response = await request.get('/api/placements')
+  expect(response.status(), `GET /api/placements: ${await response.text()}`).toBe(200)
+  return (await response.json()) as Placement[]
+}
+
+/** Places a device's first endpoint on a floor (`PUT /api/placements`, Admin). */
+export async function placeEndpoint(
+  request: APIRequestContext,
+  device: SimulatedDevice,
+  floorId: number,
+  xCm: number,
+  yCm: number,
+): Promise<Placement> {
+  const response = await request.put('/api/placements', {
+    headers: mutationHeaders(),
+    data: { endpointId: device.endpoints[0]!.id, deviceId: null, floorId, xCm, yCm },
+  })
+  expect(response.status(), `PUT /api/placements: ${await response.text()}`).toBe(200)
+  return (await response.json()) as Placement
+}
+
+/** Where floor point (x, y) cm is on the screen: from the plan SVG's viewBox (cm) and its box (px). */
+export async function planPoint(page: Page, x: number, y: number): Promise<{ x: number; y: number }> {
+  const svg = page.locator('[data-slot="floor-plan"] svg').first()
+  const box = (await svg.boundingBox())!
+  const [vx, vy, vw, vh] = (await svg.getAttribute('viewBox'))!.split(' ').map(Number) as [
+    number,
+    number,
+    number,
+    number,
+  ]
+  const scale = Math.min(box.width / vw, box.height / vh)
+  // preserveAspectRatio xMidYMid meet: the view box is centred in the element.
+  const left = box.x + (box.width - vw * scale) / 2
+  const top = box.y + (box.height - vh * scale) / 2
+  return { x: left + (x - vx) * scale, y: top + (y - vy) * scale }
+}
+
+/** A tap on a touch screen (phones, `hasTouch`), a click elsewhere. */
+export async function tapPlan(page: Page, x: number, y: number, touch: boolean): Promise<void> {
+  const point = await planPoint(page, x, y)
+  if (touch) await page.touchscreen.tap(point.x, point.y)
+  else await page.mouse.click(point.x, point.y)
+}
+
+/** Waits until the page's live connection to the hub is up (devices update without a reload from then on). */
+export async function waitForLive(page: Page): Promise<void> {
+  await expect(page.locator('[data-realtime-status="connected"]')).toBeAttached({ timeout: 15_000 })
+}
+
 // --- UI helpers ------------------------------------------------------------------------------------------------------
+
+/**
+ * The history charts on the page drawn wider than their card, described ("history-chart ends at 1270 px, its card at
+ * 836 px"). Empty when every chart follows its card's width. Poll it: charts redraw a moment after their card resizes.
+ */
+export async function chartsWiderThanTheirCard(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-slot="history-chart"], [data-slot="energy-bars"], [data-slot="state-timeline"]',
+      ),
+    ].flatMap((chart) => {
+      const card = chart.closest('section')
+      if (!card) return []
+      const limit = card.getBoundingClientRect().right + 1
+      const drawn = [chart, ...chart.querySelectorAll<Element>('svg, canvas')]
+      const widest = Math.max(...drawn.map((element) => element.getBoundingClientRect().right))
+      return widest > limit
+        ? [`${chart.dataset.slot} ends at ${Math.round(widest)} px, its card at ${Math.round(limit)} px`]
+        : []
+    }),
+  )
+}
 
 /** Phones get the sidebar as a sheet (below Tailwind's md breakpoint). */
 export function isPhone(page: Page): boolean {
@@ -164,6 +474,11 @@ export interface Gates {
    * checked when it ends; the final page is checked automatically too.
    */
   check(label?: string): Promise<void>
+  /**
+   * From now on, console errors matching `pattern` are expected (the test takes the network down on purpose, so the
+   * browser reports the requests and sockets that fail meanwhile). Every other console error still fails the test.
+   */
+  expectConsoleErrors(pattern: RegExp): void
 }
 
 /** Width at or below which the page must not scroll sideways. */
@@ -247,15 +562,23 @@ export const test = base.extend<{ gates: Gates }>({
   gates: [
     async ({ page }, use, testInfo) => {
       const problems: string[] = []
+      const expectedErrors: RegExp[] = []
       page.on('console', (message) => {
         const text = message.text()
-        if (message.type() === 'error' && !isExpectedApiAnswer(message))
+        if (
+          message.type() === 'error' &&
+          !isExpectedApiAnswer(message) &&
+          !expectedErrors.some((pattern) => pattern.test(text))
+        )
           problems.push(`console error: ${text} (${message.location().url})`)
         else if (MISSING_KEY.test(text)) problems.push(`missing i18n key: ${text}`)
       })
       page.on('pageerror', (error) => problems.push(`uncaught exception: ${error.message}`))
 
-      await use({ check: (label) => checkPage(page, label) })
+      await use({
+        check: (label) => checkPage(page, label),
+        expectConsoleErrors: (pattern) => void expectedErrors.push(pattern),
+      })
 
       // The last page the test saw, unless the test already failed (its own error is the interesting one) or skipped
       // itself before opening any page.

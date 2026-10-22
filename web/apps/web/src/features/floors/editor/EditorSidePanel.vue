@@ -8,13 +8,15 @@ import { formatArea, roomAreaM2 } from '../../../components/floorplan/measure'
 import { roomColorClasses } from '../../../components/floorplan/roomColors'
 import { roomIcon } from '../../../components/floorplan/roomIcons'
 import BackgroundPanel from './BackgroundPanel.vue'
+import EditorDevicesPanel from './EditorDevicesPanel.vue'
 import FloorPropertiesForm from './FloorPropertiesForm.vue'
 import RoomPropertiesPanel from './RoomPropertiesPanel.vue'
 import type { EditorMessage } from './draft'
 import { useEditor, type PanelTab } from './useEditorState'
 
 /**
- * The editor's side panel (a sheet below lg): Rooms (the list, or the selected room's properties), Floor (its
+ * The editor's side panel (a sheet below lg): Rooms (the list, or the selected room's properties), Devices (placing
+ * devices on the plan), Floor (its
  * properties) and Image (the traced background image). After a save attempt that found problems it lists them at the
  * top. A room row and the room on the plan highlight each other under the pointer.
  */
@@ -64,6 +66,8 @@ const problems = computed(() => {
   return list
 })
 
+const TABS: readonly PanelTab[] = ['rooms', 'devices', 'floor', 'background']
+
 function onTab(value: string | number): void {
   state.panelTab.value = value as PanelTab
 }
@@ -76,10 +80,10 @@ function onTab(value: string | number): void {
     @update:model-value="onTab"
   >
     <div class="border-b p-3">
-      <TabsList class="grid w-full grid-cols-3">
-        <TabsTrigger value="rooms">{{ t('floors.editor.tabs.rooms') }}</TabsTrigger>
-        <TabsTrigger value="floor">{{ t('floors.editor.tabs.floor') }}</TabsTrigger>
-        <TabsTrigger value="background">{{ t('floors.editor.tabs.background') }}</TabsTrigger>
+      <TabsList class="grid w-full grid-cols-4">
+        <TabsTrigger v-for="tab in TABS" :key="tab" :value="tab" class="px-1 text-xs xl:text-sm">
+          {{ t(`floors.editor.tabs.${tab}`) }}
+        </TabsTrigger>
       </TabsList>
     </div>
 
@@ -174,6 +178,10 @@ function onTab(value: string | number): void {
             <KeyHint keys="R" />
           </Button>
         </section>
+      </TabsContent>
+
+      <TabsContent value="devices" class="mt-0">
+        <EditorDevicesPanel />
       </TabsContent>
 
       <TabsContent value="floor" class="mt-0">
