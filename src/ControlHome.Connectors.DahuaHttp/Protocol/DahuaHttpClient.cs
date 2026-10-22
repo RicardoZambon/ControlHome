@@ -46,6 +46,12 @@ internal enum DahuaFailure
     /// <summary>The device did not answer in time.</summary>
     Timeout,
 
+    /// <summary>
+    /// A one-shot command was sent, but the connection broke or ended before the answer: the device may have carried it
+    /// out (never sent again).
+    /// </summary>
+    NoAnswer,
+
     /// <summary>The device answered something this connector cannot use.</summary>
     InvalidResponse,
 }
@@ -65,9 +71,10 @@ internal sealed class DahuaHttpException(DahuaFailure failure, HttpStatusCode? s
 /// for <c>Digest</c> only (never Basic), no proxy, no redirects, no cookies. Every call is made once; retry policy belongs
 /// to the caller (and a 401 is never retried quickly: devices lock out after a few failed logins).
 /// <para>
-/// The door release uses a separate handler whose connections are never reused, and sends <c>Connection: close</c>: the
-/// Digest challenge and the authenticated request each run on a new connection, so the HTTP stack never silently re-sends
-/// the authenticated request after a dropped keep-alive connection (at-most-once).
+/// Door releases (and the XPE relay) never go through <see cref="SocketsHttpHandler"/>: it silently re-sends a request
+/// without a body (up to three times) when the server closes the connection before answering. They are sent with
+/// <see cref="OneShotHttp"/> instead — the Digest challenge on one connection, then the authenticated request exactly once
+/// on a new one (<see cref="DigestChallenge"/>), each with <c>Connection: close</c> (at-most-once).
 /// </para>
 /// </summary>
 internal sealed class DahuaHttpClient : IDisposable
@@ -83,7 +90,6 @@ internal sealed class DahuaHttpClient : IDisposable
     private readonly DahuaConnection _connection;
     private readonly DahuaRuntimeOptions _options;
     private readonly HttpClient _client;
-    private readonly HttpClient _commands;
     private readonly HttpClient _plain;
 
     internal DahuaHttpClient(DahuaConnection connection, DahuaRuntimeOptions options)
@@ -93,10 +99,6 @@ internal sealed class DahuaHttpClient : IDisposable
         _connection = connection;
         _options = options;
         _client = new HttpClient(CreateHandler(connection, options, reuseConnections: true, credentials: true), disposeHandler: true)
-        {
-            Timeout = Timeout.InfiniteTimeSpan,
-        };
-        _commands = new HttpClient(CreateHandler(connection, options, reuseConnections: false, credentials: true), disposeHandler: true)
         {
             Timeout = Timeout.InfiniteTimeSpan,
         };
@@ -223,15 +225,18 @@ internal sealed class DahuaHttpClient : IDisposable
 
     /// <summary>
     /// Releases the door of an access terminal (<c>accessControl.cgi?action=openDoor&amp;channel=N&amp;UserID=…&amp;Type=Remote</c>):
-    /// one request, never retried, on connections that are never reused.
+    /// the authenticated request is sent exactly once (<see cref="OneShotHttp"/>), never retried.
     /// </summary>
-    /// <exception cref="DahuaHttpException">The terminal refused or did not answer (it may or may not have opened).</exception>
+    /// <exception cref="DahuaHttpException">
+    /// The terminal refused, could not be reached (nothing sent), or did not answer in time / dropped the connection after
+    /// the request was sent (<see cref="DahuaFailure.Timeout"/>, <see cref="DahuaFailure.NoAnswer"/>: it may have opened).
+    /// </exception>
     public async Task OpenDoorAsync(int door, string userId, CancellationToken cancellationToken)
     {
         var path = string.Create(
             CultureInfo.InvariantCulture,
             $"cgi-bin/accessControl.cgi?action=openDoor&channel={door}&UserID={Uri.EscapeDataString(userId)}&Type=Remote");
-        var answer = await SendOnceAsync(_commands, path, cancellationToken).ConfigureAwait(false);
+        var answer = await SendOnceAsync(path, digest: true, cancellationToken).ConfigureAwait(false);
         if (!DahuaKeyValues.Parse(answer).IsOk)
         {
             throw new DahuaHttpException(DahuaFailure.InvalidResponse, HttpStatusCode.OK, $"The access terminal at {Endpoint} did not confirm the door release.");
@@ -240,7 +245,7 @@ internal sealed class DahuaHttpClient : IDisposable
 
     /// <summary>
     /// The XPE door station's HTTP relay (<c>/fcgi/do?action=OpenDoor&amp;UserName&amp;Password&amp;DoorNum</c>): the
-    /// credentials travel in the query (the device's own scheme), so the URL is never logged. One request, never retried.
+    /// credentials travel in the query (the device's own scheme), so the URL is never logged. Sent exactly once.
     /// </summary>
     public async Task OpenXpeRelayAsync(int door, CancellationToken cancellationToken)
     {
@@ -252,7 +257,7 @@ internal sealed class DahuaHttpClient : IDisposable
             ("DoorNum", door.ToString(CultureInfo.InvariantCulture)),
         };
         var path = "fcgi/do?" + string.Join('&', query.Select(p => $"{p.Item1}={Uri.EscapeDataString(p.Item2)}"));
-        await SendOnceAsync(_plain, path, cancellationToken).ConfigureAwait(false);
+        await SendOnceAsync(path, digest: false, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Whether something answers HTTP at the device's address (any status; no credentials sent).</summary>
@@ -273,7 +278,6 @@ internal sealed class DahuaHttpClient : IDisposable
     public void Dispose()
     {
         _client.Dispose();
-        _commands.Dispose();
         _plain.Dispose();
     }
 
@@ -312,17 +316,38 @@ internal sealed class DahuaHttpClient : IDisposable
         }
     }
 
-    private async Task<string> SendOnceAsync(HttpClient client, string pathAndQuery, CancellationToken cancellationToken)
+    /// <summary>
+    /// A command that must reach the device at most once (<see cref="OneShotHttp"/>, never through the retrying handler).
+    /// With <paramref name="digest"/> it is first sent without credentials: a <c>401</c> carries the Digest challenge (the
+    /// device did nothing), and the authenticated request then goes out exactly once on a new connection. A device that
+    /// needs no login carries the command out on the first request, which is then the only one. Never Basic.
+    /// </summary>
+    private async Task<string> SendOnceAsync(string pathAndQuery, bool digest, CancellationToken cancellationToken)
     {
         using var timeout = StartDeadline(cancellationToken, _options.CommandTimeout);
+        var target = Address(pathAndQuery).PathAndQuery;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, Address(pathAndQuery));
-            request.Headers.ConnectionClose = true;
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
-            Ensure(response);
-            var bytes = await ReadLimitedAsync(response.Content, MaxTextBytes, timeout.Token).ConfigureAwait(false);
-            return Encoding.UTF8.GetString(bytes);
+            var response = await OneShotHttp.GetAsync(_connection.BaseUri, target, null, MaxTextBytes, _options.ConnectTimeout, _connection.Time, timeout.Token)
+                .ConfigureAwait(false);
+            if (digest && response.Status == (int)HttpStatusCode.Unauthorized)
+            {
+                var challenge = DigestChallenge.Select(response.Values("WWW-Authenticate"));
+                if (challenge is null || _connection.Password is null)
+                {
+                    throw new DahuaHttpException(
+                        DahuaFailure.Unauthorized,
+                        HttpStatusCode.Unauthorized,
+                        $"The device at {Endpoint} offers no usable Digest authentication (401; Basic is never used).");
+                }
+
+                var authorization = challenge.Authorize(HttpMethod.Get.Method, target, _connection.Username, _connection.Password);
+                response = await OneShotHttp.GetAsync(_connection.BaseUri, target, authorization, MaxTextBytes, _options.ConnectTimeout, _connection.Time, timeout.Token)
+                    .ConfigureAwait(false);
+            }
+
+            Ensure((HttpStatusCode)response.Status);
+            return Encoding.UTF8.GetString(response.Body);
         }
         catch (Exception exception) when (Translate(exception, cancellationToken) is { } translated)
         {
@@ -334,9 +359,10 @@ internal sealed class DahuaHttpClient : IDisposable
 
     private Deadline StartDeadline(CancellationToken cancellationToken, TimeSpan timeout) => new(cancellationToken, timeout, _connection.Time);
 
-    private void Ensure(HttpResponseMessage response)
+    private void Ensure(HttpResponseMessage response) => Ensure(response.StatusCode);
+
+    private void Ensure(HttpStatusCode status)
     {
-        var status = response.StatusCode;
         if ((int)status is >= 200 and < 300)
         {
             return;
@@ -359,6 +385,12 @@ internal sealed class DahuaHttpClient : IDisposable
         DahuaHttpException => null,
         OperationCanceledException when cancellationToken.IsCancellationRequested => null,
         OperationCanceledException => new DahuaHttpException(DahuaFailure.Timeout, null, $"The device at {Endpoint} did not answer in time.", exception),
+        OneShotHttpException { RequestSent: true } => new DahuaHttpException(
+            DahuaFailure.NoAnswer,
+            null,
+            $"The device at {Endpoint} dropped the connection after the request was sent ({exception.Message}).",
+            exception),
+        OneShotHttpException => new DahuaHttpException(DahuaFailure.Unreachable, null, $"Cannot reach the device at {Endpoint} ({exception.Message}).", exception),
         HttpRequestException { InnerException: SocketException socket } => new DahuaHttpException(
             DahuaFailure.Unreachable,
             null,

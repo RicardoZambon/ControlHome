@@ -6,6 +6,7 @@ using ControlHome.Api.Http;
 using ControlHome.Application.Common;
 using ControlHome.Application.Devices;
 using ControlHome.Application.Identity;
+using ControlHome.Application.Security;
 using ControlHome.Infrastructure.Cameras;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
@@ -23,6 +24,12 @@ namespace ControlHome.Api.Features.Cameras;
 /// </summary>
 public static class CameraEndpoints
 {
+    /// <summary>How often a live view's WebSocket is pinged.</summary>
+    public static readonly TimeSpan KeepAliveInterval = TimeSpan.FromSeconds(20);
+
+    /// <summary>A live view whose browser does not answer a ping within this is closed.</summary>
+    public static readonly TimeSpan KeepAliveTimeout = TimeSpan.FromSeconds(40);
+
     /// <summary>The go2rtc restreamer and the live-session limit.</summary>
     public static IServiceCollection AddCameraLiveView(this IServiceCollection services)
     {
@@ -57,6 +64,11 @@ public static class CameraEndpoints
             .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
+        // Over HTTP/2 (the HTTPS listener) browsers open WebSockets with an extended CONNECT, never a GET (RFC 8441).
+        cameras.MapMethods("/{id:guid}/camera/stream", [HttpMethods.Connect], StreamAsync)
+            .RequireAuthorization(AuthorizationPolicies.Viewer)
+            .ExcludeFromDescription();
+
         cameras.MapPost("/{id:guid}/camera/webrtc", WebRtcAsync)
             .WithName("exchangeCameraWebRtc")
             .WithSummary("WebRTC live view: exchanges the browser's receive-only SDP offer for the restreamer's answer.")
@@ -83,6 +95,7 @@ public static class CameraEndpoints
         ICameraRestreamer restreamer,
         CameraLiveSessions sessions,
         IServiceScopeFactory scopes,
+        KnownSecrets secrets,
         TimeProvider time,
         CancellationToken cancellationToken)
     {
@@ -139,8 +152,21 @@ public static class CameraEndpoints
 
         using (upstream)
         {
-            using var client = await context.WebSockets.AcceptWebSocketAsync();
-            await CameraStreamRelay.RunAsync(client, upstream, session.IsValidAsync, IdentitySetup.SecurityStampValidationInterval, time, cancellationToken);
+            // Pings with a deadline: a browser that went away without closing (a phone put to sleep) frees its live-view
+            // slot and go2rtc consumer within a minute instead of holding them while the server's sends block.
+            using var client = await context.WebSockets.AcceptWebSocketAsync(new WebSocketAcceptContext
+            {
+                KeepAliveInterval = KeepAliveInterval,
+                KeepAliveTimeout = KeepAliveTimeout,
+            });
+            await CameraStreamRelay.RunAsync(
+                client,
+                upstream,
+                secrets.Redact,
+                session.IsValidAsync,
+                IdentitySetup.SecurityStampValidationInterval,
+                time,
+                cancellationToken);
         }
 
         return TypedResults.Empty;

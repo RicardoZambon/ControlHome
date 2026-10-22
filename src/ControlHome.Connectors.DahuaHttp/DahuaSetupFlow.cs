@@ -17,7 +17,8 @@ namespace ControlHome.Connectors.DahuaHttp;
 /// When the device refuses, a checklist step explains what to check for that answer (401: credentials, Compatibility
 /// authentication with MD5, the lockout after failed logins; 500: the authentication mode; 404: the CGI service; 403: IP
 /// filter or permission) and offers to try again or edit the settings. A refused login is never retried by the flow on its
-/// own: the user must ask again, not sooner than <see cref="DahuaRuntimeOptions.FlowAuthRetryCooldown"/>, and after
+/// own: the user must ask again, and the same values (whether through "Try again" or the form) are not sent sooner than
+/// <see cref="DahuaRuntimeOptions.FlowAuthRetryCooldown"/> after a refusal (corrected ones are tried at once); after
 /// <see cref="DahuaRuntimeOptions.FlowMaxAuthFailures"/> refusals the flow stops before the device locks this server out.
 /// A blank password keeps the stored one only for the same address, port and user.
 /// </para>
@@ -34,6 +35,7 @@ internal sealed class DahuaSetupFlow(DahuaHttpConnectorDescriptor descriptor, Da
     private string? _pendingPassword;
     private DahuaFailure? _lastFailure;
     private DateTimeOffset _lastAuthFailureAt;
+    private (string Host, int Port, string Username, string Password)? _refusedAttempt;
     private int _authFailures;
 
     public Task<FlowStep> StartAsync(FlowContext context, CancellationToken cancellationToken)
@@ -51,7 +53,7 @@ internal sealed class DahuaSetupFlow(DahuaHttpConnectorDescriptor descriptor, Da
         {
             case DeviceStep:
                 return await TestAsync(context, input, cancellationToken).ConfigureAwait(false);
-            case ChecklistStep when _lastFailure is { } failure:
+            case ChecklistStep when _lastFailure is not null:
                 var choice = input.ValueKind == JsonValueKind.Object && input.TryGetProperty("choice", out var c) && c.ValueKind == JsonValueKind.String
                     ? c.GetString()
                     : null;
@@ -65,12 +67,7 @@ internal sealed class DahuaSetupFlow(DahuaHttpConnectorDescriptor descriptor, Da
                     return new AbortStep("unknown_choice", new LocalizedText("Unknown choice.", "Opção desconhecida."));
                 }
 
-                var wait = failure == DahuaFailure.Unauthorized ? _lastAuthFailureAt + options.FlowAuthRetryCooldown - context.Time.GetUtcNow() : TimeSpan.Zero;
-                if (wait > TimeSpan.Zero)
-                {
-                    return Checklist(failure, wait);
-                }
-
+                // The same values again: TestAsync holds a refused login back until the cooldown has passed.
                 return await TestAsync(context, _pendingValues, _pendingPassword, cancellationToken).ConfigureAwait(false);
             default:
                 return new AbortStep("unknown_step", new LocalizedText("This step is not part of the flow.", "Esta etapa não faz parte do fluxo."));
@@ -129,6 +126,15 @@ internal sealed class DahuaSetupFlow(DahuaHttpConnectorDescriptor descriptor, Da
             });
         }
 
+        // A refused login is not sent again with nothing changed (a double click, "Change the settings" and back) before
+        // the cooldown: each refusal counts towards the device's lockout. Corrected values are tried at once.
+        var attempt = (settings.Host.ToUpperInvariant(), settings.Port, settings.Username, password);
+        if (_refusedAttempt == attempt && _lastAuthFailureAt + options.FlowAuthRetryCooldown - context.Time.GetUtcNow() is var wait && wait > TimeSpan.Zero)
+        {
+            _lastFailure = DahuaFailure.Unauthorized;
+            return Checklist(DahuaFailure.Unauthorized, wait);
+        }
+
         _pendingValues = values;
         _pendingPassword = givenPassword;
         using var client = clients(new DahuaConnection(settings.BaseUri, settings.Username, password, context.Time));
@@ -174,6 +180,7 @@ internal sealed class DahuaSetupFlow(DahuaHttpConnectorDescriptor descriptor, Da
             {
                 _authFailures++;
                 _lastAuthFailureAt = context.Time.GetUtcNow();
+                _refusedAttempt = attempt;
                 if (_authFailures >= options.FlowMaxAuthFailures)
                 {
                     return new AbortStep(

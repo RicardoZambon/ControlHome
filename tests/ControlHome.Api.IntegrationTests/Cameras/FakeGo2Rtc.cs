@@ -20,8 +20,8 @@ public sealed record Go2RtcRequest(string Method, string Path, string Query, str
 /// <summary>
 /// A stand-in for the go2rtc sidecar on a loopback Kestrel port, recording every request (so tests can prove nothing but
 /// its three viewer paths is ever used): <c>PATCH /api/streams</c> → 200, <c>POST /api/webrtc</c> → a JSON SDP answer,
-/// <c>GET /api/ws</c> (WebSocket) → answers each text message with an <c>mse</c> message and a binary segment; anything
-/// else 404. Every request must carry the Basic credentials (<c>local_auth</c>), else 401.
+/// <c>GET /api/ws</c> (WebSocket) → answers each text message with an <c>mse</c> message and a binary segment (or, for a
+/// message carrying <see cref="QuoteSourceValue"/>, an error quoting the stream's credentials); anything else 404. Every request must carry the Basic credentials (<c>local_auth</c>), else 401.
 /// </summary>
 public sealed class FakeGo2Rtc : IAsyncDisposable
 {
@@ -29,6 +29,9 @@ public sealed class FakeGo2Rtc : IAsyncDisposable
     // Random per run: nothing secret-looking in the repository.
     public static readonly string Password = Guid.NewGuid().ToString("N");
     public const string Answer = "v=0\r\no=- 1 1 IN IP4 192.0.2.5\r\ns=-\r\nt=0 0\r\n";
+
+    /// <summary>A viewer message value that makes the fake answer with an error quoting the stream's credentials.</summary>
+    public const string QuoteSourceValue = "quote-the-source";
 
     private static readonly byte[] _segment = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70];
 
@@ -98,7 +101,7 @@ public sealed class FakeGo2Rtc : IAsyncDisposable
             case ("GET", "/api/ws") when context.WebSockets.IsWebSocketRequest:
                 using (var socket = await context.WebSockets.AcceptWebSocketAsync())
                 {
-                    await EchoAsync(socket, context.RequestAborted);
+                    await EchoAsync(socket, request.Query["src"].ToString(), context.RequestAborted);
                 }
 
                 return;
@@ -108,7 +111,14 @@ public sealed class FakeGo2Rtc : IAsyncDisposable
         }
     }
 
-    private async Task EchoAsync(WebSocket socket, CancellationToken cancellationToken)
+    /// <summary>"user:password@host" of the source last registered for <paramref name="stream"/>.</summary>
+    private string LastSourceCredentials(string? stream)
+    {
+        var source = Requests.LastOrDefault(r => r.Method == "PATCH" && r.Param("name") == stream)?.Param("src");
+        return Uri.TryCreate(source, UriKind.Absolute, out var uri) ? $"{uri.UserInfo}@{uri.Host}" : "unknown";
+    }
+
+    private async Task EchoAsync(WebSocket socket, string? stream, CancellationToken cancellationToken)
     {
         var buffer = new byte[64 * 1024];
         try
@@ -122,7 +132,15 @@ public sealed class FakeGo2Rtc : IAsyncDisposable
                     return;
                 }
 
-                SocketMessages.Enqueue(Encoding.UTF8.GetString(buffer, 0, result.Count));
+                var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                SocketMessages.Enqueue(message);
+                if (message.Contains(QuoteSourceValue, StringComparison.Ordinal))
+                {
+                    // Like an error that quotes the camera's credentials (go2rtc itself strips URL user info).
+                    await socket.SendAsync(Encoding.UTF8.GetBytes($$"""{"type":"error","value":"webrtc/candidate: streams: {{LastSourceCredentials(stream)}}: wrong user/pass"}"""), WebSocketMessageType.Text, true, cancellationToken);
+                    continue;
+                }
+
                 await socket.SendAsync("""{"type":"mse","value":"video/mp4; codecs=\"avc1.640029\""}"""u8.ToArray(), WebSocketMessageType.Text, true, cancellationToken);
                 await socket.SendAsync(_segment, WebSocketMessageType.Binary, true, cancellationToken);
             }

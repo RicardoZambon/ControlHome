@@ -3,7 +3,6 @@ using ControlHome.Application.Abstractions;
 using ControlHome.Application.Common;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Domain.Capabilities;
-using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -60,51 +59,9 @@ public static class CameraStreamNames
         $"ch_{endpointId:N}_{(quality == CameraStreamQuality.Sub ? "sub" : "main")}";
 }
 
-/// <summary>The stream qualities as the API spells them.</summary>
-public static class CameraStreamQualities
-{
-    public const string Main = "main";
-    public const string Sub = "sub";
-
-    /// <summary><c>main</c> (also when omitted) or <c>sub</c>; anything else is <c>null</c>.</summary>
-    public static CameraStreamQuality? Parse(string? value) => value switch
-    {
-        null or "" or Main => CameraStreamQuality.Main,
-        Sub => CameraStreamQuality.Sub,
-        _ => null,
-    };
-}
-
-/// <summary>A WebRTC offer for a camera's live view (<c>POST /api/endpoints/{id}/camera/webrtc</c>).</summary>
-/// <param name="Sdp">The browser's SDP offer; every media section must be receive-only (<c>a=recvonly</c>).</param>
-/// <param name="Quality"><c>main</c> (default) or <c>sub</c> (the lighter extra stream, for tiles and phones).</param>
-public sealed record CameraWebRtcOfferRequest(string Sdp, string? Quality);
-
-/// <summary>The restreamer's SDP answer (with its ICE candidates).</summary>
-public sealed record CameraWebRtcAnswerDto(string Sdp);
-
 /// <summary>A registered live stream, ready to be relayed.</summary>
 /// <param name="StreamName">The restreamer's opaque name for it (<see cref="CameraStreamNames"/>).</param>
 public sealed record CameraLiveStream(string StreamName);
-
-public sealed class CameraWebRtcOfferRequestValidator : AbstractValidator<CameraWebRtcOfferRequest>
-{
-    public const int MaxSdpLength = 64 * 1024;
-
-    public CameraWebRtcOfferRequestValidator()
-    {
-        RuleFor(x => x.Sdp)
-            .NotEmpty()
-            .MaximumLength(MaxSdpLength)
-            .Must(sdp => sdp is not null && sdp.StartsWith("v=0", StringComparison.Ordinal))
-            .WithMessage("'{PropertyName}' must be an SDP offer (starting with v=0).")
-            .Must(sdp => sdp is null || SdpOffers.IsReceiveOnly(sdp))
-            .WithMessage("'{PropertyName}' must only receive media: every audio/video section recvonly (no sending, no data channels).");
-        RuleFor(x => x.Quality)
-            .Must(quality => CameraStreamQualities.Parse(quality) is not null)
-            .WithMessage("'{PropertyName}' must be main or sub.");
-    }
-}
 
 /// <summary>Checks on browser SDP offers for camera viewing.</summary>
 public static class SdpOffers
@@ -115,7 +72,8 @@ public static class SdpOffers
     /// Whether every media section of <paramref name="sdp"/> is audio or video that only receives (<c>recvonly</c> or
     /// <c>inactive</c>, from the media section or else the session level; no direction means <c>sendrecv</c>). Anything
     /// that would send media to the restreamer (publishing into a camera's stream, two-way audio) or open a data channel
-    /// is refused.
+    /// is refused, and so is a section (or session) naming more than one direction: parsers disagree on which one counts
+    /// (go2rtc's pion takes the first).
     /// </summary>
     public static bool IsReceiveOnly(string sdp)
     {
@@ -144,6 +102,11 @@ public static class SdpOffers
             }
             else if (line.StartsWith("a=", StringComparison.Ordinal) && _directions.Contains(line[2..], StringComparer.Ordinal))
             {
+                if ((media is null ? session : direction) is not null)
+                {
+                    return false;
+                }
+
                 if (media is null)
                 {
                     session = line[2..];

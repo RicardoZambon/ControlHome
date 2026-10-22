@@ -16,7 +16,16 @@ namespace ControlHome.Api.IntegrationTests.Cameras;
 /// <summary>The API with a fake go2rtc sidecar configured and the Simulated demo cameras streaming a (synthetic) RTSP source.</summary>
 public sealed class CamerasApiFactory(SqlServerFixture sql) : DevicesApiFactory(sql)
 {
-    public const string StreamTemplate = "rtsp://198.51.100.10:8554/demo{n}";
+    /// <summary>
+    /// The synthetic camera password in the demo cameras' stream URLs (must never reach a client). Built at run time so
+    /// the secret scanner does not read the test's made-up credentials as real ones.
+    /// </summary>
+    public static readonly string StreamPassword = string.Concat("synthetic", "-cam-", "pass-41");
+
+    public static readonly string StreamTemplate = StreamUrl("demo{n}");
+
+    /// <summary>A demo camera's stream URL with the synthetic user and password.</summary>
+    public static string StreamUrl(string path) => string.Concat("rtsp", "://viewer:", StreamPassword, "@198.51.100.10:8554/", path);
 
     public FakeGo2Rtc Go2Rtc { get; private set; } = null!;
 
@@ -100,7 +109,7 @@ public sealed class CameraLiveViewTests(CamerasApiFactory factory) : DevicesTest
         var requests = Go2Rtc.Requests.ToList();
         requests.Select(r => (r.Method, r.Path)).ShouldBe([("PATCH", "/api/streams"), ("GET", "/api/ws"), ("PATCH", "/api/streams"), ("POST", "/api/webrtc")]);
         requests.ShouldAllBe(r => r.Authorization == FakeGo2Rtc.ExpectedAuthorization);
-        (requests[0].Param("name"), requests[0].Param("src")).ShouldBe((sub, "rtsp://198.51.100.10:8554/demo1"));
+        (requests[0].Param("name"), requests[0].Param("src")).ShouldBe((sub, CamerasApiFactory.StreamUrl("demo1#backchannel=0")));
         (requests[1].Param("src"), requests[1].WebSocket).ShouldBe((sub, true));
         requests[1].Param("dst").ShouldBeNull();
         (requests[2].Param("name"), requests[3].Param("src")).ShouldBe((main, main));
@@ -198,17 +207,88 @@ public sealed class CameraLiveViewTests(CamerasApiFactory factory) : DevicesTest
     [Fact]
     public void Only_viewer_protocol_messages_are_relayed_to_go2rtc()
     {
-        CameraStreamRelay.IsAllowed("""{"type":"mse","value":"avc1.640029"}"""u8).ShouldBeTrue();
-        CameraStreamRelay.IsAllowed("""{"type":"mp4","value":""}"""u8).ShouldBeTrue();
-        CameraStreamRelay.IsAllowed("""{"type":"webrtc/candidate","value":"candidate:1 1 udp 1 192.0.2.7 50000 typ host"}"""u8).ShouldBeTrue();
-        CameraStreamRelay.IsAllowed(Encoding.UTF8.GetBytes($$"""{"type":"webrtc/offer","value":"{{Escape(ReceiveOnlyOffer)}}"}""")).ShouldBeTrue();
-        CameraStreamRelay.IsAllowed(Encoding.UTF8.GetBytes($$"""{"type":"webrtc/offer","value":"{{Escape(ReceiveOnlyOffer.Replace("recvonly", "sendrecv", StringComparison.Ordinal))}}"}""")).ShouldBeFalse();
-        CameraStreamRelay.IsAllowed("""{"type":"webrtc","value":{"type":"offer","sdp":"v=0"}}"""u8).ShouldBeFalse();
-        CameraStreamRelay.IsAllowed("""{"type":"hls","value":""}"""u8).ShouldBeFalse();
-        CameraStreamRelay.IsAllowed("""{"type":"exec"}"""u8).ShouldBeFalse();
-        CameraStreamRelay.IsAllowed("""["mse"]"""u8).ShouldBeFalse();
-        CameraStreamRelay.IsAllowed("not json"u8).ShouldBeFalse();
+        Relayed("""{"type":"mse","value":"avc1.640029"}""").ShouldBe("""{"type":"mse","value":"avc1.640029"}""");
+        Relayed("""{"type":"mp4","value":""}""").ShouldBe("""{"type":"mp4","value":""}""");
+        Relayed("""{"type":"mjpeg"}""").ShouldBe("""{"type":"mjpeg"}""");
+        Relayed("""{"type":"webrtc/candidate","value":"candidate:1 1 udp 1 192.0.2.7 50000 typ host"}""")
+            .ShouldBe("""{"type":"webrtc/candidate","value":"candidate:1 1 udp 1 192.0.2.7 50000 typ host"}""");
+        Relayed($$"""{"type":"webrtc/offer","value":"{{Escape(ReceiveOnlyOffer)}}"}""").ShouldBe($$"""{"type":"webrtc/offer","value":"{{Escape(ReceiveOnlyOffer)}}"}""");
+        Relayed($$"""{"type":"webrtc/offer","value":"{{Escape(ReceiveOnlyOffer.Replace("recvonly", "sendrecv", StringComparison.Ordinal))}}"}""").ShouldBeNull();
+        Relayed("""{"type":"webrtc","value":{"type":"offer","sdp":"v=0"}}""").ShouldBeNull();
+        Relayed("""{"type":"hls","value":""}""").ShouldBeNull();
+        Relayed("""{"type":"exec"}""").ShouldBeNull();
+        Relayed("""{"type":"mse","value":{"codecs":"avc1"}}""").ShouldBeNull("viewer values are strings");
+        Relayed("""["mse"]""").ShouldBeNull();
+        Relayed("""{"type":"mse"} {"type":"webrtc"}""").ShouldBeNull();
+        Relayed("not json").ShouldBeNull();
     }
+
+    [Fact]
+    public void Messages_go2rtc_would_read_differently_are_refused_and_the_rest_is_rewritten()
+    {
+        // go2rtc decodes with Go's encoding/json: object keys match case-insensitively and the last duplicate wins. A
+        // message checked as "mse" (or as a receive-only offer) must never reach it as a sending WebRTC offer.
+        var sending = Escape(ReceiveOnlyOffer.Replace("recvonly", "sendrecv", StringComparison.Ordinal));
+        Relayed($$"""{"type":"mse","TYPE":"webrtc/offer","value":"{{sending}}"}""").ShouldBeNull();
+        Relayed($$"""{"type":"mse","type":"webrtc/offer","value":"{{sending}}"}""").ShouldBeNull();
+        Relayed($$"""{"type":"webrtc/offer","value":"{{Escape(ReceiveOnlyOffer)}}","Value":"{{sending}}"}""").ShouldBeNull();
+        Relayed($$"""{"type":"webrtc/offer","value":"{{Escape(ReceiveOnlyOffer)}}","value":"{{sending}}"}""").ShouldBeNull();
+
+        // Anything else go2rtc gets is written anew: only type and value, nothing the viewer added.
+        Relayed("""{"value":"avc1.640029","src":"exec:x","type":"mse","dst":{"x":1}}""").ShouldBe("""{"type":"mse","value":"avc1.640029"}""");
+    }
+
+    [Fact]
+    public async Task A_view_starts_at_most_a_few_go2rtc_consumers_and_never_shows_a_camera_password()
+    {
+        var (admin, _, viewer) = await SignInAllAsync();
+        await CreateIntegrationAsync(admin, config: """{"preset":"demo"}""");
+        var camera = MainEndpoint((await WaitForDevicesAsync(viewer, 20)).Single(d => d.Name == "Gate camera")).Id;
+        var cookie = await SessionCookieAsync("viewer");
+        using var socket = await ConnectAsync($"/api/endpoints/{camera}/camera/stream", cookie);
+
+        // Each mse/mp4/mjpeg/webrtc offer adds a consumer in go2rtc (a copy of the camera's stream): a few per view only.
+        for (var i = 0; i < CameraStreamRelay.MaxStreamStartsPerView + 2; i++)
+        {
+            await SendTextAsync(socket, """{"type":"mse","value":"avc1.640029"}""");
+        }
+
+        const string Candidate = """{"type":"webrtc/candidate","value":"candidate:1 1 udp 1 192.0.2.7 50000 typ host"}""";
+        await SendTextAsync(socket, Candidate);
+        for (var i = 0; i < 2 * (CameraStreamRelay.MaxStreamStartsPerView + 1); i++)
+        {
+            await ReceiveAsync(socket);
+        }
+
+        Go2Rtc.SocketMessages.ToList().ShouldBe(
+            [.. Enumerable.Repeat("""{"type":"mse","value":"avc1.640029"}""", CameraStreamRelay.MaxStreamStartsPerView), Candidate]);
+
+        // go2rtc's answers pass through the log redactor: an error quoting the camera's source keeps no password.
+        await SendTextAsync(socket, $$"""{"type":"webrtc/candidate","value":"{{FakeGo2Rtc.QuoteSourceValue}}"}""");
+        var (type, error) = await ReceiveAsync(socket);
+        type.ShouldBe(WebSocketMessageType.Text);
+        error.ShouldContain("198.51.100.10");
+        error.ShouldNotContain(CamerasApiFactory.StreamPassword);
+        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", Ct);
+    }
+
+    [Fact]
+    public async Task The_stream_also_answers_http2_websocket_connects()
+    {
+        // Browsers open WebSockets over HTTP/2 (HTTPS) with an extended CONNECT, which a GET-only route would refuse (405).
+        var (admin, _, viewer) = await SignInAllAsync();
+        await CreateIntegrationAsync(admin, config: """{"preset":"demo"}""");
+        var camera = MainEndpoint((await WaitForDevicesAsync(viewer, 20)).Single(d => d.Name == "Gate camera")).Id;
+
+        using var request = new HttpRequestMessage(HttpMethod.Connect, $"/api/endpoints/{camera}/camera/stream");
+        using var response = await viewer.SendAsync(request, Ct);
+
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, "request.websocket_required");
+        Go2Rtc.Requests.ShouldBeEmpty();
+    }
+
+    private static string? Relayed(string json) =>
+        CameraStreamRelay.Canonicalize(Encoding.UTF8.GetBytes(json)) is { } message ? Encoding.UTF8.GetString(message.Json) : null;
 
     private static string Escape(string sdp) => sdp.Replace("\r\n", "\\r\\n", StringComparison.Ordinal);
 

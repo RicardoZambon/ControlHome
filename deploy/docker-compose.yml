@@ -71,7 +71,11 @@ services:
           echo "go2rtc: set GO2RTC_API_USERNAME and a random GO2RTC_API_PASSWORD (16+ characters) in deploy/.env" >&2
           exit 1
         fi
-        [ -n "$$CONTROLHOME_LAN_IP" ] || echo "go2rtc: CONTROLHOME_LAN_IP is not set; WebRTC may not reach browsers (MSE still works)" >&2
+        if [ -z "$$CONTROLHOME_LAN_IP" ]; then
+          echo "go2rtc: CONTROLHOME_LAN_IP is not set; WebRTC may not reach browsers (MSE still works)" >&2
+          # Unset, not empty: go2rtc.yaml's default applies instead of a candidate without an address (":8555").
+          unset CONTROLHOME_LAN_IP
+        fi
         exec go2rtc -config /config/go2rtc.yaml
     volumes:
       - ./go2rtc.yaml:/config/go2rtc.yaml:ro

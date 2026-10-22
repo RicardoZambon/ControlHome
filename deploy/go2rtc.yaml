@@ -43,5 +43,8 @@ exec:
   allow_paths: []
 
 log:
-  # Keep it at info: trace levels print request URLs, and stream sources carry camera credentials.
+  # Keep it at info: trace and debug print request URLs and stream sources, which carry camera credentials. go2rtc masks
+  # only the values of this file's ${VAR}s, not the sources ControlHome registers at runtime.
   level: info
+  # The streams module logs a broken stream's source URL (camera user and password) as a warning: errors only for it.
+  streams: error

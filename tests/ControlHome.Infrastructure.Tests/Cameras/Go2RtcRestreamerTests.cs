@@ -55,7 +55,8 @@ public sealed class Go2RtcRestreamerTests : IDisposable
         request.Method.ShouldBe("PATCH", "PUT would also write the stream into go2rtc.yaml");
         request.Path.ShouldBe("/api/streams");
         request.Query!["name"].ShouldHaveSingleItem().ShouldBe("ch_0123abcd_main");
-        request.Query!["src"].ShouldHaveSingleItem().ShouldBe(_camera);
+        // go2rtc's RTSP client asks cameras for a back channel (two-way audio) unless told not to: never, here.
+        request.Query!["src"].ShouldHaveSingleItem().ShouldBe(_camera + "#backchannel=0");
         request.Headers!["Authorization"].ShouldHaveSingleItem().ShouldBe("Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{User}:{ApiPassword}")));
 
         // From now on every log line masks the camera URL and its password, escaped or not.

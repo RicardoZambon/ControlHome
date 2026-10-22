@@ -68,9 +68,12 @@ cause for that answer and offers *Try again* or *Change the settings*:
 
 **Lockout:** Intelbras/Dahua devices lock an address out after a few failed logins (3–5 depending on the model and its
 login-failure setting, for 5 to 30 minutes). The flow never retries on its own: *Try again* is accepted at most every
-30 s, and after 3 refused logins the flow stops and asks you to wait 30 minutes. A running integration that gets a
-`401` waits **30 minutes** before trying again (status *Needs reauthorization*): run the integration's flow again with the
-right password instead of waiting.
+30 s for the same values (corrected values are tried at once), and after 3 refused logins the flow stops and asks you
+to wait 30 minutes. A running integration that gets a `401` — on the event stream, a still, a refresh or a command —
+waits **30 minutes** before it logs in again (status *Needs reauthorization*): until then nothing reaches the device
+with the refused password, not the event stream's reconnects, not stills, door releases (refused at once: "the door was
+not released") or live view (go2rtc would log in over RTSP with the same user). Run the integration's flow again with
+the right password instead of waiting.
 
 To change the password or the address later, open the integration's flow again: a blank password keeps the stored one
 only while address, port and user stay the same (it is never sent to another device).
@@ -78,7 +81,8 @@ only while address, port and user stay the same (it is never sent to another dev
 ## How it works
 
 - **HTTP Digest** through .NET's `SocketsHttpHandler` with a `CredentialCache` for `Digest` only, no proxy, no
-  redirects. Every request is answered with a challenge first, then sent once with the Digest response.
+  redirects (MD5 or SHA-256, `qop=auth`). Every request is answered with a challenge first, then sent once with the
+  Digest response. Door releases are the exception (see below): they never go through `SocketsHttpHandler`.
 - **Startup:** identification, `configManager.cgi?action=getConfig&name=ChannelTitle` (channel names),
   `name=VideoAnalyseRule` (enabled line-crossing / intrusion rules), `alarm.cgi?action=getInSlots` (alarm inputs). The
   devices are reported as one full inventory (a channel no longer imported is orphaned, never deleted).
@@ -108,12 +112,18 @@ only while address, port and user stay the same (it is never sent to another dev
   channel numbering is probed once (1, else 0, depending on the firmware); recorder channels are always 1-based.
 - **Door release** (`doorOpener.open`, safety-critical: PIN step-up in the UI, never from Viewers):
   `accessControl.cgi?action=openDoor&channel=1&UserID=<user id>&Type=Remote`. **At most once:** an idempotency key is
-  required and a repeated key never reaches the device; the request is sent **once** — never retried, never hedged —
-  on connections that are never reused (so the HTTP stack cannot re-send it after a dropped keep-alive connection).
-  A late answer is reported as failed (`timeout`: "the door may or may not have opened") and is not repeated.
+  required and a repeated key never reaches the device; the request is sent **once** — never retried, never hedged.
+  .NET's `SocketsHttpHandler` silently re-sends a request without a body (up to three more times) when the server
+  closes the connection before answering, even on a new connection, so a terminal that opened the door and then
+  dropped the connection would open it again: the release is written by a small one-shot HTTP/1.1 client instead (the
+  Digest challenge on one connection, then the authenticated request exactly once on a new one, `Connection: close`).
+  A late answer or a connection dropped after sending is reported as failed (`timeout`: "the door may or may not have
+  opened") and is not repeated; a terminal that cannot be reached, refuses the login or offers only Basic auth gets
+  nothing ("the door was not released").
 - **XPE 3200 relay** (only with `Connectors:DahuaHttp:XpeRelay=true`, env `Connectors__DahuaHttp__XpeRelay=true`):
-  `GET /fcgi/do?action=OpenDoor&UserName=…&Password=…&DoorNum=1` once, no Digest (the station's own scheme puts the
-  credentials in the URL, so it is never logged). **Untested on real hardware**: the URL comes from a second-hand
+  `GET /fcgi/do?action=OpenDoor&UserName=…&Password=…&DoorNum=1` once (the same one-shot client), no Digest (the
+  station's own scheme puts the credentials in the URL, so it is never logged). The station has no event stream: it is
+  probed (a plain `GET /`, no credentials) every minute to keep its availability current. **Untested on real hardware**: the URL comes from a second-hand
   description of the station's manual ("Acionar Relé por HTTP" must be enabled on the station). Setup only checks that
   the address answers HTTP; it cannot test the relay without opening the door.
 
@@ -137,13 +147,23 @@ camera's credentials stay on the server:
   where every process on the host is "local" with host networking); `allow_paths` registers only `/api/streams`,
   `/api/ws` and `/api/webrtc` (no web UI, no `/api/config`, `/api/exit`, …); the RTSP server is off (`rtsp.listen: ""`);
   only the modules `api, ws, rtsp, webrtc, mp4` load (no `exec`, `ffmpeg`, `echo`, `expr`; `exec.allow_paths: []`
-  anyway).
+  anyway). go2rtc's own log masks only its config's `${VAR}` values, and its `streams` module logs a broken stream's
+  source URL (camera password included) as a warning, so that module logs errors only (`log.streams: error`); never
+  raise go2rtc's log level to debug or trace.
 - The relay forwards to go2rtc only the viewer messages `mse`, `mp4`, `mjpeg`, `webrtc/offer` (receive-only SDP) and
-  `webrtc/candidate`; any other message is dropped, binary or oversized messages close the socket. WebRTC offers that
-  would *send* media (publishing into a camera's stream, two-way audio) or open data channels are refused. A client's
-  own `src`/`dst` parameters are ignored. The session is re-checked every minute (a disabled or demoted user's view
-  closes), at most 32 views are open at once (`Cameras:Go2Rtc:MaxLiveSessions`) and one user starts at most 30 views
-  (WebSocket or WebRTC) a minute (`429 request.rate_limited`).
+  `webrtc/candidate`, each **rewritten** as `{"type":…,"value":"…"}` (go2rtc reads JSON with Go's case-insensitive,
+  last-duplicate-wins keys, so a message with `"type"` twice or a `"TYPE"` key is dropped rather than passed on); any
+  other message is dropped, binary or oversized messages close the socket, and one view starts at most 4 streams
+  (each `mse`/`mp4`/`mjpeg`/offer is a go2rtc consumer). WebRTC offers that would *send* media (publishing into a
+  camera's stream, two-way audio), name two directions in one section or open data channels are refused, and
+  sources are registered with `#backchannel=0`, so go2rtc never asks a camera for its speaker. A client's own
+  `src`/`dst` parameters are ignored. go2rtc's text messages other than signalling (codecs, SDP answers, ICE
+  candidates, passed as they are) go through the log redactor before they reach the browser (an error quoting the
+  camera's source keeps no password). The session is re-checked every minute (a disabled
+  or demoted user's view closes), the browser is pinged every 20 s (a socket that does not answer within 40 s is
+  closed, freeing its slot and go2rtc consumer), at most 32 views are open at once (`Cameras:Go2Rtc:MaxLiveSessions`)
+  and one user starts at most 30 views (WebSocket or WebRTC) a minute (`429 request.rate_limited`). The WebSocket is
+  served for HTTP/1.1 upgrades and HTTP/2 extended `CONNECT` (the HTTPS listener) alike.
 
 ### Turning it on
 
@@ -173,6 +193,9 @@ the file.
   listener are not implemented (the attach stream is the only event source).
 - VTO video door stations (DHIP on TCP 5000) are not supported.
 - go2rtc has no ffmpeg/transcoding in this setup: H.265-only cameras will not play in most browsers.
+- A WebRTC view negotiated with `POST …/camera/webrtc` runs directly between the browser and go2rtc once it is set
+  up: disabling the user does not cut it (it ends when the page closes). The WebSocket relay itself (MSE) closes within
+  a minute of the change.
 - Endpoints added by an event (an IVS rule or alarm input not announced at startup) are retired after a restart until
   their next event, unless the device announces them at startup.
 - The device's lockout policy is not read from the device; ControlHome simply never retries a refused login quickly.
@@ -212,7 +235,9 @@ Run these with the owner's devices before the connector loses its *Experimental*
 - [ ] Live view: tile (sub stream) and full screen (main stream) play in Chrome, Firefox and Safari/iOS over MSE and over
       WebRTC; a Viewer can watch; a disabled user's open view closes within a minute.
 - [ ] go2rtc: `curl http://127.0.0.1:1984/api/streams` without credentials is `401`; `/api/config` with credentials is
-      `404`; port 1984 is not reachable from another machine on the LAN; `go2rtc.yaml` on disk never contains a stream.
+      `404`; port 1984 is not reachable from another machine on the LAN; `go2rtc.yaml` on disk never contains a stream;
+      unplugging a camera while it streams leaves no camera password in `docker compose logs go2rtc`; a camera with a
+      speaker gets no back-channel (talk) session.
 - [ ] Access terminal (SS 3530/3532/5530…): door contact follows the real door; a card/face access shows `granted`, an
       unknown card `denied`; the remote release opens the door exactly once (PIN step-up), also when the network is
       slow; record the `UserID` the terminal expects.

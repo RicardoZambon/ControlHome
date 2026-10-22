@@ -114,9 +114,13 @@ public sealed partial class Go2RtcRestreamer : ICameraRestreamer
         var baseUri = Base();
         CheckName(streamName);
         RegisterSecrets(source.Url);
+
+        // go2rtc's RTSP client asks the camera for a back channel (two-way audio into its speaker) unless the source says
+        // otherwise: viewers only ever watch.
+        var src = source.Url.Contains('#', StringComparison.Ordinal) ? source.Url : source.Url + "#backchannel=0";
         using var request = new HttpRequestMessage(
             HttpMethod.Patch,
-            new Uri(baseUri, $"api/streams?name={Uri.EscapeDataString(streamName)}&src={Uri.EscapeDataString(source.Url)}"));
+            new Uri(baseUri, $"api/streams?name={Uri.EscapeDataString(streamName)}&src={Uri.EscapeDataString(src)}"));
         using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {

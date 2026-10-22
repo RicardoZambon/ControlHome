@@ -55,8 +55,60 @@ internal sealed record DahuaRuntimeOptions(
     /// <summary>Failed logins one setup flow may cause before it gives up (the device's lockout is near).</summary>
     public int FlowMaxAuthFailures { get; init; } = 3;
 
+    /// <summary>How often an XPE door station (no event stream) is probed to keep its availability current.</summary>
+    public TimeSpan ProbeInterval { get; init; } = TimeSpan.FromMinutes(1);
+
     /// <summary>The largest still accepted from <c>snapshot.cgi</c>.</summary>
     public int MaxSnapshotBytes { get; init; } = 10 * 1024 * 1024;
+}
+
+/// <summary>
+/// The login lock of one device: after it refused the credentials (HTTP 401) nothing logs in again until the retry time
+/// (<see cref="DahuaRuntimeOptions.AuthRetryDelay"/>) — not the event stream's reconnects, not stills, refreshes, commands
+/// or live streams (go2rtc logs in over RTSP with the same user). Devices lock a client out after a few failed logins
+/// (often for 30 minutes), so every further try with refused credentials would only extend the lockout. Thread-safe.
+/// </summary>
+internal sealed class DahuaLoginGate(TimeProvider time, TimeSpan retryDelay)
+{
+    private readonly Lock _lock = new();
+    private DateTimeOffset? _until;
+
+    /// <summary>When logins may be tried again, or <c>null</c> when they may now.</summary>
+    public DateTimeOffset? BlockedUntil
+    {
+        get
+        {
+            lock (_lock)
+            {
+                if (_until is { } until && time.GetUtcNow() >= until)
+                {
+                    _until = null;
+                }
+
+                return _until;
+            }
+        }
+    }
+
+    /// <summary>The device refused the credentials now: logins wait until the returned time.</summary>
+    public DateTimeOffset Refused()
+    {
+        lock (_lock)
+        {
+            var until = time.GetUtcNow() + retryDelay;
+            _until = until;
+            return until;
+        }
+    }
+
+    /// <summary>The device accepted the credentials (the event stream opened).</summary>
+    public void Accepted()
+    {
+        lock (_lock)
+        {
+            _until = null;
+        }
+    }
 }
 
 /// <summary>

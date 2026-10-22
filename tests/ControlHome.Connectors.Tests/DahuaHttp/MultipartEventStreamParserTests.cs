@@ -106,6 +106,78 @@ public sealed class MultipartEventStreamParserTests
     }
 
     [Fact]
+    public void A_boundary_declared_with_dashes_also_matches_rfc_delimiters()
+    {
+        // Declared "--myboundary": firmware sends "--myboundary" lines, but RFC 2046 makes the delimiter "----myboundary".
+        var stream = "----myboundary\r\nContent-Type: text/plain\r\n\r\nCode=VideoMotion;action=Start;index=0\r\n----myboundary\r\nHeartbeat\r\n";
+        var parser = new MultipartEventStreamParser("--myboundary");
+
+        var parts = new List<string>(parser.Feed(Encoding.ASCII.GetBytes(stream)));
+        parts.AddRange(parser.Complete());
+
+        parts.ShouldBe(["Code=VideoMotion;action=Start;index=0", "Heartbeat"]);
+    }
+
+    [Fact]
+    public void Multi_line_data_counted_short_still_comes_out_whole_without_waiting()
+    {
+        // Content-Length counted as if the lines ended in LF while the firmware sends CRLF: short by a byte per line, so
+        // the count ends inside the data object. The part must keep the rest of the object (else the data is lost).
+        var body = "Code=AccessControl;action=Pulse;index=0;data={\r\n   \"ErrorCode\" : 0,\r\n   \"Status\" : 1,\r\n   \"UserID\" : \"101\"\r\n}\r\n";
+        var length = Encoding.UTF8.GetByteCount(body.Replace("\r\n", "\n", StringComparison.Ordinal));
+        var stream = $"--myboundary\r\nContent-Type: text/plain\r\nContent-Length: {length}\r\n\r\n{body}\r\n";
+        var parser = new MultipartEventStreamParser("myboundary");
+
+        var part = parser.Feed(Encoding.ASCII.GetBytes(stream)).ShouldHaveSingleItem();
+
+        var e = DahuaEventParser.Parse(part).ShouldHaveSingleItem();
+        e.DataInteger("Status").ShouldBe(1);
+        e.DataText("UserID").ShouldBe("101");
+    }
+
+    [Fact]
+    public void Braces_inside_strings_do_not_hold_a_counted_part_back()
+    {
+        var body = "Code=CrossLineDetection;action=Pulse;index=0;data={\r\n   \"Name\" : \"Linha {1\"\r\n}\r\n\r\n";
+        var stream = $"--myboundary\r\nContent-Length: {Encoding.UTF8.GetByteCount(body)}\r\n\r\n{body}";
+        var parser = new MultipartEventStreamParser("myboundary");
+
+        var part = parser.Feed(Encoding.ASCII.GetBytes(stream)).ShouldHaveSingleItem();
+
+        DahuaEventParser.Parse(part).ShouldHaveSingleItem().DataText("Name").ShouldBe("Linha {1");
+    }
+
+    [Fact]
+    public void Malformed_part_headers_are_tolerated()
+    {
+        var stream = "--myboundary\r\nContent-Length: lots\r\nX-Odd : : value\r\n\r\nCode=VideoMotion;action=Start;index=0\r\n--myboundary\r\nContent-Length: -5\r\n\r\nHeartbeat\r\n--myboundary\r\n";
+        var parser = new MultipartEventStreamParser("myboundary");
+
+        var parts = new List<string>(parser.Feed(Encoding.ASCII.GetBytes(stream)));
+        parts.AddRange(parser.Complete());
+
+        parts.ShouldBe(["Code=VideoMotion;action=Start;index=0", "Heartbeat"]);
+    }
+
+    [Fact]
+    public void Every_split_of_the_stream_gives_the_same_parts()
+    {
+        var bytes = DahuaFixtures.Multipart("event-stream-access.txt");
+        var whole = new MultipartEventStreamParser(DahuaFixtures.Boundary);
+        var expected = new List<string>(whole.Feed(bytes));
+        expected.AddRange(whole.Complete());
+
+        for (var split = 1; split < bytes.Length; split += 7)
+        {
+            var parser = new MultipartEventStreamParser(DahuaFixtures.Boundary);
+            var parts = new List<string>(parser.Feed(bytes.AsSpan(0, split)));
+            parts.AddRange(parser.Feed(bytes.AsSpan(split)));
+            parts.AddRange(parser.Complete());
+            parts.ShouldBe(expected, $"split at {split}");
+        }
+    }
+
+    [Fact]
     public void An_oversized_part_is_skipped_and_the_stream_recovers()
     {
         var parser = new MultipartEventStreamParser("myboundary", maxPartBytes: 128);

@@ -107,6 +107,27 @@ public sealed class DahuaSetupFlowTests : IDisposable
         _device.Authenticated("/cgi-bin/magicBox.cgi", "getDeviceType").Count.ShouldBe(3);
     }
 
+    [Fact]
+    public async Task Resubmitting_refused_credentials_right_away_does_not_reach_the_device()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-10-21T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+        _device.RejectCredentials();
+        await using var flow = DahuaHarness.Factory().CreateSetupFlow()!;
+        await flow.StartAsync(Context(time), Ct);
+        (await flow.ContinueAsync(DahuaSetupFlow.DeviceStep, Input(), Ct)).ShouldBeOfType<ChooseStep>();
+        (await flow.ContinueAsync(DahuaSetupFlow.ChecklistStep, Choice("edit"), Ct)).ShouldBeOfType<FormStep>();
+
+        // "Change the settings", then the same values again at once (a double click, nothing corrected): not sent.
+        var tooSoon = (await flow.ContinueAsync(DahuaSetupFlow.DeviceStep, Input(), Ct)).ShouldBeOfType<ChooseStep>();
+        tooSoon.Description!.En.ShouldContain("Wait 30 s");
+        _device.Authenticated("/cgi-bin/magicBox.cgi", "getDeviceType").ShouldHaveSingleItem();
+
+        // A corrected password is tried at once.
+        var corrected = DahuaFixtures.Json($$"""{"host":"127.0.0.1","port":{{_device.Port}},"username":"{{FakeDahuaDevice.User}}","password":"another-synthetic-pass","kind":"auto"}""");
+        (await flow.ContinueAsync(DahuaSetupFlow.DeviceStep, corrected, Ct)).ShouldBeOfType<ChooseStep>();
+        _device.Authenticated("/cgi-bin/magicBox.cgi", "getDeviceType").Count.ShouldBe(2);
+    }
+
     [Theory]
     [InlineData(500, "Compatibility")]
     [InlineData(404, "CGI")]

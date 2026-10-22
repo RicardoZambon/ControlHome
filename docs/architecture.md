@@ -287,10 +287,14 @@ endpoints and orphaned devices are left out of the rooms.
   its runtime for the stream source (`ICameraStreamProvider`, the supervisor) and registers it with the restreamer
   (`ICameraRestreamer` = `Go2RtcRestreamer`, options `Cameras:Go2Rtc:Url/Username/Password`, off while unset) under an
   opaque name `ch_<endpoint id>_main|sub`. go2rtc is used through exactly three paths: `PATCH /api/streams` (in memory —
-  go2rtc writes `PUT`s into its config file, never `PATCH`es), `POST /api/webrtc` and the `api/ws` WebSocket, with Basic
-  credentials (`local_auth`). The Api serves `GET /api/endpoints/{id}/camera/stream` (WebSocket relay: restreamer frames
-  pass as is; from the browser only go2rtc's viewer messages `mse`/`mp4`/`mjpeg`/`webrtc/offer`/`webrtc/candidate`,
-  offers receive-only; the session re-checked every minute; `Cameras:Go2Rtc:MaxLiveSessions` = 32) and
+  go2rtc writes `PUT`s into its config file, never `PATCH`es; sources get `#backchannel=0`, so no camera speaker is
+  ever opened), `POST /api/webrtc` and the `api/ws` WebSocket, with Basic credentials (`local_auth`). The Api serves
+  `GET /api/endpoints/{id}/camera/stream` (also HTTP/2 extended `CONNECT`; WebSocket relay: restreamer binary frames
+  pass as is, its signalling text as is and any other text (errors) through the log redactor; from the browser only
+  go2rtc's viewer messages `mse`/`mp4`/`mjpeg`/`webrtc/offer`/`webrtc/candidate`, rewritten as `{type, value}`
+  because Go matches JSON keys case-insensitively, offers receive-only (one direction per section), at most 4 stream
+  starts per view; the session re-checked every minute;
+  pings every 20 s, 40 s to answer; `Cameras:Go2Rtc:MaxLiveSessions` = 32) and
   `POST /api/endpoints/{id}/camera/webrtc` (receive-only SDP offer → answer), both for Viewers; errors
   `cameras.no_stream`, `cameras.live_disabled`, `cameras.live_unavailable`, `cameras.live_busy`,
   `request.websocket_required`. The Simulated demo cameras stream `Simulated:CameraStreamSource` when it is set (a test
@@ -349,9 +353,12 @@ endpoints and orphaned devices are left out of the rooms.
   between user retries, at most 3). Runtime: one long-lived `eventManager.cgi?action=attach&codes=[All]&heartbeat=5`
   with a tolerant multipart parser and local filtering (VideoMotion, CrossLine/CrossRegionDetection, AlarmLocal,
   VideoLoss, AccessControl, DoorStatus), reconnect after 1 s → 5 min with ±20 % jitter (20 s without a heartbeat is a
-  dead stream), state read back after every reconnect (`getEventIndexes`, `getDoorStatus`); a 401 sets `NeedsReauth`
-  and waits 30 min. `doorOpener.open` sends one `accessControl.cgi?action=openDoor` (idempotency key, never retried, on
-  never-reused connections so the HTTP stack cannot re-send it); the XPE 3200 HTTP relay is behind
+  dead stream), state read back after every reconnect (`getEventIndexes`, `getDoorStatus`); a 401 anywhere (stream,
+  still, refresh, command) sets `NeedsReauth` and closes a login gate: nothing logs in again — no reconnect, still,
+  door release or RTSP source for go2rtc — for 30 min. `doorOpener.open` sends one `accessControl.cgi?action=openDoor`
+  (idempotency key, never retried) through `OneShotHttp`, a hand-written HTTP/1.1 GET with a hand-computed Digest
+  answer (`DigestChallenge`), never `SocketsHttpHandler`, which silently re-sends a bodiless request up to three times
+  when a server drops the connection before answering; the XPE 3200 HTTP relay is behind
   `Connectors:DahuaHttp:XpeRelay` (off, untested on hardware). Stills via `snapshot.cgi` (a camera's 0/1 channel base
   probed once), live streams `rtsp://…/cam/realmonitor?channel=N&subtype=0|1`.
 

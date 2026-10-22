@@ -145,6 +145,62 @@ public sealed class DahuaRuntimeTests : IDisposable
     }
 
     [Fact]
+    public async Task After_a_refused_login_nothing_else_reaches_the_device_until_the_retry_time()
+    {
+        // The password was changed on the device while ControlHome runs: every further login with the old one counts
+        // towards the device's lockout, so stills, refreshes, live streams (go2rtc logs in over RTSP) and reconnects all
+        // wait for the retry time — not only the event stream.
+        var time = new FakeTimeProvider(DateTimeOffset.Parse("2026-10-21T12:00:00Z", CultureInfo.InvariantCulture));
+        _device.Identity("VIP 1230 B G4");
+        _device.Answer("/cgi-bin/snapshot.cgi", null, ("channel", "1")).WithHeader("Content-Type", "image/jpeg").WithBody(DahuaFixtures.Jpeg);
+        _device.EventStream(DahuaFixtures.Part("Heartbeat"), once: true);
+        var runtime = Runtime("camera", DahuaHarness.FastOptions with { AuthRetryDelay = TimeSpan.FromMinutes(30) });
+        var context = new RecordingContext(time);
+        await using var run = DahuaHarness.Run(runtime, context);
+        await DahuaHarness.WaitUntilAsync(() => context.Statuses.Any(s => s.Status == IntegrationStatus.Degraded), "the first stream ended");
+        (await runtime.GetSnapshotAsync("SYNTH00000001", "main", Ct)).ShouldNotBeNull();
+
+        _device.RejectCredentials();
+        (await runtime.GetSnapshotAsync("SYNTH00000001", "main", Ct)).ShouldBeNull();
+        var before = _device.Requests.Count;
+
+        (await runtime.GetSnapshotAsync("SYNTH00000001", "main", Ct)).ShouldBeNull();
+        await runtime.RefreshAsync("SYNTH00000001", Ct);
+        var command = new DeviceCommandBatch("SYNTH00000001", [new DeviceCommand("main", CapabilityIds.Camera, "snapshot", DahuaFixtures.Json("{}"))], "still-1");
+        (await runtime.ExecuteAsync(command, Ct)).ShouldBeOfType<CommandOutcome.Rejected>();
+        (await runtime.GetStreamSourceAsync("SYNTH00000001", "main", CameraStreamQuality.Sub, Ct)).ShouldBeNull("go2rtc would log in with the refused password");
+        context.Statuses.Last().Status.ShouldBe(IntegrationStatus.NeedsReauth);
+
+        // The event stream's reconnect waits too (its back-off is long over after a minute).
+        time.Advance(TimeSpan.FromMinutes(1));
+        await Task.Delay(300, Ct);
+        _device.Authenticated("/cgi-bin/snapshot.cgi").Count.ShouldBe(2, "one still with the right password, one refused, nothing after");
+        _device.Requests.Count.ShouldBe(before, "no request at all reached the device after the refusal");
+
+        // Once the wait is over, one login is tried again.
+        time.Advance(TimeSpan.FromMinutes(30));
+        await DahuaHarness.WaitUntilAsync(() => _device.Authenticated("/cgi-bin/eventManager.cgi", "attach").Count == 2, "the stream is tried once more");
+    }
+
+    [Fact]
+    public async Task An_xpe_station_is_probed_again_and_goes_offline_when_it_stops_answering()
+    {
+        _device.Server.Given(WireMock.RequestBuilders.Request.Create().UsingGet().WithPath("/"))
+            .AtPriority(1)
+            .RespondWith(WireMock.ResponseBuilders.Response.Create().WithStatusCode(200).WithBody("<html></html>"));
+        var runtime = DahuaHarness.Factory(DahuaHarness.FastOptions with { ProbeInterval = TimeSpan.FromMilliseconds(100) }, xpeRelay: true)
+            .CreateRuntime(DahuaHarness.Instance(DahuaHarness.Config(_device.Port, "xpe")));
+        var context = new RecordingContext(TimeProvider.System);
+        await using var run = DahuaHarness.Run(runtime, context);
+        await DahuaHarness.WaitUntilAsync(() => _device.Requests.Count >= 3, "the station is probed repeatedly");
+        context.Availability.ShouldContain(a => a.Availability == Availability.Online);
+
+        _device.Server.Stop();
+        await DahuaHarness.WaitUntilAsync(() => context.Availability.Count > 0 && context.Availability[^1].Availability == Availability.Offline, "it goes offline");
+        _device.Requests.ShouldAllBe(r => FakeDahuaDevice.Header(r, "Authorization") == null, "a probe sends no credentials");
+    }
+
+    [Fact]
     public async Task An_unreachable_device_is_offline_and_retried_with_backoff()
     {
         var port = _device.Port;

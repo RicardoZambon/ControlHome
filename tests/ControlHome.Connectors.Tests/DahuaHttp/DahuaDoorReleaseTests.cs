@@ -1,6 +1,10 @@
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using ControlHome.Connectors.Abstractions;
 using ControlHome.Connectors.DahuaHttp;
+using ControlHome.Connectors.DahuaHttp.Protocol;
 using ControlHome.Domain.Capabilities;
 using ControlHome.Domain.Devices;
 using WireMock.RequestBuilders;
@@ -96,6 +100,57 @@ public sealed class DahuaDoorReleaseTests : IDisposable
     }
 
     [Fact]
+    public async Task After_refused_credentials_no_release_reaches_the_terminal_until_the_retry_time()
+    {
+        _device.Server.Given(Request.Create().UsingGet().WithPath(AccessCgi).WithParam("action", "openDoor").WithHeader("Authorization", "Digest *"))
+            .AtPriority(1)
+            .RespondWith(Response.Create().WithStatusCode(401).WithBody("Error\r\n"));
+        await using var run = await StartAsync();
+        (await run.Runtime.ExecuteAsync(Open("key-5"), Ct)).ShouldBeOfType<CommandOutcome.Rejected>().Code.ShouldBe(CommandRejectionCodes.Refused);
+
+        // Pressing the button again (a new key) must not count as another failed login on the terminal.
+        var again = (await run.Runtime.ExecuteAsync(Open("key-6"), Ct)).ShouldBeOfType<CommandOutcome.Rejected>();
+
+        again.Code.ShouldBe(CommandRejectionCodes.Refused);
+        again.Message.ShouldContain("not released");
+        _device.All(AccessCgi, "openDoor").Count.ShouldBe(2, "the first release's challenge and its refused login, nothing after");
+    }
+
+    [Fact]
+    public async Task A_connection_dropped_after_the_release_was_sent_is_never_sent_again()
+    {
+        // The terminal keeps the Digest challenge's connection open (keep-alive), reads the authenticated release and
+        // closes the connection without answering: it may have opened the door. An HTTP stack that had reused the
+        // keep-alive connection would silently send the release again on a new one.
+        await using var terminal = new DroppingTerminal();
+        using var client = new DahuaHttpClient(
+            new DahuaConnection(new Uri($"http://127.0.0.1:{terminal.Port}/"), FakeDahuaDevice.User, FakeDahuaDevice.Password, TimeProvider.System),
+            DahuaHarness.FastOptions);
+
+        var failure = await Should.ThrowAsync<DahuaHttpException>(() => client.OpenDoorAsync(1, "101", Ct));
+        await Task.Delay(TimeSpan.FromMilliseconds(500), Ct);
+
+        // Sent, then no answer: the door may have opened (never "not released"), and it was sent exactly once.
+        failure.Failure.ShouldBe(DahuaFailure.NoAnswer);
+        terminal.AuthenticatedRequests.ShouldBe(1);
+        terminal.Connections.ShouldBe(2, "the challenge and the release, each on its own connection");
+    }
+
+    [Fact]
+    public async Task A_terminal_offering_only_basic_auth_never_gets_the_password()
+    {
+        _device.Server.Given(Request.Create().UsingGet().WithPath(AccessCgi).WithParam("action", "openDoor"))
+            .AtPriority(1)
+            .RespondWith(Response.Create().WithStatusCode(401).WithHeader("WWW-Authenticate", "Basic realm=\"SS\"").WithBody("Error\r\n"));
+        await using var run = await StartAsync();
+
+        (await run.Runtime.ExecuteAsync(Open("key-8"), Ct)).ShouldBeOfType<CommandOutcome.Rejected>().Code.ShouldBe(CommandRejectionCodes.Refused);
+
+        var request = _device.All(AccessCgi, "openDoor").ShouldHaveSingleItem("the challenge only");
+        FakeDahuaDevice.Header(request, "Authorization").ShouldBeNull();
+    }
+
+    [Fact]
     public async Task A_release_needs_an_idempotency_key_and_a_door_endpoint()
     {
         _device.Answer(AccessCgi, "openDoor").WithBody("OK\r\n");
@@ -134,7 +189,95 @@ public sealed class DahuaDoorReleaseTests : IDisposable
         FakeDahuaDevice.Header(relay, "Authorization").ShouldBeNull();
     }
 
+    /// <summary>
+    /// A minimal HTTP/1.1 server on a raw socket: a request without credentials gets the Digest challenge and the
+    /// connection stays open for the next one; an authenticated request is counted and its connection dropped unanswered.
+    /// </summary>
+    private sealed class DroppingTerminal : IAsyncDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource _stop = new();
+        private readonly Task _accepting;
+        private int _authenticated;
+        private int _connections;
 
+        public DroppingTerminal()
+        {
+            _listener.Start();
+            _accepting = AcceptAsync();
+        }
+
+        public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
+
+        /// <summary>Requests that carried a valid Digest answer for the fake device's password.</summary>
+        public int AuthenticatedRequests => Volatile.Read(ref _authenticated);
+
+        public int Connections => Volatile.Read(ref _connections);
+
+        public async ValueTask DisposeAsync()
+        {
+            await _stop.CancelAsync();
+            _listener.Stop();
+            await _accepting.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            _stop.Dispose();
+        }
+
+        private async Task AcceptAsync()
+        {
+            while (!_stop.IsCancellationRequested)
+            {
+                var connection = await _listener.AcceptTcpClientAsync(_stop.Token);
+                Interlocked.Increment(ref _connections);
+                _ = ServeAsync(connection);
+            }
+        }
+
+        private async Task ServeAsync(TcpClient connection)
+        {
+            using (connection)
+            {
+                var stream = connection.GetStream();
+                using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+                try
+                {
+                    while (true)
+                    {
+                        var headers = new List<string>();
+                        string? line;
+                        while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(_stop.Token)))
+                        {
+                            headers.Add(line);
+                        }
+
+                        if (headers.Count == 0)
+                        {
+                            return;
+                        }
+
+                        if (headers.FirstOrDefault(h => h.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase)) is { } authorization)
+                        {
+                            // Acts on it (opens the door), then drops the connection without answering.
+                            if (DahuaFixtures.IsValidDigest(authorization["Authorization:".Length..].Trim(), "GET", FakeDahuaDevice.User, FakeDahuaDevice.Password))
+                            {
+                                Interlocked.Increment(ref _authenticated);
+                            }
+
+                            return;
+                        }
+
+                        var challenge = "HTTP/1.1 401 Unauthorized\r\n"
+                            + $"WWW-Authenticate: Digest realm=\"{FakeDahuaDevice.Realm}\", qop=\"auth\", nonce=\"{Guid.NewGuid():N}\", opaque=\"\"\r\n"
+                            + "Content-Length: 0\r\n\r\n";
+                        await stream.WriteAsync(Encoding.ASCII.GetBytes(challenge), _stop.Token);
+                    }
+                }
+                catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
+                {
+                    // The client went away.
+                }
+            }
+        }
+    }
 
     private static DeviceCommandBatch Open(string key, string device = Device, string endpoint = "main") =>
         new(device, [new DeviceCommand(endpoint, CapabilityIds.DoorOpener, "open", _empty)], key);

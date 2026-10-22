@@ -26,8 +26,16 @@ public sealed class SdpOffersTests
     [InlineData("m=video 9 UDP/TLS/RTP/SAVPF 96\r\na=recvonly\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendonly\r\n")]
     [InlineData("m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\na=recvonly\r\n")]
     [InlineData("")]
+
+    // Two directions in one section: go2rtc's WebRTC stack (pion) takes the first one, so the check must not take the last.
+    [InlineData("m=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=sendrecv\r\na=recvonly\r\n")]
+    [InlineData("m=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=recvonly\r\na=sendrecv\r\n")]
     public void Offers_that_would_send_media_or_open_channels_are_refused(string media) =>
         SdpOffers.IsReceiveOnly(Session + media).ShouldBeFalse();
+
+    [Fact]
+    public void An_ambiguous_session_level_direction_is_refused() =>
+        SdpOffers.IsReceiveOnly("v=0\r\ns=-\r\na=sendrecv\r\na=recvonly\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\n").ShouldBeFalse();
 
     [Fact]
     public void A_session_level_direction_applies_to_sections_without_their_own()

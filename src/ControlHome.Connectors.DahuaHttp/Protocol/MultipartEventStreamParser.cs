@@ -7,12 +7,14 @@ namespace ControlHome.Connectors.DahuaHttp.Protocol;
 /// An incremental parser for the <c>multipart/x-mixed-replace</c> body of <c>eventManager.cgi?action=attach</c>: bytes go
 /// in as they arrive (<see cref="Feed"/>), the text of each complete part comes out (trimmed; empty parts are skipped).
 /// <para>
-/// Firmware differs, so it is tolerant: CRLF or LF line ends; the delimiter <c>--&lt;boundary&gt;</c> (or the boundary as
-/// declared when it already starts with <c>--</c>; when none was declared, the first line starting with <c>--</c>); part
-/// headers optional; a part with <c>Content-Length</c> is complete after that many bytes (plus the rest of its last line,
-/// since some firmware counts a byte or two short) — without waiting for the next delimiter, which may come only with the
-/// next heartbeat — and a part without one ends at the next delimiter. A length that runs into the next delimiter is cut
-/// there. Preamble, garbage between parts and parts larger than <see cref="MaxPartBytes"/> are skipped.
+/// Firmware differs, so it is tolerant: CRLF or LF line ends; the delimiter <c>--&lt;boundary&gt;</c> (when the declared
+/// boundary already starts with <c>--</c>, also the boundary itself — the first of the two that shows up is used; when
+/// none was declared, the first line starting with <c>--</c>); part headers optional; a part with <c>Content-Length</c>
+/// is complete after that many bytes — without waiting for the next delimiter, which may come only with the next
+/// heartbeat — plus the rest of its last line, since some firmware counts short (a byte or two, or one per line when it
+/// counts LF but sends CRLF), and plus further lines while a <c>data={…}</c> object it opened is not closed yet. A part
+/// without a length ends at the next delimiter; a length that runs into the next delimiter is cut there. Preamble,
+/// garbage between parts and parts larger than <see cref="MaxPartBytes"/> are skipped.
 /// </para>
 /// </summary>
 internal sealed class MultipartEventStreamParser
@@ -23,20 +25,25 @@ internal sealed class MultipartEventStreamParser
     private readonly List<byte> _buffer = [];
     private readonly List<string> _parts = [];
     private readonly StringBuilder _body = new();
+    private readonly string[] _declared;
     private byte[]? _delimiter;
     private State _state = State.SeekBoundary;
     private int _remaining;
     private bool _skipping;
+
+    // JSON nesting of the part's text so far (outside strings): a counted part is not cut inside its data object.
+    private int _depth;
+    private bool _inString;
+    private bool _escaped;
 
     public MultipartEventStreamParser(string? boundary, int maxPartBytes = DefaultMaxPartBytes)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(maxPartBytes, 64);
         MaxPartBytes = maxPartBytes;
         var trimmed = boundary?.Trim().Trim('"');
-        if (!string.IsNullOrEmpty(trimmed))
-        {
-            _delimiter = Encoding.ASCII.GetBytes(trimmed.StartsWith("--", StringComparison.Ordinal) ? trimmed : "--" + trimmed);
-        }
+        _declared = string.IsNullOrEmpty(trimmed) ? []
+            : trimmed.StartsWith("--", StringComparison.Ordinal) ? [trimmed, "--" + trimmed]
+            : ["--" + trimmed];
     }
 
     private enum State
@@ -75,7 +82,7 @@ internal sealed class MultipartEventStreamParser
             if (_buffer.Count > 0 && !_skipping)
             {
                 var cut = FindDelimiterAtLineStart(_buffer.Count);
-                _body.Append(Decode(_buffer, 0, cut >= 0 ? cut : _buffer.Count));
+                Append(Decode(_buffer, 0, cut >= 0 ? cut : _buffer.Count));
             }
 
             Emit();
@@ -180,8 +187,11 @@ internal sealed class MultipartEventStreamParser
                 else
                 {
                     AppendLine(line);
-                    Emit();
-                    _state = State.SeekBoundary;
+                    if (Closed)
+                    {
+                        Emit();
+                        _state = State.SeekBoundary;
+                    }
                 }
 
                 break;
@@ -209,7 +219,7 @@ internal sealed class MultipartEventStreamParser
         {
             if (!_skipping)
             {
-                _body.Append(Decode(_buffer, 0, cut));
+                Append(Decode(_buffer, 0, cut));
             }
 
             _buffer.RemoveRange(0, cut);
@@ -220,23 +230,27 @@ internal sealed class MultipartEventStreamParser
 
         if (!_skipping)
         {
-            _body.Append(Decode(_buffer, 0, count));
+            Append(Decode(_buffer, 0, count));
         }
 
         var endsLine = count == 0 || _buffer[count - 1] == (byte)'\n';
         _buffer.RemoveRange(0, count);
-        if (endsLine)
+        if (endsLine && Closed)
         {
             Emit();
             _state = State.SeekBoundary;
         }
         else
         {
+            // The rest of the last line, and more lines while the data object is open (the count was short).
             _state = State.BodyCountedTail;
         }
 
         return true;
     }
+
+    /// <summary>The part's text so far closes every object and array it opened (a skipped part counts as closed).</summary>
+    private bool Closed => _skipping || _depth <= 0;
 
     /// <summary>The offset (≤ <paramref name="limit"/>) of a delimiter that starts a line inside the first bytes, or -1.</summary>
     private int FindDelimiterAtLineStart(int limit)
@@ -295,12 +309,26 @@ internal sealed class MultipartEventStreamParser
         var trimmed = line.TrimEnd();
         if (_delimiter is null)
         {
-            // Not declared: the first line that looks like one defines it.
             if (_state != State.SeekBoundary || trimmed.Length <= 2 || !trimmed.StartsWith("--", StringComparison.Ordinal))
             {
                 return false;
             }
 
+            if (_declared.Length > 0)
+            {
+                // Declared: the first of its spellings that shows up is the one this device uses.
+                var match = _declared.FirstOrDefault(d => string.Equals(trimmed, d, StringComparison.Ordinal)
+                    || string.Equals(trimmed, d + "--", StringComparison.Ordinal));
+                if (match is null)
+                {
+                    return false;
+                }
+
+                _delimiter = Encoding.ASCII.GetBytes(match);
+                return true;
+            }
+
+            // Not declared: the first line that looks like one defines it.
             _delimiter = Encoding.ASCII.GetBytes(trimmed.EndsWith("--", StringComparison.Ordinal) && trimmed.Length > 4 ? trimmed[..^2] : trimmed);
             return true;
         }
@@ -329,6 +357,9 @@ internal sealed class MultipartEventStreamParser
         _body.Clear();
         _remaining = 0;
         _skipping = false;
+        _depth = 0;
+        _inString = false;
+        _escaped = false;
     }
 
     private void AppendLine(string line)
@@ -345,7 +376,44 @@ internal sealed class MultipartEventStreamParser
             return;
         }
 
-        _body.Append(line).Append('\n');
+        Append(line);
+        Append("\n");
+    }
+
+    /// <summary>Adds text to the part, following its JSON nesting (braces and brackets outside strings).</summary>
+    private void Append(string text)
+    {
+        _body.Append(text);
+        foreach (var c in text)
+        {
+            if (_inString)
+            {
+                if (_escaped)
+                {
+                    _escaped = false;
+                }
+                else if (c == '\\')
+                {
+                    _escaped = true;
+                }
+                else if (c == '"')
+                {
+                    _inString = false;
+                }
+            }
+            else if (c == '"')
+            {
+                _inString = true;
+            }
+            else if (c is '{' or '[')
+            {
+                _depth++;
+            }
+            else if (c is '}' or ']')
+            {
+                _depth--;
+            }
+        }
     }
 
     private void Emit()
