@@ -18,9 +18,15 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-21 — Tagged **v0.1.0** (Phase 1 complete).
 - 2026-10-21 — Milestone 1.5 merged (PR #19): Umbrel community store template (`deploy/umbrel/`), Dockerfile NuGet layer fix, VersionPrefix 0.2.0.
 
-## In progress (2026-10-21)
-- Running `w37w24lxt` (run wf_d8ce225c-942, script workflows/scripts/p2a-vendor-connectors-wf_ea0b675b-d0e.js): one finish + adversarial review agent per Phase 2 wave A connector, starting from the implemented commits pushed as `wip/p2-lgthinq` (ef14c87), `wip/p2-dahuahttp` (9c8ed59) and `wip/p2-smartthings` (d4bcbbb), each salvaging the uncommitted fixes of the stopped review run (worktrees wf_1bee2b70-67a-1/2/3). Next: merge the three result branches into `milestone/2-vendor-connectors`, add the catalogue Experimental flag, then UI + E2E (second workflow), PR.
-- Dependabot #12 (Scalar.AspNetCore 2.18.0) and #18 (web minor/patch group): branches updated from main, merge when CI is green.
+## In progress (2026-10-22)
+- **Paused by the owner after Phase 2 wave A (2026-10-22): wait for the next command.**
+- Phase 2 wave A connectors are implemented, adversarially reviewed and green on the full suite, each on its own branch from c4a0238 (not merged yet):
+  - `wip/p2-lgthinq` fe1bee0: LG ThinQ (REST + MQTT, vendor energy windows into EnergyHourly via `IConnectorContext.ReportEnergyWindowsAsync`). 1694/1695 tests.
+  - `wip/p2-dahuahttp` 339c026: Intelbras/Dahua HTTP (Digest, event stream, door release at-most-once) + go2rtc live view (`/api/endpoints/{id}/camera/stream|webrtc`, compose profile `cameras`). 1715/1716 tests.
+  - `wip/p2-smartthings` 8fa26bf: SmartThings (OAuth-In + paste-back, single-flight token rotation, adaptive polling). 1687/1688 tests.
+  - Next (2.4): merge the three into `milestone/2-vendor-connectors` (expect conflicts in ControlHome.slnx, Directory.Packages.props, deploy/Dockerfile, ConnectorSetup.cs, test csprojs, architecture tests, api-client), regenerate OpenAPI, wire SmartThings powerConsumptionReport windows to the LG track's energy-window API, add the catalogue Experimental flag + docs/connectors/LIVE-VALIDATION.md, then the UI workflow (camera player and tiles, door open, setup screens), E2E, screenshots, PR, tag v0.2.0.
+  - Open issues from the reviews: LG DELETE /client needs an SDK removal hook; LG replace-token keeps an old-account MQTT certificate; Dahua ONVIF fallback, hooks receiver and syslog listener not built; Dahua login lock policy is a fixed 30 min; WebRTC sessions are not cut when a user is disabled; SmartThings rooms quota is per run (no persisted IQuotaCounter) and capability/presentation cache is in memory; Umbrel template lacks the go2rtc profile.
+- Roadmap page (live, db-backed): https://claude.ai/artifact/FHB8V8d3pNEXTkor8GqRPW — update task statuses with ArtifactData when milestones move.
 - 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans.
 - Next phases: Phase 2 (docs/plans/phase-2-vendor-connectors.md: LG ThinQ, DahuaHttp + go2rtc, SmartThings), Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
 - Usage guard: session cron every 10 min, pause at ≥ 90% of the 5-hour limit or ≥ 92% of the weekly limit (TaskStop running tasks, record in STATUS, one-shot resume after the reset).
