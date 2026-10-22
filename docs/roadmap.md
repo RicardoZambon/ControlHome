@@ -58,7 +58,7 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
 - [x] **1.4 History and MQTT** (storage PR #15; charts with 1.3)
   - History with rollups, retention, `EnergyHourly` and ECharts history views; MQTT connector.
   - Spec: `history-chart`. Tag **`v0.1`**.
-- [ ] **1.5 Umbrel template + store-repo instructions** (non-blocking, `v0.1.x`).
+- [x] **1.5 Umbrel template + store-repo instructions** (`deploy/umbrel/`; the store repository itself is created by the owner).
 
 ## Phase 2 — Vendor connectors, wave 1 → tag `v0.2`
 

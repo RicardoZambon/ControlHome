@@ -74,7 +74,7 @@ docker compose -f deploy/docker-compose.yml logs controlhome | grep -i "setup co
 
 Open `http://<your-server>:8711`, enter the one-time setup code, and the wizard walks you through the database (if not
 configured), the admin account and your home. Images: `ghcr.io/ricardozambon/controlhome` (`edge` from `main`, semver
-tags for releases). An Umbrel community app follows in milestone 1.5.
+tags for releases). On Umbrel, install it from a community app store: see [deploy/umbrel](deploy/umbrel/README.md).
 
 ## How it's built
 
