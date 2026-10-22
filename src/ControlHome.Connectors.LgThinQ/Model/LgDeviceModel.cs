@@ -44,12 +44,16 @@ internal sealed class LgDeviceModel(
     IReadOnlyList<LgReadRule> reads,
     IReadOnlyDictionary<(string Endpoint, string Capability, string Command), LgCommandBuilder> commands,
     IReadOnlyList<(string Endpoint, string Property)> energy,
-    IReadOnlyDictionary<string, string> notificationEndpoints)
+    IReadOnlyDictionary<string, string> notificationEndpoints,
+    bool reportable = true)
 {
     /// <summary>The generic momentary attribute that carries push notifications (<c>DEVICE_PUSH</c>).</summary>
     public const string NotificationAttribute = "notification";
 
     public string DeviceId { get; } = deviceId;
+
+    /// <summary>Whether LG reports the appliance's state changes (<c>deviceInfo.reportable</c>); otherwise it is polled.</summary>
+    public bool Reportable { get; } = reportable;
 
     public string DeviceType { get; } = deviceType;
 
@@ -69,9 +73,9 @@ internal sealed class LgDeviceModel(
             {
                 value = rule.Read(status);
             }
-            catch (Exception exception) when (exception is InvalidOperationException or FormatException or ArgumentException or KeyNotFoundException)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                value = null; // payload drift: skip the attribute, never the device
+                value = null; // payload drift (or a mapping bug): skip the attribute, never the device or the runtime
             }
 
             if (value is not null)

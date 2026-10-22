@@ -12,7 +12,8 @@ namespace ControlHome.Connectors.LgThinQ.Api;
 /// in <c>response</c>; errors in <c>error.code</c> / <c>error.message</c> (thrown as <see cref="LgApiException"/>; a 1306
 /// pauses the token's budget for an hour). Never logs the token.
 /// </summary>
-internal sealed partial class LgApiClient(HttpClient http, LgRateBudget budget, ILogger logger)
+/// <param name="readTimeout">How long reading an answer's body may take once its headers came (on <paramref name="time"/>).</param>
+internal sealed partial class LgApiClient(HttpClient http, LgRateBudget budget, ILogger logger, TimeProvider time, TimeSpan readTimeout)
 {
     /// <summary>The MQTT client registration body of the SDK (<c>CLIENT_BODY</c>).</summary>
     public static readonly JsonObject ClientBody = new()
@@ -114,6 +115,9 @@ internal sealed partial class LgApiClient(HttpClient http, LgRateBudget budget, 
         if (control)
         {
             request.Headers.TryAddWithoutValidation("x-conditional-control", "true");
+
+            // A user is waiting: the command goes before the background calls waiting for the token budget.
+            request.Options.Set(LgBudgetHandler.Priority, true);
         }
 
         HttpResponseMessage response;
@@ -133,7 +137,28 @@ internal sealed partial class LgApiClient(HttpClient http, LgRateBudget budget, 
 
         using (response)
         {
-            var json = await ReadAsync(response, cancellationToken).ConfigureAwait(false);
+            JsonElement? json;
+            using (var read = new CancellationTokenSource(readTimeout, time))
+            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, read.Token))
+            {
+                try
+                {
+                    json = await ReadAsync(response, linked.Token).ConfigureAwait(false);
+                }
+                catch (Exception failure) when (!cancellationToken.IsCancellationRequested
+                    && failure is OperationCanceledException or HttpRequestException or IOException)
+                {
+                    // The headers came, the body did not (in time). A write LG answered with success happened; a read did not.
+                    LogUnreachable(logger, method.Method, Template(path), failure.GetType().Name);
+                    if (response.IsSuccessStatusCode && method != HttpMethod.Get)
+                    {
+                        return JsonSerializer.SerializeToElement(new JsonObject());
+                    }
+
+                    throw new LgApiException(failure);
+                }
+            }
+
             if (response.IsSuccessStatusCode)
             {
                 LogCall(logger, method.Method, Template(path), (int)response.StatusCode);

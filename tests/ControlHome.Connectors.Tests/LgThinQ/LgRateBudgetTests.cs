@@ -35,6 +35,58 @@ public sealed class LgRateBudgetTests
     }
 
     [Fact]
+    public async Task Commands_go_out_before_background_calls_waiting_for_the_budget()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 21, 12, 0, 0, TimeSpan.Zero));
+        using var budget = new LgRateBudget(time, new LgRateOptions(1, TimeSpan.FromSeconds(10), TimeSpan.FromHours(1)));
+        await budget.AcquireAsync(Ct);
+
+        var poll = budget.AcquireAsync(Ct).AsTask();
+        var subscribe = budget.AcquireAsync(Ct).AsTask();
+        var command = budget.AcquireAsync(priority: true, Ct).AsTask();
+        var second = budget.AcquireAsync(priority: true, Ct).AsTask();
+
+        time.Advance(TimeSpan.FromSeconds(10));
+        await command.WaitAsync(TimeSpan.FromSeconds(5), Ct);
+        (poll.IsCompleted, subscribe.IsCompleted, second.IsCompleted).ShouldBe((false, false, false));
+
+        time.Advance(TimeSpan.FromSeconds(10));
+        await second.WaitAsync(TimeSpan.FromSeconds(5), Ct);
+        time.Advance(TimeSpan.FromSeconds(10));
+        await poll.WaitAsync(TimeSpan.FromSeconds(5), Ct);
+        subscribe.IsCompleted.ShouldBeFalse();
+        time.Advance(TimeSpan.FromSeconds(10));
+        await subscribe.WaitAsync(TimeSpan.FromSeconds(5), Ct);
+    }
+
+    [Fact]
+    public async Task A_cancelled_wait_leaves_the_queue_without_taking_a_call()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 21, 12, 0, 0, TimeSpan.Zero));
+        using var budget = new LgRateBudget(time, new LgRateOptions(1, TimeSpan.FromSeconds(10), TimeSpan.FromHours(1)));
+        await budget.AcquireAsync(Ct);
+        using var cancel = new CancellationTokenSource();
+
+        var cancelled = budget.AcquireAsync(cancel.Token).AsTask();
+        var next = budget.AcquireAsync(Ct).AsTask();
+        await cancel.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(cancelled);
+        time.Advance(TimeSpan.FromSeconds(10));
+        await next.WaitAsync(TimeSpan.FromSeconds(5), Ct);
+        budget.CallsLastHour.ShouldBe(2);
+    }
+
+    [Fact]
+    public void A_retry_after_longer_than_a_day_is_capped()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 21, 12, 0, 0, TimeSpan.Zero));
+        using var budget = new LgRateBudget(time, LgRateOptions.Default);
+
+        budget.Block(TimeSpan.FromDays(30)).ShouldBe(time.GetUtcNow().AddDays(1));
+    }
+
+    [Fact]
     public async Task After_a_1306_every_call_is_refused_for_an_hour_without_reaching_lg()
     {
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 21, 12, 0, 0, TimeSpan.Zero));

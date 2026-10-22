@@ -5,14 +5,24 @@ namespace ControlHome.Connectors.LgThinQ.Model;
 
 /// <summary>
 /// A device's last known status: a full <c>GET devices/{id}/state</c> replaces it, an MQTT <c>DEVICE_STATUS</c> report is
-/// merged into it — newest wins, by arrival (LG's reports can arrive out of order and carry no usable sequence). Objects
-/// merge member by member; lists of compartments or locations merge entry by entry (matched on <c>locationName</c>,
-/// <c>location.locationName</c> or <c>unit</c>); anything else is replaced. Thread-safe.
+/// merged into it — newest wins, by arrival (LG's reports can arrive out of order and carry no usable sequence). A full
+/// state counts as arriving when it was asked for: reports merged while the request was on its way are newer and are
+/// merged again on top of it (<see cref="Replace(JsonElement, long?)"/>). Objects merge member by member; lists of
+/// compartments or locations merge entry by entry (matched on <c>locationName</c>, <c>location.locationName</c> or
+/// <c>unit</c>); anything else is replaced. Thread-safe.
 /// </summary>
 internal sealed class LgStatus
 {
+    /// <summary>Reports kept to re-apply over a full state that was asked for before them (a poll takes a second or two).</summary>
+    private const int RecentReports = 64;
+
     private readonly Lock _lock = new();
+    private readonly Queue<(long Version, JsonNode? Report)> _recent = new();
     private JsonNode? _status;
+    private long _version;
+
+    /// <summary>The newest report version no longer kept in <see cref="_recent"/>.</summary>
+    private long _dropped;
 
     public bool IsKnown
     {
@@ -21,6 +31,18 @@ internal sealed class LgStatus
             lock (_lock)
             {
                 return _status is not null;
+            }
+        }
+    }
+
+    /// <summary>Counts every change (replace or merge): what a full state request remembers as "asked at".</summary>
+    public long Version
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _version;
             }
         }
     }
@@ -37,13 +59,35 @@ internal sealed class LgStatus
         }
     }
 
-    /// <summary>Replaces the status with a full one; returns the new status.</summary>
-    public JsonElement Replace(JsonElement full)
+    /// <summary>
+    /// Replaces the status with a full one; returns the new status. With <paramref name="askedAt"/> (the
+    /// <see cref="Version"/> when the full state was requested), reports merged since then are merged again on top of it.
+    /// </summary>
+    public JsonElement Replace(JsonElement full, long? askedAt = null)
     {
         lock (_lock)
         {
-            _status = JsonNode.Parse(full.GetRawText());
-            return JsonSerializer.SerializeToElement(_status);
+            var current = _status;
+            var replaced = JsonNode.Parse(full.GetRawText());
+            if (askedAt is { } asked && asked < _version)
+            {
+                if (_dropped <= asked)
+                {
+                    foreach (var (_, report) in _recent.Where(r => r.Version > asked))
+                    {
+                        replaced = replaced is null ? report?.DeepClone() : Merge(replaced, report?.DeepClone());
+                    }
+                }
+                else
+                {
+                    // More reports came meanwhile than are kept: what is known now wins over the older answer.
+                    replaced = replaced is null ? current?.DeepClone() : Merge(replaced, current?.DeepClone());
+                }
+            }
+
+            _status = replaced;
+            _version++;
+            return _status is null ? JsonSerializer.SerializeToElement(new JsonObject()) : JsonSerializer.SerializeToElement(_status);
         }
     }
 
@@ -53,7 +97,14 @@ internal sealed class LgStatus
         lock (_lock)
         {
             var incoming = JsonNode.Parse(report.GetRawText());
-            _status = _status is null ? incoming : Merge(_status, incoming);
+            _status = _status is null ? incoming?.DeepClone() : Merge(_status, incoming?.DeepClone());
+            _version++;
+            _recent.Enqueue((_version, incoming));
+            while (_recent.Count > RecentReports)
+            {
+                _dropped = _recent.Dequeue().Version;
+            }
+
             return _status is null ? JsonSerializer.SerializeToElement(new JsonObject()) : JsonSerializer.SerializeToElement(_status);
         }
     }

@@ -306,6 +306,44 @@ public sealed class LgDeviceMapperTests
         towerModel.Read(report).Value(CapabilityIds.ApplianceCycle, "machineState", "washer").ShouldBe(StateValue.String("running"));
     }
 
+    [Fact]
+    public void A_full_state_asked_for_before_a_report_arrived_keeps_that_report()
+    {
+        var status = new LgStatus();
+        status.Replace(LgFixtures.Parse("""{"operation":{"airConOperationMode":"POWER_ON"},"temperature":{"targetTemperature":19}}"""));
+        var asked = status.Version;
+
+        status.Merge(LgFixtures.Parse("""{"operation":{"airConOperationMode":"POWER_OFF"}}"""));
+        var current = status.Replace(LgFixtures.Parse("""{"operation":{"airConOperationMode":"POWER_ON"},"temperature":{"targetTemperature":26}}"""), asked);
+
+        current.GetProperty("operation").GetProperty("airConOperationMode").GetString().ShouldBe("POWER_OFF");
+        current.GetProperty("temperature").GetProperty("targetTemperature").GetInt32().ShouldBe(26);
+
+        // Without reports in between the full state replaces everything.
+        var fresh = status.Replace(LgFixtures.Parse("""{"operation":{"airConOperationMode":"POWER_ON"}}"""), status.Version);
+        fresh.GetProperty("operation").GetProperty("airConOperationMode").GetString().ShouldBe("POWER_ON");
+        fresh.TryGetProperty("temperature", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_read_rule_that_throws_skips_its_attribute_and_never_the_device()
+    {
+        var device = new DiscoveredDevice("test-x-0001", "X", null, "LG", null, null, null, new Dictionary<string, string>(), null, []);
+        var model = new LgDeviceModel(
+            "test-x-0001",
+            "DEVICE_X",
+            device,
+            [
+                new LgReadRule("main", CapabilityIds.Switch, "on", _ => throw new NullReferenceException("drift")),
+                new LgReadRule("main", CapabilityIds.Switch, "on", _ => StateValue.True),
+            ],
+            new Dictionary<(string, string, string), LgCommandBuilder>(),
+            [],
+            new Dictionary<string, string>());
+
+        model.Read(LgFixtures.Parse("{}")).ShouldHaveSingleItem().Value.ShouldBe(StateValue.True);
+    }
+
     [Theory]
     [InlineData("END", false, "finished")]
     [InlineData("PAUSE", false, "paused")]

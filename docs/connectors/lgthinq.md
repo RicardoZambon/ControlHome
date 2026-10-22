@@ -92,14 +92,19 @@ read/write access; writable ones get a `set<Name>` command, checked against the 
 - `DEVICE_STATUS` messages are partial: they are merged into the appliance's last known state (newest message wins).
   Added, removed or renamed appliances trigger a new discovery after 30 s.
 - AWS drops MQTT sessions routinely, so **reconnecting is the normal path**: exponential back-off 1 s → 5 min with
-  jitter, then the topic is subscribed again. While MQTT is down the integration is *Degraded* and every appliance is
-  **polled at most every 5 minutes** (`GET devices/{id}/state`); the same 5-minute rule applies at start-up and after a
-  reconnect, so restarts never re-read everything at once.
+  jitter, then the topic is subscribed again; a connection the broker drops within a minute does not reset the back-off.
+  While MQTT is down the integration is *Degraded* and every appliance is **polled at most every 5 minutes**
+  (`GET devices/{id}/state`); the same 5-minute rule applies at start-up and after a reconnect, so restarts never re-read
+  everything at once. Appliances MQTT does not report (LG marks them not `reportable`, or refuses their event
+  subscription) are polled every 5 minutes while MQTT is up too.
+- If LG refuses the MQTT client registration, the certificate or the route (or answers without a broker), real-time
+  updates are retried with the same back-off while the appliances are polled; the integration keeps running.
 
 ### Call limits
 
 LG publishes no number for the PAT's hourly limit. Every call (REST, subscriptions, energy, the setup check) shares one
-**token bucket per token**: 5 calls at once, then one every 10 s. When LG answers **1306** (call limit exceeded) the
+**token bucket per token**: 5 calls at once, then one every 10 s; a command you send goes before background calls still
+waiting for their turn, and waiting in line never counts against a call's 15 s timeout. When LG answers **1306** (call limit exceeded) the
 integration shows **Quota exceeded** and makes no call at all for an hour (commands are refused with a clear message
 meanwhile); the log line says how many calls were made in the hour before, to tune the budget.
 
@@ -108,12 +113,19 @@ meanwhile); the log line says how many calls were made in the hour before, to tu
 LG gives **energy history, not live power**: Wh per day or per month, complete up to yesterday. Once a night, at a random
 time between **01:00 and 05:59** local (chosen per integration, like LG's own Home Assistant integration does, to spread
 the load), ControlHome asks for every day since the first of last month (`DAILY`) and for last and this month
-(`MONTHLY`) — two calls per appliance — and stores them as **energy windows**:
+(`MONTHLY`) — two calls per energy property of an appliance — and stores them as **energy windows**:
 
 - each day is spread evenly over its 24 hours (`EnergyHourly`, source `vendorWindow`, flagged *estimated* because it is
   not hourly data);
 - a month only fills the days its daily data leaves out (its total minus those days);
+- several entries of one day (or month) add up, as in LG's SDK, which sums the answer's `dataList`;
 - the same windows are reported again every night, which is harmless (the rows are replaced, never added).
+
+LG does not document the field that dates each `dataList` entry. ControlHome looks for `usedDate` (and similar names),
+then for any member holding a date of the right shape (`20261020`, `"2026-10-20"`, `"202610"`). If the daily answer has
+entries but none of them carries a readable date, the run asks for **yesterday alone** (a third call, summed like the
+SDK does) and reports only that day — without the months, which, spread over the days, would overwrite what earlier
+nights stored (the log says "the daily answer has no readable dates").
 
 An appliance whose energy already comes from another source (an energy counter, or a source you chose) is skipped, so
 energy is never counted twice. For live watts use a smart plug or a whole-home meter through another connector.
@@ -130,7 +142,8 @@ energy is never counted twice. For live watts use a smart plug or a whole-home m
   °F attributes are left out.
 - Removing the integration does **not** unregister the MQTT client at LG yet (`DELETE client`): the connector SDK has no
   removal hook. Revoke the token at <https://connect-pat.lgthinq.com> when you remove the integration.
-- The energy usage answer's date field (`usedDate`) is taken from LG's other APIs; see the checklist below.
+- The energy usage answer's date field (`usedDate`) is taken from LG's other APIs (other names and shapes are recognised,
+  and an undated answer falls back to yesterday alone); see the checklist below.
 
 ## Troubleshooting
 
@@ -140,6 +153,7 @@ energy is never counted twice. For live watts use a smart plug or a whole-home m
 | *Error* — "has not accepted LG ThinQ's terms" (1304) | The LG account must accept new terms. | Open the LG ThinQ app and accept them; ControlHome retries hourly. |
 | *Error* — "does not serve this country" (1307) or "does not know this account" (1202, 1303) | Wrong country. | Replace the token and pick the country the LG account was created in. |
 | *Quota exceeded* (1306) | The hourly call limit is used up. | Nothing: calls resume after an hour. Many appliances on one token use more calls at start-up. |
+| *Error* — "rejected the API key (x-api-key)" (1301) | LG no longer accepts the SDK's public key. | Enter the key LG's current SDK uses under *Advanced: API key* (replace token flow). |
 | *Degraded* — "Cannot connect to LG ThinQ's real-time service" | MQTT is blocked or failing. | Allow outbound TCP 8883 from the server. States are polled every 5 minutes meanwhile. |
 | A command fails with "Remote control is off" (2301) | Remote start is off at the appliance. | Turn on *Remote Start* on the appliance itself. |
 | "cannot do this in its current state" (2302), "powered off" (2304), "current mode" (2305) | The appliance refused in its current state. | Change it on the appliance, or turn it on first. |
@@ -160,7 +174,8 @@ Run once with your own account (Brazil) and note the results in `docs/connectors
    off" message with it off); a fridge compartment setpoint.
 5. Notifications: a finished wash produces a `notification` event (`washing_is_complete`).
 6. Energy: the morning after setup, the energy history shows yesterday's Wh for an appliance with energy data. Check the
-   log for "energy windows reported"; if LG's daily answer has no `usedDate` field, note the field name it uses.
+   log for "energy windows reported"; if LG's daily answer has no `usedDate` field, note the field name it uses (a
+   "has no readable dates" warning means only yesterday is stored each night).
 7. Wrong token and wrong country errors come back on the right setup fields; a revoked token sets **Needs reauth**, and
    replacing it keeps the appliances in their rooms.
 8. Leave it running for a few days: reconnects happen (AWS), the integration returns to **Ok** on its own, and no

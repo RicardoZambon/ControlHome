@@ -27,6 +27,9 @@ internal static class LgEnergy
     /// <summary>How long after <see cref="WindowStart"/> the run may start (01:00–05:59).</summary>
     public const int WindowMinutes = 300;
 
+    /// <summary>Field names an entry's date is looked for under first (LG's other APIs use <c>usedDate</c>).</summary>
+    private static readonly string[] _dateFields = ["usedDate", "date", "usageDate", "useDate", "usedDay", "day", "usedMonth", "month", "period"];
+
     /// <summary>A random local time of day in 01:00–05:59 (chosen once per integration, so restarts keep it).</summary>
     public static TimeSpan RandomTimeOfDay(Random random)
     {
@@ -34,14 +37,18 @@ internal static class LgEnergy
         return WindowStart + TimeSpan.FromMinutes(random.Next(0, WindowMinutes)) + TimeSpan.FromSeconds(random.Next(0, 60));
     }
 
-    /// <summary>The next instant (UTC, after <paramref name="nowUtc"/>) at local <paramref name="timeOfDay"/> in <paramref name="zone"/>.</summary>
+    /// <summary>
+    /// The next instant (UTC, after <paramref name="nowUtc"/>) at local wall-clock <paramref name="timeOfDay"/> in
+    /// <paramref name="zone"/> (on a day with a daylight-saving change too; a time the change skips moves to the first
+    /// valid one after it).
+    /// </summary>
     public static DateTimeOffset NextRun(DateTimeOffset nowUtc, TimeZoneInfo zone, TimeSpan timeOfDay)
     {
         ArgumentNullException.ThrowIfNull(zone);
         var localToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(nowUtc, zone).DateTime);
         for (var day = localToday; ; day = day.AddDays(1))
         {
-            var run = ToUtc(day, zone) + timeOfDay;
+            var run = ToUtc(day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified) + timeOfDay, zone);
             if (run > nowUtc)
             {
                 return run;
@@ -60,9 +67,10 @@ internal static class LgEnergy
     }
 
     /// <summary>
-    /// The energy windows of one property from LG's DAILY and MONTHLY answers (<c>{result: {dataList: [{usedDate, &lt;property&gt;}]}}</c>):
+    /// The energy windows of one property from LG's DAILY and MONTHLY answers (<c>{result: {dataList: [{&lt;date&gt;, &lt;property&gt;}]}}</c>):
     /// days as local-midnight-to-midnight windows, months from their first day to the end of the month or the start of
-    /// today, whichever comes first (never into the future). Entries without a usable date or value are skipped.
+    /// today, whichever comes first (never into the future). Entries of the same day (or month) add up — LG's SDK sums
+    /// <c>dataList</c>, and a day may come as several rows. Entries without a usable date or value are skipped.
     /// </summary>
     public static IReadOnlyList<EnergyWindowReport> Windows(
         string deviceId,
@@ -101,9 +109,11 @@ internal static class LgEnergy
     }
 
     /// <summary>A local midnight in UTC (a midnight skipped by a DST change becomes the first valid hour of that day).</summary>
-    public static DateTimeOffset ToUtc(DateOnly day, TimeZoneInfo zone)
+    public static DateTimeOffset ToUtc(DateOnly day, TimeZoneInfo zone) => ToUtc(day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), zone);
+
+    /// <summary>A local wall-clock time in UTC; a time skipped by a DST change moves to the first valid one (30-minute steps).</summary>
+    private static DateTimeOffset ToUtc(DateTime local, TimeZoneInfo zone)
     {
-        var local = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
         while (zone.IsInvalidTime(local))
         {
             local = local.AddMinutes(30);
@@ -112,45 +122,129 @@ internal static class LgEnergy
         return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, zone), TimeSpan.Zero);
     }
 
+    /// <summary>One day's window (a local midnight to the next), e.g. from a one-day query's <see cref="Total"/>.</summary>
+    public static EnergyWindowReport Day(string deviceId, string endpoint, DateOnly day, double wh, TimeZoneInfo zone) =>
+        new(deviceId, endpoint, ToUtc(day, zone), ToUtc(day.AddDays(1), zone), wh);
+
+    /// <summary>
+    /// Whether an answer has energy entries but not one whose date could be read (LG does not document the field): its
+    /// entries cannot be placed on days, only summed (<see cref="Total"/>) for a query of a single period.
+    /// </summary>
+    public static bool IsUndated(JsonElement? answer, string property, string period, DateOnly from, DateOnly to)
+    {
+        var rows = Rows(answer, property, period).ToList();
+        return rows.Count > 0 && rows.All(r => r.Date is null)
+            && !(rows.Count == 1 && SinglePeriod(period, from, to));
+    }
+
+    /// <summary>
+    /// The sum of <paramref name="property"/> over the answer's <c>dataList</c> (what LG's SDK returns for a query), or
+    /// <c>null</c> when the answer has no list.
+    /// </summary>
+    public static double? Total(JsonElement? answer, string property)
+    {
+        if (answer is not { } response || (response.Get("result") ?? response).Get("dataList") is not { ValueKind: JsonValueKind.Array } list)
+        {
+            return null;
+        }
+
+        return list.EnumerateArray().Sum(entry => entry.Num(property) is { } wh && wh >= 0 ? wh : 0);
+    }
+
+    /// <summary>The entries of the range, summed per day (DAILY) or month (MONTHLY), oldest first.</summary>
     private static IEnumerable<(DateOnly Date, double Wh)> Entries(JsonElement? answer, string property, string period, DateOnly from, DateOnly to)
+    {
+        var rows = Rows(answer, property, period).ToList();
+        var first = period == Daily ? from : new DateOnly(from.Year, from.Month, 1);
+        var sums = new SortedDictionary<DateOnly, double>();
+        foreach (var (date, wh) in rows)
+        {
+            // One period asked for, one undated answer: that period.
+            var day = date ?? (rows.Count == 1 && SinglePeriod(period, from, to) ? first : null);
+            if (day is { } known && known >= first && known <= to)
+            {
+                sums[known] = sums.GetValueOrDefault(known) + wh;
+            }
+        }
+
+        return sums.Select(s => (s.Key, s.Value));
+    }
+
+    /// <summary>The answer's entries with a value: their date (when one could be read) and their Wh.</summary>
+    private static IEnumerable<(DateOnly? Date, double Wh)> Rows(JsonElement? answer, string property, string period)
     {
         if (answer is not { } response)
         {
             yield break;
         }
 
-        var list = (response.Get("result") ?? response).Array("dataList").ToList();
-        foreach (var entry in list)
+        foreach (var entry in (response.Get("result") ?? response).Array("dataList"))
         {
             var value = entry.Num(property) ?? entry.Num("energyUsage") ?? entry.Num("value");
-            if (value is not { } wh || wh < 0)
+            if (value is { } wh && wh >= 0)
             {
-                continue;
-            }
-
-            var date = ParseDate(entry.Str("usedDate") ?? entry.Str("date") ?? entry.Str("usageDate"), period);
-            if (date is null && list.Count == 1 && (period == Daily ? from == to : (from.Year, from.Month) == (to.Year, to.Month)))
-            {
-                date = from; // one period asked for, one answer
-            }
-
-            if (date is { } day && day >= (period == Daily ? from : new DateOnly(from.Year, from.Month, 1)) && day <= to)
-            {
-                yield return (day, wh);
+                yield return (DateOf(entry, property, period), wh);
             }
         }
     }
 
-    private static DateOnly? ParseDate(string? text, string period)
+    private static bool SinglePeriod(string period, DateOnly from, DateOnly to) =>
+        period == Daily ? from == to : (from.Year, from.Month) == (to.Year, to.Month);
+
+    /// <summary>
+    /// An entry's date: from a field named like a date (<c>usedDate</c>, <c>date</c>, …), else from any other member holding
+    /// a date of the period's shape (<c>20261020</c>, <c>"2026-10-20"</c>, <c>"202610"</c>). Values, epoch timestamps and
+    /// anything else are not dates.
+    /// </summary>
+    private static DateOnly? DateOf(JsonElement entry, string property, string period)
     {
-        if (text is null)
+        if (entry.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
 
-        var digits = new string([.. text.Where(char.IsAsciiDigit)]);
+        foreach (var name in _dateFields)
+        {
+            if (entry.Get(name) is { } named && ParseDate(named, period) is { } date)
+            {
+                return date;
+            }
+        }
+
+        foreach (var member in entry.EnumerateObject())
+        {
+            if (member.Name != property && !_dateFields.Contains(member.Name, StringComparer.Ordinal) && ParseDate(member.Value, period) is { } date)
+            {
+                return date;
+            }
+        }
+
+        return null;
+    }
+
+    private static DateOnly? ParseDate(JsonElement value, string period)
+    {
+        string digits;
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.String when value.GetString() is { Length: <= 40 } text:
+                digits = new string([.. text.Where(char.IsAsciiDigit)]);
+                break;
+            case JsonValueKind.Number when value.TryGetInt64(out var number) && number > 0:
+                // A bare number is a date only with exactly the period's digits (20261020, 202610): never a value or a timestamp.
+                digits = number.ToString(CultureInfo.InvariantCulture);
+                if (digits.Length != (period == Daily ? 8 : 6))
+                {
+                    return null;
+                }
+
+                break;
+            default:
+                return null;
+        }
+
         return period == Daily
             ? digits.Length >= 8 && DateOnly.TryParseExact(digits[..8], "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day) ? day : null
-            : digits.Length >= 6 && DateOnly.TryParseExact(digits[..6] + "01", "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var month) ? month : null;
+            : digits.Length is 6 or >= 8 && DateOnly.TryParseExact(digits[..6] + "01", "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var month) ? month : null;
     }
 }

@@ -16,6 +16,12 @@ internal sealed record LgRuntimeOptions
     /// <summary>Longest delay between MQTT connection attempts.</summary>
     public TimeSpan ReconnectMax { get; init; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// A connection that lasted at least this long resets the reconnect back-off; one dropped sooner (a duplicate client
+    /// id, a broker refusing the session) keeps backing off, so it never turns into a reconnect every second.
+    /// </summary>
+    public TimeSpan StableConnection { get; init; } = TimeSpan.FromMinutes(1);
+
     /// <summary>Relative jitter of reconnect and retry delays (0–0.5).</summary>
     public double Jitter { get; init; } = 0.2;
 

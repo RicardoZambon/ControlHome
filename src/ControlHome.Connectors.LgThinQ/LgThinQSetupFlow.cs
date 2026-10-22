@@ -168,6 +168,9 @@ internal sealed class LgThinQSetupFlow(LgThinQConnectorFactory factory) : IConne
         LgErrorKind.QuotaExceeded => (LgThinQSettings.PatField, new LocalizedText(
             "The LG ThinQ call limit of this account is used up. Try again in an hour.",
             "O limite de chamadas da LG ThinQ desta conta acabou. Tente de novo em uma hora.")),
+        LgErrorKind.Account when exception.Code == LgErrors.InvalidServiceKey => (LgThinQSettings.ApiKeyField, new LocalizedText(
+            "LG ThinQ rejected the API key (x-api-key). Leave it empty for the key of LG's official SDK, or enter the one LG published.",
+            "A LG ThinQ recusou a chave da API (x-api-key). Deixe vazio para usar a chave do SDK oficial da LG, ou informe a que a LG publicou.")),
         LgErrorKind.Account when exception.Code == LgErrors.NotAcceptableTerms => (LgThinQSettings.PatField, new LocalizedText(
             "The LG account has not accepted LG ThinQ's terms. Open the LG ThinQ app, accept them and try again.",
             "A conta LG não aceitou os termos da LG ThinQ. Abra o app LG ThinQ, aceite os termos e tente de novo.")),

@@ -41,6 +41,7 @@ internal static class LgErrors
     public const string InvalidToken = "1103";
     public const string InvalidTokenAgain = "1218";
     public const string NotFoundToken = "1302";
+    public const string InvalidServiceKey = "1301";
     public const string AlreadySubscribedPush = "1207";
     public const string NotAcceptableTerms = "1304";
     public const string ExceededApiCalls = "1306";
@@ -138,6 +139,7 @@ internal static class LgErrors
             NotSupportedCountry => "LG ThinQ does not serve this country for the account. Pick the country the LG account was created in (replace the token).",
             ExceededApiCalls => "The LG ThinQ call limit of the account is used up; ControlHome pauses its calls for an hour.",
             "1202" or "1209" or "1303" => "LG ThinQ does not know this account in the chosen country. Check the country (replace the token).",
+            InvalidServiceKey => "LG ThinQ rejected the API key (x-api-key). If LG published a new key for its SDK, enter it in the integration's advanced settings.",
             _ when error.Kind == LgErrorKind.NeedsReauth => "LG ThinQ rejected the access token. Replace it in the integration.",
             _ => $"LG ThinQ answered {NameOf(error.Code)} ({error.Code}).",
         };

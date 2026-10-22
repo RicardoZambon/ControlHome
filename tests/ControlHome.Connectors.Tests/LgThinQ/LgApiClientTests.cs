@@ -118,6 +118,47 @@ public sealed class LgApiClientTests : IDisposable
     }
 
     [Fact]
+    public async Task Waiting_for_the_call_budget_does_not_count_against_the_attempt_timeout()
+    {
+        _cloud.Ok("POST", "/devices/test-ac-0001/control", "{}");
+        using var factory = new LgThinQConnectorFactory(null, _cloud.Options() with { Rate = new LgRateOptions(1, TimeSpan.FromSeconds(10), TimeSpan.FromHours(1)) }, null);
+        var api = Api(factory);
+
+        // Three commands at once with one call every 10 s: the third waits 20 s for its turn, longer than the 15 s an
+        // attempt may take, and still goes out (a control call is never retried, so a timeout would lose it).
+        var calls = Enumerable.Range(0, 3)
+            .Select(_ => api.ControlAsync("test-ac-0001", new JsonObject { ["operation"] = new JsonObject { ["airConOperationMode"] = "POWER_ON" } }, Ct))
+            .ToList();
+        await Waiting.UntilAsync(() => Controls() == 1, "the first command went out");
+        _time.Advance(TimeSpan.FromSeconds(10));
+        await Waiting.UntilAsync(() => Controls() == 2, "the second command went out");
+        _time.Advance(TimeSpan.FromSeconds(10));
+
+        await Task.WhenAll(calls).WaitAsync(TimeSpan.FromSeconds(10), Ct);
+        Controls().ShouldBe(3);
+
+        int Controls() => _cloud.Requests("POST", "/devices/test-ac-0001/control").Count;
+    }
+
+    [Fact]
+    public async Task A_retry_after_header_never_parks_a_get_retry()
+    {
+        _cloud.Server.Given(Request.Create().WithPath("/devices/test-ac-0001/state").UsingGet()).InScenario("busy").WillSetStateTo("recovered")
+            .RespondWith(Response.Create().WithStatusCode(503).WithHeader("Retry-After", "3600").WithBody(LgFixtures.Error("2000")));
+        _cloud.Server.Given(Request.Create().WithPath("/devices/test-ac-0001/state").UsingGet()).InScenario("busy").WhenStateIs("recovered")
+            .RespondWith(Response.Create().WithStatusCode(200).WithBody(LgFixtures.Ok("""{"operation":{"airConOperationMode":"POWER_ON"}}""")));
+        using var factory = Factory();
+
+        // The test options retry without delay; honouring "Retry-After: 3600" would park the retry for an hour of the clock.
+        var state = Api(factory).GetStateAsync("test-ac-0001", Ct);
+        await Waiting.UntilAsync(() => _cloud.Requests("GET", "/devices/test-ac-0001/state").Count >= 1, "the first attempt failed");
+        _time.Advance(TimeSpan.FromSeconds(30));
+
+        (await state.WaitAsync(TimeSpan.FromSeconds(10), Ct)).GetProperty("operation").GetProperty("airConOperationMode").GetString().ShouldBe("POWER_ON");
+        _cloud.Requests("GET", "/devices/test-ac-0001/state").Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task The_mqtt_client_calls_use_the_sdks_bodies()
     {
         _cloud.Account();

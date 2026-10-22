@@ -29,9 +29,10 @@ internal sealed record LgHttpOptions(TimeSpan AttemptTimeout, int GetRetries, Ti
 
 /// <summary>
 /// The connector's HTTP stack: one primary handler for every integration (a pooled <see cref="SocketsHttpHandler"/>, or a
-/// test handler), and per integration a pipeline of resilience (retries only for idempotent GETs, a timeout per attempt)
-/// → headers (<see cref="LgHeadersHandler"/>: a fresh <c>x-message-id</c> per attempt) → call budget
-/// (<see cref="LgBudgetHandler"/>: every attempt takes a token) → the primary handler.
+/// test handler), and per integration a pipeline of retries (only for idempotent GETs) → call budget
+/// (<see cref="LgBudgetHandler"/>: every attempt waits for a token, commands first) → a timeout per attempt
+/// (<see cref="LgAttemptTimeoutHandler"/>, started once the token is granted: waiting in line is not LG being slow) →
+/// headers (<see cref="LgHeadersHandler"/>: a fresh <c>x-message-id</c> per attempt) → the primary handler.
 /// </summary>
 internal sealed class LgHttp : IDisposable
 {
@@ -63,15 +64,18 @@ internal sealed class LgHttp : IDisposable
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(budget);
         ArgumentNullException.ThrowIfNull(time);
-        var budgetHandler = new LgBudgetHandler(budget) { InnerHandler = new SharedHandler(_primary) };
-        var headers = new LgHeadersHandler(identity) { InnerHandler = budgetHandler };
-        var resilience = new ResilienceHandler(Pipeline(time)) { InnerHandler = headers };
+        var headers = new LgHeadersHandler(identity) { InnerHandler = new SharedHandler(_primary) };
+        var attempt = new LgAttemptTimeoutHandler(Options.AttemptTimeout, time) { InnerHandler = headers };
+        var budgetHandler = new LgBudgetHandler(budget) { InnerHandler = attempt };
+        var resilience = new ResilienceHandler(Pipeline(time)) { InnerHandler = budgetHandler };
         return new HttpClient(resilience, disposeHandler: true)
         {
             BaseAddress = baseUrl,
 
-            // The pipeline's per-attempt timeout applies; this only bounds a whole call with its retries.
-            Timeout = (Options.AttemptTimeout * (Options.GetRetries + 1)) + TimeSpan.FromMinutes(1),
+            // Each attempt has its own timeout (LgAttemptTimeoutHandler) once it got its token; the wait for the token is
+            // bounded by the caller (a command's own timeout, the runtime's stop), never by a timer that cannot tell
+            // waiting in line from LG being slow.
+            Timeout = Timeout.InfiniteTimeSpan,
         };
     }
 
@@ -96,6 +100,9 @@ internal sealed class LgHttp : IDisposable
                 BackoffType = DelayBackoffType.Exponential,
                 UseJitter = true,
 
+                // A server's Retry-After (an hour, say) would park the call inside the retry; the caller's back-off decides.
+                ShouldRetryAfterHeader = false,
+
                 // Only idempotent reads are retried: a control, subscription or certificate request is never sent twice.
                 // 429 (and LG's 1306) are not retried at all: the budget pauses instead.
                 ShouldHandle = args => ValueTask.FromResult(IsGet(args.Context) && args.Outcome switch
@@ -107,7 +114,6 @@ internal sealed class LgHttp : IDisposable
             });
         }
 
-        builder.AddTimeout(Options.AttemptTimeout);
         return builder.Build();
     }
 
@@ -159,13 +165,45 @@ internal sealed class LgHeadersHandler(LgIdentity identity) : DelegatingHandler
         Convert.ToBase64String(Guid.NewGuid().ToByteArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 }
 
-/// <summary>Takes a token of the integration's call budget for every attempt (retries included).</summary>
+/// <summary>
+/// Takes a token of the integration's call budget for every attempt (retries included); requests marked with
+/// <see cref="Priority"/> (commands a user waits for) are served before the background calls waiting.
+/// </summary>
 internal sealed class LgBudgetHandler(LgRateBudget budget) : DelegatingHandler
+{
+    /// <summary>Set on a control call: it goes before polls, subscriptions and energy queries waiting for the budget.</summary>
+    public static readonly HttpRequestOptionsKey<bool> Priority = new("ControlHome.LgThinQ.Priority");
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var priority = request.Options.TryGetValue(Priority, out var value) && value;
+        await budget.AcquireAsync(priority, cancellationToken).ConfigureAwait(false);
+        return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// Bounds one attempt on the connector's clock, starting once its budget token is granted: a request LG does not answer
+/// in time fails with <see cref="TimeoutRejectedException"/> (a GET may then be retried; a control call never is).
+/// </summary>
+internal sealed class LgAttemptTimeoutHandler(TimeSpan timeout, TimeProvider time) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        await budget.AcquireAsync(cancellationToken).ConfigureAwait(false);
-        return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        using var attempt = new CancellationTokenSource(timeout, time);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, attempt.Token);
+        try
+        {
+            return await base.SendAsync(request, linked.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception) when (attempt.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutRejectedException(
+                string.Create(CultureInfo.InvariantCulture, $"LG ThinQ did not answer within {timeout.TotalSeconds:0} s."),
+                timeout,
+                exception);
+        }
     }
 }
 

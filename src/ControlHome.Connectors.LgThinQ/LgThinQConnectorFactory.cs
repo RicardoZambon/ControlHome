@@ -69,7 +69,7 @@ public sealed class LgThinQConnectorFactory : IConnectorFactory, IDisposable
     {
         var budget = _budgets.For(pat, time);
         var http = _http.CreateClient(_options.BaseUrlOverride ?? settings.BaseUrl, new LgIdentity(pat, settings.Country, clientId, settings.ApiKey), budget, time);
-        return new LgApiClient(http, budget, logger);
+        return new LgApiClient(http, budget, logger, time, _options.Http.AttemptTimeout);
     }
 }
 

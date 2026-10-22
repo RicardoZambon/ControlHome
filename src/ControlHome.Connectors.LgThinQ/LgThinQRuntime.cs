@@ -15,18 +15,22 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace ControlHome.Connectors.LgThinQ;
 
 /// <summary>
-/// One LG ThinQ integration. A session: discover (<c>GET devices</c> + profiles → full inventory), poll each device's state
-/// once (at most every 5 minutes per device), register the MQTT client (<c>POST client</c>, allowExist), subscribe every
-/// device's push and event notifications (1207 = already subscribed) and the device-list changes, then run in parallel:
+/// One LG ThinQ integration. A session: discover (<c>GET devices</c> + profiles → full inventory; a listed appliance whose
+/// profile LG cannot answer for now keeps its cached profile, else the inventory is not claimed complete so nothing is
+/// orphaned), poll each device's state once (at most every 5 minutes per device), subscribe every device's push and event
+/// notifications (1207 = already subscribed) and the device-list changes, then run in parallel:
 /// <list type="bullet">
-/// <item>the MQTT loop — stored client certificate (issued through a CSR when missing, rejected or expiring, at most once a
-/// minute), <c>GET route</c>, TLS on 8883 with the bundled AWS root, QoS 1 subscription; reconnecting with exponential
-/// back-off and jitter (AWS drops sessions routinely), re-posting event subscriptions and re-polling stale devices after
-/// each reconnect;</item>
-/// <item>the message loop — <c>DEVICE_STATUS</c> partial reports merged into the device's status (newest wins) and reported,
-/// <c>DEVICE_PUSH</c> codes as notification events, device-list changes as a rediscovery;</item>
-/// <item>a daily subscription refresh, a poller while MQTT is down (each device at most every 5 minutes), and the nightly
-/// energy run (random time 01:00–05:59 local: daily and monthly Wh → energy windows).</item>
+/// <item>the MQTT loop — register the client (<c>POST client</c>, allowExist), stored client certificate (issued through a
+/// CSR when missing, rejected or expiring, at most once a minute), <c>GET route</c>, TLS on 8883 with the bundled AWS root,
+/// QoS 1 subscription; reconnecting with exponential back-off and jitter (AWS drops sessions routinely; the back-off only
+/// starts over after a connection that lasted), re-posting event subscriptions and re-polling stale devices after each
+/// reconnect. A refused or unusable setup answer degrades to polling and is retried; it never stops the session;</item>
+/// <item>the message loop — <c>DEVICE_STATUS</c> partial reports merged into the device's status (newest wins, also over a
+/// poll that was on its way) and reported, <c>DEVICE_PUSH</c> codes as notification events, device-list changes as a
+/// rediscovery;</item>
+/// <item>a daily subscription refresh, a poller (each device at most every 5 minutes: all while MQTT is down, and always the
+/// appliances MQTT does not report), and the nightly energy run (random time 01:00–05:59 local: daily and monthly Wh →
+/// energy windows).</item>
 /// </list>
 /// All calls share the token's budget. A rejected token sets <see cref="IntegrationStatus.NeedsReauth"/> and the runtime
 /// waits (the replace-token flow restarts it); the call limit (1306) sets <see cref="IntegrationStatus.QuotaExceeded"/>
@@ -47,6 +51,7 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
     private readonly Dictionary<string, LgDeviceModel> _devices = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _usedKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Availability> _availability = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _pollOnly = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _rediscover = new(0, 1);
     private IConnectorContext? _context;
     private LgApiClient? _api;
@@ -268,7 +273,6 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
     {
         await DiscoverAsync(context, api, cancellationToken).ConfigureAwait(false);
         await PollStaleAsync(context, api, cancellationToken).ConfigureAwait(false);
-        await CallAsync(context, ct => api.RegisterClientAsync(ct), cancellationToken).ConfigureAwait(false);
         await SubscribeAllAsync(context, api, push: true, cancellationToken).ConfigureAwait(false);
         context.SetStatus(IntegrationStatus.Degraded, "Connected to LG ThinQ; real-time updates are starting.");
 
@@ -283,7 +287,7 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             MqttLoopAsync(context, api, clientId, inbox.Writer, stop.Token),
             ProcessAsync(context, inbox.Reader, stop.Token),
             RefreshLoopAsync(context, api, stop.Token),
-            PollWhileDownAsync(context, api, stop.Token),
+            PollLoopAsync(context, api, stop.Token),
             EnergyLoopAsync(context, api, stop.Token),
             RediscoveryLoopAsync(context, api, stop.Token),
         ];
@@ -372,6 +376,7 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
         var list = LgDeviceInfo.ParseList(await CallAsync(context, ct => api.GetDevicesAsync(ct), cancellationToken).ConfigureAwait(false));
         var parents = LgDeviceMapper.Parents(list);
         var models = new List<LgDeviceModel>();
+        var unanswered = new List<string>();
         foreach (var info in list)
         {
             LgCachedProfile? cached;
@@ -379,11 +384,22 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             {
                 cached = await ProfileAsync(context, api, info, cancellationToken).ConfigureAwait(false);
             }
-            catch (LgApiException exception) when (exception.Kind is LgErrorKind.Device or LgErrorKind.Other or LgErrorKind.CommandRejected)
+            catch (LgApiException exception) when (exception.Kind is LgErrorKind.Device)
             {
-                // Not supported by ThinQ Connect (or gone meanwhile): left out of the inventory.
+                // Gone meanwhile, not owned, or a model ThinQ Connect does not support: not part of the inventory.
                 LogProfileFailed(context.Logger, info.DeviceId, info.DeviceType, LgErrors.NameOf(exception.Code));
                 continue;
+            }
+            catch (LgApiException exception) when (exception.Kind is LgErrorKind.Other or LgErrorKind.CommandRejected)
+            {
+                // LG lists the appliance but cannot answer its profile right now: the last profile stands in, else the
+                // appliance waits for the next discovery — it is listed, so it must not be orphaned.
+                LogProfileFailed(context.Logger, info.DeviceId, info.DeviceType, LgErrors.NameOf(exception.Code));
+                if (!_memory.Profiles.TryGetValue(info.DeviceId, out cached))
+                {
+                    unanswered.Add(info.DeviceId);
+                    continue;
+                }
             }
 
             var model = LgDeviceMapper.Map(info, cached.Profile, cached.Energy, parents.GetValueOrDefault(info.DeviceId));
@@ -393,35 +409,32 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             }
         }
 
-        try
+        if (unanswered.Count == 0)
         {
-            await context.SyncInventoryAsync([.. models.Select(m => m.Discovered)], cancellationToken).ConfigureAwait(false);
-        }
-        catch (ArgumentException exception)
-        {
-            // A mapping bug must not take every appliance down: report them one by one, skipping the rejected one.
-            LogInventoryRejected(context.Logger, exception.Message);
-            var accepted = new List<LgDeviceModel>();
-            foreach (var model in models)
+            try
             {
-                try
-                {
-                    await context.UpsertDeviceAsync(model.Discovered, cancellationToken).ConfigureAwait(false);
-                    accepted.Add(model);
-                }
-                catch (ArgumentException rejected)
-                {
-                    LogDeviceRejected(context.Logger, model.DeviceId, rejected.Message);
-                }
+                await context.SyncInventoryAsync([.. models.Select(m => m.Discovered)], cancellationToken).ConfigureAwait(false);
             }
-
-            models = accepted;
+            catch (ArgumentException exception)
+            {
+                // A mapping bug must not take every appliance down: report them one by one, skipping the rejected one.
+                LogInventoryRejected(context.Logger, exception.Message);
+                models = await UpsertEachAsync(context, models, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            // Not a full inventory: claiming one would orphan the appliances LG could not describe.
+            LogInventoryIncomplete(context.Logger, unanswered.Count);
+            models = await UpsertEachAsync(context, models, cancellationToken).ConfigureAwait(false);
         }
 
         lock (_lock)
         {
+            // Appliances LG could not describe this time keep their last model (commands and reports keep working).
+            var kept = unanswered.Select(id => _devices.GetValueOrDefault(id)).OfType<LgDeviceModel>().ToList();
             _devices.Clear();
-            foreach (var model in models)
+            foreach (var model in models.Concat(kept))
             {
                 _devices[model.DeviceId] = model;
             }
@@ -437,6 +450,26 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
                 Report(context, model, status.Current);
             }
         }
+    }
+
+    /// <summary>Adds or updates the devices one by one (parents first), skipping any the inventory rejects; nothing is orphaned.</summary>
+    private static async Task<List<LgDeviceModel>> UpsertEachAsync(IConnectorContext context, List<LgDeviceModel> models, CancellationToken cancellationToken)
+    {
+        var accepted = new List<LgDeviceModel>();
+        foreach (var model in models.OrderBy(m => m.Discovered.ParentExternalId is null ? 0 : 1))
+        {
+            try
+            {
+                await context.UpsertDeviceAsync(model.Discovered, cancellationToken).ConfigureAwait(false);
+                accepted.Add(model);
+            }
+            catch (ArgumentException rejected)
+            {
+                LogDeviceRejected(context.Logger, model.DeviceId, rejected.Message);
+            }
+        }
+
+        return accepted;
     }
 
     private async Task<LgCachedProfile> ProfileAsync(IConnectorContext context, LgApiClient api, LgDeviceInfo info, CancellationToken cancellationToken)
@@ -550,13 +583,19 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
     private async Task PollAsync(IConnectorContext context, LgApiClient api, LgDeviceModel device, CancellationToken cancellationToken)
     {
         _memory.LastPoll[device.DeviceId] = context.Time.GetUtcNow();
+        var current = _memory.StatusOf(device.DeviceId);
+
+        // The answer counts as of the moment it was asked for: reports that arrive meanwhile are newer and stay.
+        var asked = current.Version;
         var state = await api.GetStateAsync(device.DeviceId, cancellationToken).ConfigureAwait(false);
-        var status = _memory.StatusOf(device.DeviceId).Replace(state);
-        Report(context, device, status);
+        Report(context, device, current.Replace(state, asked));
     }
 
-    /// <summary>While MQTT is down, polls each device at most every <see cref="LgRuntimeOptions.PollInterval"/>.</summary>
-    private async Task PollWhileDownAsync(IConnectorContext context, LgApiClient api, CancellationToken cancellationToken)
+    /// <summary>
+    /// Polls each device at most every <see cref="LgRuntimeOptions.PollInterval"/>: all of them while MQTT is down, and
+    /// always those MQTT does not report (not reportable, or their event subscription was refused).
+    /// </summary>
+    private async Task PollLoopAsync(IConnectorContext context, LgApiClient api, CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -564,7 +603,24 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             if (!_mqttConnected)
             {
                 await PollStaleAsync(context, api, cancellationToken).ConfigureAwait(false);
+                continue;
             }
+
+            foreach (var device in Devices.Where(d => !d.Reportable || IsPollOnly(d.DeviceId)))
+            {
+                if (PollDue(device.DeviceId, context.Time.GetUtcNow()))
+                {
+                    await PollDeviceAsync(context, api, device, cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+    }
+
+    private bool IsPollOnly(string deviceId)
+    {
+        lock (_lock)
+        {
+            return _pollOnly.Contains(deviceId);
         }
     }
 
@@ -594,19 +650,35 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
 
     private async Task SubscribeDeviceAsync(IConnectorContext context, LgApiClient api, LgDeviceModel device, bool push, CancellationToken cancellationToken)
     {
-        try
+        if (push)
         {
-            if (push)
+            try
             {
                 await CallAsync(context, ct => api.SubscribePushAsync(device.DeviceId, ct), cancellationToken).ConfigureAwait(false);
             }
+            catch (LgApiException exception) when (exception.Kind is LgErrorKind.Device or LgErrorKind.Other or LgErrorKind.CommandRejected)
+            {
+                // Appliances without notifications (robot cleaners, microwaves): their state events still matter.
+                LogSubscribeFailed(context.Logger, device.DeviceId, LgErrors.NameOf(exception.Code));
+            }
+        }
 
+        try
+        {
             await CallAsync(context, ct => api.SubscribeEventAsync(device.DeviceId, ct), cancellationToken).ConfigureAwait(false);
+            lock (_lock)
+            {
+                _pollOnly.Remove(device.DeviceId);
+            }
         }
         catch (LgApiException exception) when (exception.Kind is LgErrorKind.Device or LgErrorKind.Other or LgErrorKind.CommandRejected)
         {
-            // Some appliances (old models) cannot be subscribed: they report through polling only.
+            // Some appliances (old models) cannot be subscribed: they are polled every 5 minutes instead.
             LogSubscribeFailed(context.Logger, device.DeviceId, LgErrors.NameOf(exception.Code));
+            lock (_lock)
+            {
+                _pollOnly.Add(device.DeviceId);
+            }
         }
     }
 
@@ -630,6 +702,7 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
     {
         var failures = 0;
         var rejections = 0;
+        var registered = false;
         string? host = null;
         var port = 8883;
         while (true)
@@ -638,19 +711,34 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             LgMqttCredentials credentials;
             try
             {
+                if (!registered)
+                {
+                    // POST client (allowExist) once per session, like the SDK on every start.
+                    await CallAsync(context, ct => api.RegisterClientAsync(ct), cancellationToken).ConfigureAwait(false);
+                    registered = true;
+                }
+
                 credentials = await CredentialsAsync(context, api, reissue: rejections >= 2, cancellationToken).ConfigureAwait(false);
                 if (host is null || failures >= 3)
                 {
                     var route = await CallAsync(context, ct => api.GetRouteAsync(ct), cancellationToken).ConfigureAwait(false);
                     (host, port) = ParseRoute(route.Str("mqttServer"));
                 }
+
+                if (host is null)
+                {
+                    throw new LgMqttSetupException("LG ThinQ did not name an MQTT server (GET route)");
+                }
             }
-            catch (LgApiException exception) when (exception.Kind is LgErrorKind.Device or LgErrorKind.Other or LgErrorKind.CommandRejected)
+            catch (Exception exception) when (exception is LgMqttSetupException
+                or LgApiException { Kind: LgErrorKind.Device or LgErrorKind.Other or LgErrorKind.CommandRejected })
             {
-                // LG refused the certificate or route request: keep polling and try again later.
-                LogMqttSetupFailed(context.Logger, LgErrors.NameOf(exception.Code), exception.Code ?? "-");
+                // LG refused (or answered nothing usable to) the client, certificate or route request: real-time updates
+                // are optional — keep polling and try again later; never stop the integration over it.
+                var reason = exception is LgApiException refused ? $"{LgErrors.NameOf(refused.Code)} {refused.Code}" : exception.Message;
+                LogMqttSetupFailed(context.Logger, reason);
                 var wait = Task.Delay(Backoff(_options.ReconnectInitial, _options.ReconnectMax, failures++), context.Time, cancellationToken);
-                context.SetStatus(IntegrationStatus.Degraded, $"LG ThinQ refused to set up the real-time client ({LgErrors.NameOf(exception.Code)}); retrying, polling meanwhile.");
+                context.SetStatus(IntegrationStatus.Degraded, $"LG ThinQ could not set up the real-time client ({reason}); retrying, polling meanwhile.");
                 await wait.ConfigureAwait(false);
                 continue;
             }
@@ -658,11 +746,6 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             if (rejections >= 2)
             {
                 rejections = 0;
-            }
-
-            if (host is null)
-            {
-                throw new LgHaltException(IntegrationStatus.Error, "LG ThinQ did not name an MQTT server (GET route).", _options.AccountRetry);
             }
 
             X509Certificate2 clientCertificate;
@@ -700,7 +783,7 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             {
                 await transport.ConnectAsync(cancellationToken).ConfigureAwait(false);
                 await transport.SubscribeAsync(credentials.Topic, cancellationToken).ConfigureAwait(false);
-                failures = 0;
+                var connectedAt = context.Time.GetUtcNow();
                 rejections = 0;
                 _mqttConnected = true;
                 Interlocked.Increment(ref _connections);
@@ -711,6 +794,13 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
                 var reason = await WaitForLossAsync(context, transport, lost.Task, cancellationToken).ConfigureAwait(false);
                 message = $"Lost the LG ThinQ real-time connection ({reason}); reconnecting, polling meanwhile.";
                 LogMqttLost(context.Logger, reason);
+
+                // Only a connection that lasted starts the back-off over: one the broker drops right away (a duplicate
+                // client id, a refused session) keeps backing off instead of reconnecting every second.
+                if (context.Time.GetUtcNow() - connectedAt >= _options.StableConnection)
+                {
+                    failures = 0;
+                }
             }
             catch (LgMqttConnectException exception)
             {
@@ -790,21 +880,39 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
                 return stored;
             }
 
-            var wait = _memory.LastCertificateRequest + _options.CertificateMinInterval - now;
-            if (wait > TimeSpan.Zero)
-            {
-                await Task.Delay(wait, context.Time, cancellationToken).ConfigureAwait(false);
-            }
-
             var (key, csr) = LgCsr.Create();
-            _memory.LastCertificateRequest = context.Time.GetUtcNow();
-            var answer = await CallAsync(context, ct => api.IssueCertificateAsync(csr, ct), cancellationToken).ConfigureAwait(false);
+
+            // Every attempt waits for its minute — a retry after a timeout or a server error too: LG may have issued (and
+            // counted) the certificate whose answer never arrived.
+            var answer = await CallAsync(
+                    context,
+                    async ct =>
+                    {
+                        var wait = _memory.LastCertificateRequest + _options.CertificateMinInterval - context.Time.GetUtcNow();
+                        if (wait > TimeSpan.Zero)
+                        {
+                            await Task.Delay(wait, context.Time, ct).ConfigureAwait(false);
+                        }
+
+                        _memory.LastCertificateRequest = context.Time.GetUtcNow();
+                        try
+                        {
+                            return await api.IssueCertificateAsync(csr, ct).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            // Counted from when the attempt ended (it may have waited for the call budget first).
+                            _memory.LastCertificateRequest = context.Time.GetUtcNow();
+                        }
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
             var result = answer.Get("result") ?? answer;
             var certificate = result.Str("certificatePem");
             var topic = result.Array("subscriptions").Select(s => s.ValueKind == JsonValueKind.String ? s.GetString() : null).FirstOrDefault(s => s is { Length: > 0 });
             if (certificate is null || topic is null)
             {
-                throw new LgHaltException(IntegrationStatus.Error, "LG ThinQ did not issue an MQTT client certificate.", _options.AccountRetry);
+                throw new LgMqttSetupException("LG ThinQ did not issue an MQTT client certificate");
             }
 
             var issued = new LgMqttCredentials(key, certificate, topic, context.Time.GetUtcNow());
@@ -842,9 +950,9 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             {
                 Handle(context, message);
             }
-            catch (Exception exception) when (exception is JsonException or InvalidOperationException or ArgumentException or FormatException)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // One bad message never stops the integration.
+                // One bad message (or a mapping bug it exposes) never stops the integration.
                 LogMessageFailed(context.Logger, exception.GetType().Name);
             }
         }
@@ -956,6 +1064,21 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
             {
                 var daily = await UsageAsync(context, api, device, property, LgEnergy.Daily, LgDates.Day(query.DailyFrom), LgDates.Day(query.DailyTo), cancellationToken)
                     .ConfigureAwait(false);
+                if (LgEnergy.IsUndated(daily, property, LgEnergy.Daily, query.DailyFrom, query.DailyTo))
+                {
+                    // LG's answer has no date we can read per entry: ask for yesterday alone (summed, like LG's SDK). The
+                    // months are left out: spread over the days, they would overwrite what earlier nights reported.
+                    LogEnergyUndated(context.Logger, device.DeviceId, property);
+                    var yesterday = await UsageAsync(context, api, device, property, LgEnergy.Daily, LgDates.Day(query.DailyTo), LgDates.Day(query.DailyTo), cancellationToken)
+                        .ConfigureAwait(false);
+                    if (LgEnergy.Total(yesterday, property) is { } wh)
+                    {
+                        windows.Add(LgEnergy.Day(device.DeviceId, endpoint, query.DailyTo, wh, _settings.TimeZone));
+                    }
+
+                    continue;
+                }
+
                 var monthly = await UsageAsync(context, api, device, property, LgEnergy.Monthly, LgDates.Month(query.MonthlyFrom), LgDates.Month(query.MonthlyTo), cancellationToken)
                     .ConfigureAwait(false);
                 windows.AddRange(LgEnergy.Windows(device.DeviceId, endpoint, property, daily, monthly, query, _settings.TimeZone));
@@ -1025,6 +1148,9 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
     [LoggerMessage(Level = LogLevel.Error, Message = "LG ThinQ inventory rejected ({Reason}); reporting appliances one by one")]
     private static partial void LogInventoryRejected(ILogger logger, string reason);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LG ThinQ could not describe {Count} listed appliances for now; appliances are updated, none is orphaned this time")]
+    private static partial void LogInventoryIncomplete(ILogger logger, int count);
+
     [LoggerMessage(Level = LogLevel.Error, Message = "LG ThinQ appliance {DeviceId} was rejected by the inventory (skipped): {Reason}")]
     private static partial void LogDeviceRejected(ILogger logger, string deviceId, string reason);
 
@@ -1046,8 +1172,8 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
     [LoggerMessage(Level = LogLevel.Warning, Message = "LG ThinQ real-time connection failed")]
     private static partial void LogMqttError(ILogger logger, Exception exception);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "LG ThinQ refused to set up the MQTT client: {ErrorName} ({Code})")]
-    private static partial void LogMqttSetupFailed(ILogger logger, string errorName, string code);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LG ThinQ could not set up the MQTT client: {Reason}")]
+    private static partial void LogMqttSetupFailed(ILogger logger, string reason);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "LG ThinQ stored MQTT client certificate is unusable; requesting a new one")]
     private static partial void LogCredentialsUnusable(ILogger logger);
@@ -1076,9 +1202,15 @@ internal sealed partial class LgThinQRuntime : IConnectorRuntime
     [LoggerMessage(Level = LogLevel.Warning, Message = "LG ThinQ energy windows could not be saved ({Error}); the next run reports them again")]
     private static partial void LogEnergyFailed(ILogger logger, string error);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "LG ThinQ energy of {DeviceId} ({Property}): the daily answer has no readable dates; reporting yesterday alone")]
+    private static partial void LogEnergyUndated(ILogger logger, string deviceId, string property);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "LG ThinQ energy of {DeviceId} ({Period}) not available ({Error})")]
     private static partial void LogEnergyUnavailable(ILogger logger, string deviceId, string period, string error);
 }
+
+/// <summary>LG answered an MQTT setup request (client certificate, route) with nothing usable: retried, polling meanwhile.</summary>
+internal sealed class LgMqttSetupException(string message) : Exception(message);
 
 /// <summary>The session cannot go on: set <see cref="Status"/> and wait (for <see cref="RetryAfter"/>, or until restarted).</summary>
 internal sealed class LgHaltException(IntegrationStatus status, string message, TimeSpan? retryAfter) : Exception(message)

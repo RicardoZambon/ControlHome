@@ -75,8 +75,9 @@ internal sealed class LgModelBuilder(LgProfile profile)
         string deviceType,
         DiscoveredDevice device,
         IReadOnlyList<(string Endpoint, string Property)> energy,
-        IReadOnlyDictionary<string, string> notifications) =>
-        new(deviceId, deviceType, device with { Endpoints = [.. _endpoints.Where(e => !e.IsEmpty).Select(e => e.Build())] }, _reads, _commands, energy, notifications);
+        IReadOnlyDictionary<string, string> notifications,
+        bool reportable) =>
+        new(deviceId, deviceType, device with { Endpoints = [.. _endpoints.Where(e => !e.IsEmpty).Select(e => e.Build())] }, _reads, _commands, energy, notifications, reportable);
 }
 
 /// <summary>One endpoint under construction.</summary>

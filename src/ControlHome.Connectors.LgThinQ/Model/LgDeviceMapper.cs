@@ -153,7 +153,7 @@ internal static class LgDeviceMapper
             new Dictionary<string, string>(StringComparer.Ordinal),
             null,
             []);
-        return builder.Build(info.DeviceId, type, device, energy, notifications);
+        return builder.Build(info.DeviceId, type, device, energy, notifications, info.Reportable);
     }
 
     /// <summary>

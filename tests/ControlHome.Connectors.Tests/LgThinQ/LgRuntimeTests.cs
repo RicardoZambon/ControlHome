@@ -141,6 +141,34 @@ public sealed class LgRuntimeTests : IDisposable
     }
 
     [Fact]
+    public async Task Connections_that_drop_right_away_back_off_instead_of_reconnecting_every_second()
+    {
+        Account();
+        await using var lg = await LgHarness.StartAsync(_cloud);
+        await lg.WaitForStatusAsync(IntegrationStatus.Ok);
+
+        // Each connection is dropped as soon as it is up (e.g. another client with the same id): 1 s, 2 s, 4 s, ...
+        foreach (var (wait, connections) in new[] { (1, 2), (2, 3), (4, 4) })
+        {
+            await lg.Broker.DropAsync();
+            await lg.WaitForStatusAsync(IntegrationStatus.Degraded);
+            lg.Time.Advance(TimeSpan.FromSeconds(wait) - TimeSpan.FromMilliseconds(100));
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+            lg.Runtime.Connections.ShouldBe(connections - 1, $"no reconnect before {wait} s");
+            lg.Time.Advance(TimeSpan.FromMilliseconds(100));
+            await lg.WaitUntilAsync(() => lg.Runtime.Connections == connections, $"reconnect {connections}");
+            await lg.WaitForStatusAsync(IntegrationStatus.Ok);
+        }
+
+        // A connection that stayed up for a while starts over at 1 s.
+        lg.Time.Advance(TimeSpan.FromMinutes(5));
+        await lg.Broker.DropAsync();
+        await lg.WaitForStatusAsync(IntegrationStatus.Degraded);
+        lg.Time.Advance(TimeSpan.FromSeconds(1));
+        await lg.WaitUntilAsync(() => lg.Runtime.Connections == 5, "a quick reconnect after a stable connection");
+    }
+
+    [Fact]
     public async Task While_mqtt_is_down_each_device_is_polled_every_five_minutes()
     {
         Account();
@@ -204,7 +232,7 @@ public sealed class LgRuntimeTests : IDisposable
         await using var lg = await LgHarness.StartAsync(_cloud, waitForMqtt: false);
 
         await lg.WaitUntilAsync(
-            () => lg.Context.Statuses.Any(s => s.Message?.Contains("refused to set up the real-time client", StringComparison.Ordinal) == true),
+            () => lg.Context.Statuses.Any(s => s.Message?.Contains("could not set up the real-time client", StringComparison.Ordinal) == true),
             "the refusal is reported");
         lg.Running.IsCompleted.ShouldBeFalse();
 
@@ -216,6 +244,159 @@ public sealed class LgRuntimeTests : IDisposable
             },
             "the runtime connects once LG issues the certificate");
         _cloud.Requests("POST", "/client/certificate").Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_certificate_request_that_fails_on_the_way_is_not_sent_again_within_a_minute()
+    {
+        _cloud.Server.Given(Request.Create().WithPath("/client/certificate").UsingPost()).AtPriority(1).InScenario("certificate").WillSetStateTo("issued")
+            .RespondWith(Response.Create().WithStatusCode(503).WithBody(LgFixtures.Error("2000")));
+        Account();
+        await using var lg = await LgHarness.StartAsync(_cloud, waitForMqtt: false);
+        await lg.WaitUntilAsync(() => _cloud.Requests("POST", "/client/certificate").Count == 1, "the first certificate request failed");
+
+        DateTimeOffset? second = null;
+        await lg.WaitUntilAsync(
+            () =>
+            {
+                lg.Time.Advance(TimeSpan.FromSeconds(5));
+                second ??= _cloud.Requests("POST", "/client/certificate").Count == 2 ? lg.Time.GetUtcNow() : null;
+                return lg.Runtime.MqttConnected;
+            },
+            "the runtime connects once LG issues the certificate");
+
+        second!.Value.ShouldBeGreaterThanOrEqualTo(LgHarness.Start.AddMinutes(1));
+        _cloud.Requests("POST", "/client/certificate").Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task An_unusable_mqtt_setup_answer_degrades_to_polling_and_never_halts_the_integration()
+    {
+        _cloud.Ok("GET", "/route", """{"apiServer":"https://api-aic.lgthinq.com"}""", priority: 1);
+        Account();
+        await using var lg = await LgHarness.StartAsync(_cloud, waitForMqtt: false);
+
+        await lg.WaitUntilAsync(
+            () => lg.Context.Statuses.Any(s => s.Status == IntegrationStatus.Degraded && s.Message!.Contains("real-time", StringComparison.Ordinal)),
+            "the missing MQTT server is reported");
+        lg.Context.Statuses.ShouldNotContain(s => s.Status == IntegrationStatus.Error);
+
+        // The session goes on: commands work and appliances are polled every 5 minutes.
+        (await lg.ExecuteAsync(Ac, CapabilityIds.Switch, "turnOff")).ShouldBe(CommandOutcome.AcceptedOutcome);
+        lg.Time.Advance(TimeSpan.FromMinutes(5));
+        await lg.WaitUntilAsync(() => _cloud.Requests("GET", $"/devices/{Ac}/state").Count == 2, "the appliance is polled again");
+        lg.Running.IsCompleted.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_refused_client_registration_degrades_to_polling_and_is_retried()
+    {
+        _cloud.Server.Given(Request.Create().WithPath("/client").UsingPost()).AtPriority(1).InScenario("client").WillSetStateTo("registered")
+            .RespondWith(Response.Create().WithStatusCode(400).WithBody(LgFixtures.Error("1312")));
+        Account();
+        await using var lg = await LgHarness.StartAsync(_cloud, waitForMqtt: false);
+
+        await lg.WaitUntilAsync(
+            () =>
+            {
+                lg.Time.Advance(TimeSpan.FromSeconds(1));
+                return lg.Runtime.MqttConnected;
+            },
+            "the runtime connects once LG registers the client");
+        _cloud.Requests("POST", "/client").Count.ShouldBe(2);
+        lg.Context.Syncs.ShouldHaveSingleItem(); // one session: the refusal did not restart the integration
+    }
+
+    [Fact]
+    public async Task A_report_that_arrives_while_a_poll_is_on_the_way_is_not_overwritten_by_the_older_snapshot()
+    {
+        Account();
+        await using var lg = await LgHarness.StartAsync(_cloud);
+        await lg.WaitForStateAsync(Ac, CapabilityIds.Switch, "on", StateValue.True);
+
+        // The next poll's answer is held back until the test lets it go.
+        var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var snapshot = LgFixtures.Text("ac.status.json").Replace("\"targetTemperature\": 19", "\"targetTemperature\": 26", StringComparison.Ordinal);
+        snapshot.ShouldContain("\"targetTemperature\": 26");
+        _cloud.Server.Given(Request.Create().WithPath($"/devices/{Ac}/state").UsingGet()).AtPriority(1)
+            .RespondWith(Response.Create().WithCallback(_ =>
+            {
+                received.TrySetResult();
+                release.Task.Wait(TimeSpan.FromSeconds(10));
+                return new WireMock.ResponseMessage
+                {
+                    StatusCode = 200,
+                    Headers = new Dictionary<string, WireMock.Types.WireMockList<string>> { ["Content-Type"] = new("application/json") },
+                    BodyData = new WireMock.Util.BodyData { BodyAsString = LgFixtures.Ok(snapshot), DetectedBodyType = WireMock.Types.BodyType.String },
+                };
+            }));
+        lg.Time.Advance(TimeSpan.FromMinutes(5));
+        var refresh = lg.Runtime.RefreshAsync(Ac, TestContext.Current.CancellationToken);
+        await received.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        // Meanwhile the AC is switched off in the LG app: the report arrives before the (older) snapshot.
+        await lg.PublishAsync("""{"deviceId":"test-ac-0001","deviceType":"DEVICE_AIR_CONDITIONER","pushType":"DEVICE_STATUS","report":{"operation":{"airConOperationMode":"POWER_OFF"}}}""");
+        await lg.WaitForStateAsync(Ac, CapabilityIds.Switch, "on", StateValue.False);
+        release.TrySetResult();
+        await refresh;
+
+        lg.Latest(Ac, CapabilityIds.Switch, "on")!.Value.ShouldBe(StateValue.False);
+        lg.Latest(Ac, CapabilityIds.Thermostat, "targetTemperature")!.Value.ShouldBe(StateValue.Number(26)); // the rest of the snapshot applies
+    }
+
+    [Fact]
+    public async Task A_listed_appliance_whose_profile_fails_for_now_is_never_orphaned()
+    {
+        _cloud.Server.Given(Request.Create().WithPath($"/devices/{Fridge}/profile").UsingGet()).AtPriority(1)
+            .RespondWith(Response.Create().WithStatusCode(400).WithBody(LgFixtures.Error("1000")));
+        Account();
+        await using var lg = await LgHarness.StartAsync(_cloud);
+
+        lg.Context.Syncs.ShouldBeEmpty(); // no full inventory: that would orphan the fridge
+        lg.Context.Devices.Select(d => d.ExternalId).ShouldBe([Ac, Tower]);
+        lg.Context.Removed.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_cached_profile_stands_in_when_lg_cannot_answer_it_after_a_restart()
+    {
+        Account();
+        var broker = new FakeLgBroker();
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(LgHarness.Start);
+        using var factory = new LgThinQConnectorFactory(null, LgHarness.Options(_cloud), broker.Factory);
+        var secrets = new MemorySecretStore((LgSecrets.Pat, LgHarness.Pat), (LgSecrets.ClientId, LgHarness.ClientId));
+        await using (var first = await LgHarness.StartAsync(_cloud, broker, factory, secrets, time))
+        {
+            first.Context.Syncs.ShouldHaveSingleItem().ShouldBe([Ac, Fridge, Tower]);
+        }
+
+        // A week later every profile is fetched again; the fridge's fails.
+        time.Advance(TimeSpan.FromDays(8));
+        _cloud.Server.Given(Request.Create().WithPath($"/devices/{Fridge}/profile").UsingGet()).AtPriority(1)
+            .RespondWith(Response.Create().WithStatusCode(400).WithBody(LgFixtures.Error("1000")));
+        await using var second = await LgHarness.StartAsync(_cloud, broker, factory, secrets, time);
+
+        second.Context.Syncs.ShouldHaveSingleItem().ShouldBe([Ac, Fridge, Tower]);
+    }
+
+    [Fact]
+    public async Task Appliances_without_event_reports_are_polled_every_five_minutes_while_mqtt_is_up()
+    {
+        const string Robot = "test-robot-0010";
+        _cloud.Account("broker.test", 8883, (Ac, "ac"), (Fridge, "refrigerator"), (Robot, "robot-cleaner"));
+        _cloud.Fails("POST", $"/event/{Fridge}/subscribe", "1214");
+        await using var lg = await LgHarness.StartAsync(_cloud);
+        await lg.WaitForStatusAsync(IntegrationStatus.Ok);
+
+        lg.Time.Advance(TimeSpan.FromMinutes(5));
+        await lg.WaitUntilAsync(
+            () => _cloud.Requests("GET", $"/devices/{Fridge}/state").Count == 2 && _cloud.Requests("GET", $"/devices/{Robot}/state").Count == 2,
+            "the fridge (subscription refused) and the robot (not reportable) are polled");
+        lg.Time.Advance(TimeSpan.FromMinutes(1));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        _cloud.Requests("GET", $"/devices/{Ac}/state").Count.ShouldBe(1); // MQTT reports the AC
+        _cloud.Requests("GET", $"/devices/{Fridge}/state").Count.ShouldBe(2);
     }
 
     [Fact]
@@ -305,6 +486,32 @@ public sealed class LgRuntimeTests : IDisposable
             new EnergyWindowReport(Ac, "main", Utc(9, 1), Utc(10, 1), 30000),
             new EnergyWindowReport(Ac, "main", Utc(10, 1), Utc(10, 22), 21000),
         ]);
+    }
+
+    [Fact]
+    public async Task An_energy_answer_without_recognisable_dates_reports_yesterday_alone()
+    {
+        Account();
+
+        // The range answer has no date per entry: only a one-day query (summed, like LG's SDK) says which day it is.
+        _cloud.Server.Given(Request.Create().WithPath($"/devices/energy/{Ac}/usage").WithParam("period", "DAILY").WithParam("startDate", "20260901").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200).WithBody(LgFixtures.Ok("""{"result":{"dataList":[{"energyUsage":1200},{"energyUsage":300}]}}""")));
+        _cloud.Server.Given(Request.Create().WithPath($"/devices/energy/{Ac}/usage").WithParam("period", "DAILY").WithParam("startDate", "20261021").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200).WithBody(LgFixtures.Ok("""{"result":{"dataList":[{"energyUsage":250},{"energyUsage":50}]}}""")));
+        _cloud.Server.Given(Request.Create().WithPath($"/devices/energy/{Ac}/usage").WithParam("period", "MONTHLY").UsingGet())
+            .RespondWith(Response.Create().WithStatusCode(200).WithBody(LgFixtures.Ok("""{"result":{"dataList":[{"energyUsage":30000},{"energyUsage":21000}]}}""")));
+        _cloud.Fails("GET", $"/devices/energy/{Tower}/usage", "1219");
+        _cloud.Fails("GET", $"/devices/energy/{Fridge}/usage", "1219");
+        await using var lg = await LgHarness.StartAsync(_cloud);
+        await lg.WaitUntilAsync(() => lg.Runtime.NextEnergyRun is not null, "the energy run is scheduled");
+
+        lg.Time.SetUtcNow(lg.Runtime.NextEnergyRun!.Value);
+        await lg.WaitUntilAsync(() => lg.Runtime.EnergyRuns == 1, "the energy run finished");
+
+        // Months are left out: spread over the days, they would overwrite the days earlier nights reported.
+        lg.Context.EnergyReports.ShouldHaveSingleItem().ShouldBe([new EnergyWindowReport(Ac, "main", Utc(10, 21), Utc(10, 22), 300)]);
+        var yesterday = _cloud.Requests("GET", $"/devices/energy/{Ac}/usage").Last(r => r.Query!["period"].Single() == "DAILY");
+        (yesterday.Query!["startDate"].Single(), yesterday.Query["endDate"].Single()).ShouldBe(("20261021", "20261021"));
     }
 
     [Fact]

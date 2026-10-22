@@ -51,6 +51,7 @@ public sealed class LgSetupFlowTests : IDisposable
     [InlineData("1304", "pat", "terms")]
     [InlineData("1307", "country", "country")]
     [InlineData("1306", "pat", "call limit")]
+    [InlineData("1301", "apiKey", "API key")]
     public async Task Rejections_come_back_on_the_field_to_fix(string code, string field, string text)
     {
         _cloud.Fails("GET", "/devices", code, code == "1103" ? 401 : 400);
