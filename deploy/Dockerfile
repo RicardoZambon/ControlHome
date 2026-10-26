@@ -77,7 +77,7 @@ RUN dotnet publish src/ControlHome.Api/ControlHome.Api.csproj \
 # ---------------------------------------------------------------------------------------------------------------------
 # final: chiseled ASP.NET Core runtime (non-root, no shell or package manager; "extra" adds ICU and tzdata)
 # ---------------------------------------------------------------------------------------------------------------------
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra@sha256:3ed6558056b54d5c9dfefb7ff473728e022ff2bf1d976cbf8ee07b05ec594374 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra@sha256:9b755ea799ae649141a073e30d8b62d8095a5465af2b7694d17866e8c05131d8 AS final
 
 LABEL org.opencontainers.image.title="ControlHome" \
       org.opencontainers.image.description="Self-hosted home control and automation for the LAN (ASP.NET Core API + Vue SPA)." \
