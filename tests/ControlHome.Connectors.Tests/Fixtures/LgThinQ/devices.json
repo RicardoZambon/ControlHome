@@ -1,0 +1,13 @@
+[
+  { "deviceId": "test-ac-0001", "deviceInfo": { "deviceType": "DEVICE_AIR_CONDITIONER", "modelName": "PAC_910604_WW", "alias": "Living room AC", "reportable": true } },
+  { "deviceId": "test-washer-0002", "deviceInfo": { "deviceType": "DEVICE_WASHER", "modelName": "FAFXU22027", "alias": "Washer", "reportable": true } },
+  { "deviceId": "test-fridge-0003", "deviceInfo": { "deviceType": "DEVICE_REFRIGERATOR", "modelName": "TEST_FRIDGE_MODEL", "alias": "Kitchen fridge", "reportable": true } },
+  { "deviceId": "test-tower-0004", "deviceInfo": { "deviceType": "DEVICE_WASHTOWER", "modelName": "TEST_WASHTOWER_MODEL", "alias": "WashTower", "reportable": true } },
+  { "deviceId": "test-towerdryer-0006", "deviceInfo": { "deviceType": "DEVICE_WASHTOWER_DRYER", "modelName": "W3S1CVK2EVS", "alias": "Tower dryer", "reportable": true, "groupId": "test-group-0001" } },
+  { "deviceId": "test-towerwasher-0005", "deviceInfo": { "deviceType": "DEVICE_WASHTOWER_WASHER", "modelName": "TEST_TOWER_WASHER_MODEL", "alias": "Tower washer", "reportable": true, "groupId": "test-group-0001" } },
+  { "deviceId": "test-dish-0007", "deviceInfo": { "deviceType": "DEVICE_DISH_WASHER", "modelName": "TEST_DISHWASHER_MODEL", "alias": "Dishwasher", "reportable": true } },
+  { "deviceId": "test-purifier-0008", "deviceInfo": { "deviceType": "DEVICE_AIR_PURIFIER", "modelName": "AIR_910604_WW", "alias": "Air purifier", "reportable": true } },
+  { "deviceId": "test-dehum-0009", "deviceInfo": { "deviceType": "DEVICE_DEHUMIDIFIER", "modelName": "DHUM_056905_KR", "alias": "Dehumidifier", "reportable": true } },
+  { "deviceId": "test-robot-0010", "deviceInfo": { "deviceType": "DEVICE_ROBOT_CLEANER", "modelName": "TEST_ROBOT_MODEL", "alias": "Robot", "reportable": false } },
+  { "deviceId": "test-kimchi-0011", "deviceInfo": { "deviceType": "DEVICE_KIMCHI_REFRIGERATOR", "modelName": "2REB1KRS11__H", "alias": "Kimchi fridge", "reportable": true } }
+]

@@ -244,6 +244,7 @@ endpoints and orphaned devices are left out of the rooms.
   - `RefreshAsync(device)`.
 - **`IConnectorContext`**:
   - `ReportState(attr, value, observedAtUtc?)`, `ReportEvent`, `ReportAvailability`.
+  - `ReportEnergyWindowsAsync(EnergyWindowReport[])` for vendor energy history (Wh per past window, see §6).
   - `UpsertDevice` / `RemoveDevice` for connectors that push their own inventory.
   - `SetStatus(Ok | Connecting | Degraded | NeedsReauth | PlanRequired | QuotaExceeded | Error)`.
   - A per-device secret store, and quota counters persisted in the DB.
@@ -325,6 +326,15 @@ endpoints and orphaned devices are left out of the rooms.
   diagnostic `unsupportedTemplates` attribute), and Tasmota native discovery (relays, `ENERGY`, sensors). A retained
   empty config, or a device missing from a newer `bridge/devices`, orphans the device. Vendor properties without a
   catalogue capability (illuminance, voltage, current, …) go to the endpoint's `generic` capability.
+- **LG ThinQ connector** (`lgthinq`, 2.1; [`docs/connectors/lgthinq.md`](connectors/lgthinq.md); port of LG's Apache-2.0
+  pythinqconnect, see its `NOTICE`): PAT + country (region table; BR → `api-aic`) and a persistent client id in the
+  secrets; REST with the SDK's headers through a per-token `TimeProvider` token bucket (5 burst, 1 / 10 s; a 1306 pauses
+  the token for an hour → `QuotaExceeded`), retries for idempotent GETs only. Profiles → curated capabilities (AC
+  thermostat, laundry/dishwasher/robot `applianceCycle`, fridge compartments as endpoints) plus generic attributes;
+  WashTower sub-reports → endpoints, `groupId` devices → children. Outbound MQTT (AWS IoT, stored client certificate
+  issued from a CSR at most once a minute, bundled Amazon Root CA 1) with partial reports merged newest-wins, reconnect
+  with back-off, event subscriptions refreshed daily and on reconnect, `/state` polled at most every 5 min per device;
+  nightly (01:00–05:59 local) DAILY + MONTHLY Wh → energy windows.
 
 ---
 
@@ -453,8 +463,14 @@ and deleting an integration never waits on years of history. Times are UTC `date
   - Power-only devices: integrated with the **trapezoid rule between readings at most `PowerInterpolationLimit` (1 min)
     apart**; across a longer gap the earlier reading is held (history keeps changes only, so the value did not change in
     between — a plain trapezoid would smear an off → on step over the whole gap). Flagged `Estimated`.
-  - Vendor windows are spread across hours. LG daily-only data is flagged "not hourly" (Phase 2; until a connector
-    reports windows no endpoint selects them).
+  - Vendor windows (2.1, `IConnectorContext.ReportEnergyWindowsAsync` → `VendorEnergyWriter`, math in
+    `Domain/History/EnergyWindowMath`): windows of up to an hour add to the hour(s) they overlap (measured); longer ones
+    (an LG day or month) are snapped to whole UTC hours and spread evenly over the hours no finer window of the same
+    report covers (a month fills only the days without daily data), flagged `Estimated` ("not hourly"). A report upserts
+    exactly the hours it touches (`Source = vendorWindow`), so re-reporting is idempotent. The writer runs under the
+    rollup's gate and selects `vendorWindow` for an endpoint only when the pick allows it (no energy counter, no user
+    choice of another source — it replaces an automatic integrated-power choice); the rollup then keeps that selection
+    and never recomputes the endpoint's energy. Invalid, future and unknown-endpoint windows are ignored.
 - **Retention** (`RetentionPurge`, hourly on the active runtime, `DELETE TOP (5000)` loops): `StateLog` below
   min(retention, 5-minute watermark, energy watermark) — keeping each existing attribute's last row before the cutoff,
   which is the value carried into later buckets; `StatShortTerm` below min(retention, hourly watermark); `DeviceEvent`

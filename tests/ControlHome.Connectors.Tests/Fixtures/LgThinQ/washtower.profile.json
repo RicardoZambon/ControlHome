@@ -1,0 +1,38 @@
+{
+  "washer": {
+    "notification": { "push": ["WASHING_IS_COMPLETE", "ERROR_DURING_WASHING"] },
+    "property": {
+      "runState": {
+        "currentState": { "mode": ["r"], "type": "enum", "value": { "r": ["POWER_OFF", "INITIAL", "RUNNING", "RINSING", "SPINNING", "PAUSE", "END", "ERROR"] } }
+      },
+      "operation": {
+        "washerOperationMode": { "mode": ["w"], "type": "enum", "value": { "w": ["START", "STOP", "POWER_OFF"] } }
+      },
+      "remoteControlEnable": {
+        "remoteControlEnabled": { "mode": ["r"], "type": "boolean", "value": { "r": [false, true] } }
+      },
+      "timer": {
+        "remainHour": { "mode": ["r"], "type": "range", "value": { "r": { "min": 0, "max": 30, "step": 1 } } },
+        "remainMinute": { "mode": ["r"], "type": "range", "value": { "r": { "min": 0, "max": 59, "step": 1 } } }
+      }
+    }
+  },
+  "dryer": {
+    "notification": { "push": ["DRYING_IS_COMPLETE", "ERROR_DURING_DRYING"] },
+    "property": {
+      "runState": {
+        "currentState": { "mode": ["r"], "type": "enum", "value": { "r": ["POWER_OFF", "INITIAL", "RUNNING", "COOLING", "PAUSE", "END", "ERROR"] } }
+      },
+      "operation": {
+        "dryerOperationMode": { "mode": ["w"], "type": "enum", "value": { "w": ["START", "STOP", "POWER_OFF"] } }
+      },
+      "remoteControlEnable": {
+        "remoteControlEnabled": { "mode": ["r"], "type": "boolean", "value": { "r": [false, true] } }
+      },
+      "timer": {
+        "remainHour": { "mode": ["r"], "type": "range", "value": { "r": { "min": 0, "max": 30, "step": 1 } } },
+        "remainMinute": { "mode": ["r"], "type": "range", "value": { "r": { "min": 0, "max": 59, "step": 1 } } }
+      }
+    }
+  }
+}

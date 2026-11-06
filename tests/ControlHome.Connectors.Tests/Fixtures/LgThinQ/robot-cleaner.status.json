@@ -1,0 +1,5 @@
+{
+  "runState": { "currentState": "CHARGING" },
+  "robotCleanerJobMode": { "currentJobMode": "ZIGZAG" },
+  "battery": { "level": "HIGH", "percent": 87 }
+}

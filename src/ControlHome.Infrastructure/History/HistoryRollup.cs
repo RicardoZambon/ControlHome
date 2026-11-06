@@ -3,6 +3,7 @@ using ControlHome.Domain.History;
 using ControlHome.Infrastructure.Devices;
 using ControlHome.Infrastructure.Persistence;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -37,7 +38,8 @@ public sealed record RollupRunResult(
 /// 5-minute watermark;</item>
 /// <item><c>EnergyHourly</c> per endpoint from its <see cref="EnergySourceSelection"/>: the hourly increase of its energy
 /// counter, or its power readings integrated (<see cref="RollupMath.IntegratePower"/>, <c>Estimated</c>), up to the
-/// hourly watermark.</item>
+/// hourly watermark. Endpoints whose source is <see cref="EnergySource.VendorWindow"/> are left alone: their rows come from
+/// <see cref="VendorEnergyWriter"/> (which runs under the same gate, <see cref="RunExclusiveAsync{T}"/>).</item>
 /// </list>
 /// A watermark starts at the oldest <c>StateLog</c> row. After downtime each stage catches up window by window
 /// (<see cref="HistoryOptions.ShortTermBatch"/>, …), so no statement or transaction grows with the gap. Runs never overlap.
@@ -58,10 +60,22 @@ public sealed partial class HistoryRollup(
     private HistoryOptions Options => options.Value;
 
     /// <summary>
-    /// Whether an endpoint has vendor energy windows. Phase 2 connectors report them (an <c>EnergyReading</c> store); until
-    /// then no endpoint has any, so the automatic choice is a counter, else integrated power.
+    /// Runs <paramref name="work"/> while no rollup runs (and no other exclusive work): vendor energy windows
+    /// (<see cref="VendorEnergyWriter"/>) change <c>EnergyHourly</c> and the energy source selections too.
     /// </summary>
-    private static bool HasVendorWindows(Guid endpointId) => false;
+    internal async Task<T> RunExclusiveAsync<T>(Func<Task<T>> work, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await work().ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 
     /// <summary>Runs every stage until it has caught up (or <paramref name="cancellationToken"/> fires).</summary>
     public async Task<RollupRunResult> RunOnceAsync(CancellationToken cancellationToken)
@@ -76,7 +90,16 @@ public sealed partial class HistoryRollup(
             {
                 var db = scope.ServiceProvider.GetRequiredService<IControlHomeDb>();
                 catalog = await HistoryCatalog.LoadAsync(db, cancellationToken).ConfigureAwait(false);
-                selections = await catalog.SyncEnergySourcesAsync(db, HasVendorWindows, now, cancellationToken).ConfigureAwait(false);
+
+                // An endpoint has vendor energy windows once a connector reported some for it (the writer then selected
+                // them): the automatic choice keeps them unless the endpoint has an energy counter.
+                var withWindows = (await db.EnergySourceSelections.AsNoTracking()
+                        .Where(s => s.Source == EnergySource.VendorWindow)
+                        .Select(s => s.EndpointId)
+                        .ToListAsync(cancellationToken)
+                        .ConfigureAwait(false))
+                    .ToHashSet();
+                selections = await catalog.SyncEnergySourcesAsync(db, withWindows.Contains, now, cancellationToken).ConfigureAwait(false);
             }
 
             var connectionString = connections.GetConnectionString()

@@ -22,15 +22,25 @@ internal sealed class HistoryCatalog
     /// <summary>Attributes rolled up into statistics (measurements and counters).</summary>
     public IEnumerable<HistoryAttribute> WithStatistics => Attributes.Where(a => a.Kind != StatisticKind.None);
 
-    public static async Task<HistoryCatalog> LoadAsync(IControlHomeDb db, CancellationToken cancellationToken)
+    public static Task<HistoryCatalog> LoadAsync(IControlHomeDb db, CancellationToken cancellationToken) => LoadAsync(db, null, cancellationToken);
+
+    /// <summary>The catalog, restricted to the attributes of <paramref name="endpointIds"/> when given.</summary>
+    public static async Task<HistoryCatalog> LoadAsync(IControlHomeDb db, IReadOnlyCollection<Guid>? endpointIds, CancellationToken cancellationToken)
     {
-        var rows = await (
-                from attribute in db.DeviceAttributes
-                join capability in db.EndpointCapabilities on attribute.EndpointCapabilityId equals capability.Id
-                join endpoint in db.Endpoints on capability.EndpointId equals endpoint.Id
-                join device in db.Devices on endpoint.DeviceId equals device.Id
-                where !capability.Retired && !device.IsOrphaned
-                select new { attribute.Id, attribute.Key, capability.CapabilityId, capability.GenericDefinitionJson, capability.EndpointId })
+        var query =
+            from attribute in db.DeviceAttributes
+            join capability in db.EndpointCapabilities on attribute.EndpointCapabilityId equals capability.Id
+            join endpoint in db.Endpoints on capability.EndpointId equals endpoint.Id
+            join device in db.Devices on endpoint.DeviceId equals device.Id
+            where !capability.Retired && !device.IsOrphaned
+            select new { attribute.Id, attribute.Key, capability.CapabilityId, capability.GenericDefinitionJson, capability.EndpointId };
+        if (endpointIds is not null)
+        {
+            var ids = endpointIds.ToList();
+            query = query.Where(row => ids.Contains(row.EndpointId));
+        }
+
+        var rows = await query
             .AsNoTracking()
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);

@@ -6,9 +6,10 @@ namespace ControlHome.Infrastructure.Devices;
 
 /// <summary>
 /// The host side of one run of an integration's runtime: reports go to the <see cref="StateProcessor"/>, inventory changes
-/// to the <see cref="IDeviceInventory"/>, statuses to the supervisor. Once the run is asked to stop (<see cref="Close"/>,
-/// called as soon as its stop token is cancelled, not when <c>RunAsync</c> finally returns) everything the runtime still
-/// reports is ignored, so a stopped runtime can never overwrite the next one's state.
+/// to the <see cref="IDeviceInventory"/>, energy windows to the <see cref="IEnergyWindowSink"/>, statuses to the
+/// supervisor. Once the run is asked to stop (<see cref="Close"/>, called as soon as its stop token is cancelled, not when
+/// <c>RunAsync</c> finally returns) everything the runtime still reports is ignored, so a stopped runtime can never
+/// overwrite the next one's state.
 /// </summary>
 internal sealed class ConnectorContext(
     Guid integrationId,
@@ -16,7 +17,8 @@ internal sealed class ConnectorContext(
     ILogger logger,
     StateProcessor processor,
     IDeviceInventory inventory,
-    Action<IntegrationStatus, string?> setStatus) : IConnectorContext
+    Action<IntegrationStatus, string?> setStatus,
+    IEnergyWindowSink? energyWindows = null) : IConnectorContext
 {
     private volatile bool _closed;
 
@@ -90,6 +92,15 @@ internal sealed class ConnectorContext(
                 processor.ReportAvailability(IntegrationId, externalDeviceId, Availability.Unknown);
             }
         }
+    }
+
+    public Task ReportEnergyWindowsAsync(IReadOnlyList<EnergyWindowReport> windows, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(windows);
+        ObjectDisposedException.ThrowIf(_closed, this);
+        return energyWindows is null
+            ? throw new NotSupportedException("This host does not store energy windows.")
+            : energyWindows.WriteAsync(IntegrationId, windows, cancellationToken);
     }
 
     public void SetStatus(IntegrationStatus status, string? message)
