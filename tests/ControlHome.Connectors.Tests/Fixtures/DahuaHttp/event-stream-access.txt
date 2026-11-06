@@ -1,0 +1,52 @@
+--myboundary
+Content-Type: text/plain
+
+Heartbeat
+--myboundary
+Content-Type: text/plain
+
+Code=AccessControl;action=Pulse;index=0;data={
+   "CardNo" : "00000000",
+   "CardType" : 0,
+   "Door" : 0,
+   "ErrorCode" : 0,
+   "Method" : 15,
+   "Name" : "OpenDoor",
+   "ReaderID" : "1",
+   "SnapPath" : "/mnt/appdata1/userpic/SnapShot/2026-10-21/10/30/0001.jpg",
+   "Status" : 1,
+   "Type" : "Entry",
+   "UTC" : 1792578600,
+   "UserID" : "101",
+   "UserType" : 0
+}
+--myboundary
+Content-Type: text/plain
+
+Code=DoorStatus;action=Pulse;index=0;data={
+   "Status" : "Open",
+   "UTC" : 1792578601
+}
+--myboundary
+Content-Type: text/plain
+
+Code=DoorStatus;action=Pulse;index=0;data={
+   "Status" : "Close",
+   "UTC" : 1792578609
+}
+--myboundary
+Content-Type: text/plain
+
+Code=AccessControl;action=Pulse;index=0;data={
+   "CardNo" : "11111111",
+   "Door" : 0,
+   "ErrorCode" : 16,
+   "Method" : 1,
+   "Status" : 0,
+   "Type" : "Entry",
+   "UserID" : ""
+}
+--myboundary
+Content-Type: text/plain
+
+Code=AlarmLocal;action=Start;index=1

@@ -1,0 +1,33 @@
+--myboundary
+Content-Type: text/plain
+
+Code=VideoMotion;action=Start;index=2
+--myboundary
+Content-Type: text/plain
+
+Code=VideoLoss;action=Start;index=1
+--myboundary
+Content-Type: text/plain
+
+Code=CrossRegionDetection;action=Start;index=0;data={
+   "Class" : "Normal",
+   "Name" : "Cerca1",
+   "ObjectType" : "Vehicle"
+}
+--myboundary
+Content-Type: text/plain
+
+Code=VideoMotion;action=Stop;index=2
+Code=CrossRegionDetection;action=Stop;index=0
+--myboundary
+Content-Type: text/plain
+
+Code=VideoMotion;action=Start;index=9
+--myboundary
+Content-Type: text/plain
+
+Code=VideoLoss;action=Stop;index=1
+--myboundary
+Content-Type: text/plain
+
+Heartbeat

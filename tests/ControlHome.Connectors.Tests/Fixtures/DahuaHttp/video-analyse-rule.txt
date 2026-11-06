@@ -1,0 +1,12 @@
+table.VideoAnalyseRule[0][0].Class=Normal
+table.VideoAnalyseRule[0][0].Enable=true
+table.VideoAnalyseRule[0][0].Name=Linha1
+table.VideoAnalyseRule[0][0].Type=CrossLineDetection
+table.VideoAnalyseRule[0][1].Class=Normal
+table.VideoAnalyseRule[0][1].Enable=false
+table.VideoAnalyseRule[0][1].Name=Cerca1
+table.VideoAnalyseRule[0][1].Type=CrossRegionDetection
+table.VideoAnalyseRule[2][0].Class=Normal
+table.VideoAnalyseRule[2][0].Enable=true
+table.VideoAnalyseRule[2][0].Name=Cerca2
+table.VideoAnalyseRule[2][0].Type=CrossRegionDetection

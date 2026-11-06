@@ -1,3 +1,4 @@
+using ControlHome.Connectors.DahuaHttp;
 using ControlHome.Connectors.LgThinQ;
 using ControlHome.Connectors.Mqtt;
 using ControlHome.Connectors.Simulated;
@@ -22,6 +23,11 @@ public static class ConnectorSetup
 
         // LG ThinQ: appliances through the ThinQ Connect personal access token API (REST + outbound MQTT).
         services.AddConnector<LgThinQConnectorFactory>();
+        // Intelbras / Dahua-family cameras, recorders and SS access terminals (CGI API, Digest auth). The XPE door-station
+        // relay stays behind Connectors:DahuaHttp:XpeRelay (off) until tested on hardware.
+        services.AddOptions<DahuaHttpConnectorOptions>().BindConfiguration(DahuaHttpConnectorOptions.SectionName);
+        services.TryAddSingleton(sp => sp.GetRequiredService<IOptions<DahuaHttpConnectorOptions>>().Value);
+        services.AddConnector<DahuaHttpConnectorFactory>();
 
         return services;
     }
