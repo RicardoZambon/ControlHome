@@ -51,6 +51,7 @@ COPY src/ControlHome.Connectors.Simulated/ControlHome.Connectors.Simulated.cspro
 COPY src/ControlHome.Connectors.Mqtt/ControlHome.Connectors.Mqtt.csproj src/ControlHome.Connectors.Mqtt/
 COPY src/ControlHome.Connectors.LgThinQ/ControlHome.Connectors.LgThinQ.csproj src/ControlHome.Connectors.LgThinQ/
 COPY src/ControlHome.Connectors.DahuaHttp/ControlHome.Connectors.DahuaHttp.csproj src/ControlHome.Connectors.DahuaHttp/
+COPY src/ControlHome.Connectors.SmartThings/ControlHome.Connectors.SmartThings.csproj src/ControlHome.Connectors.SmartThings/
 COPY src/ControlHome.Application/ControlHome.Application.csproj src/ControlHome.Application/
 COPY src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj src/ControlHome.Infrastructure/
 COPY src/ControlHome.Api/ControlHome.Api.csproj src/ControlHome.Api/

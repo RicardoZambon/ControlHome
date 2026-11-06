@@ -1,0 +1,26 @@
+{
+  "id": "samsungce.kidsLock",
+  "version": 1,
+  "status": "proposed",
+  "name": "Kids Lock",
+  "ephemeral": false,
+  "attributes": {
+    "lockState": {
+      "schema": {
+        "type": "object",
+        "properties": { "value": { "type": "string", "enum": ["locked", "unlocked"] } },
+        "additionalProperties": false,
+        "required": ["value"]
+      },
+      "setter": "setLockState"
+    }
+  },
+  "commands": {
+    "setLockState": {
+      "name": "setLockState",
+      "arguments": [{ "name": "lockState", "optional": false, "schema": { "type": "string", "enum": ["locked", "unlocked"] } }]
+    },
+    "lock": { "name": "lock", "arguments": [] },
+    "unlock": { "name": "unlock", "arguments": [] }
+  }
+}

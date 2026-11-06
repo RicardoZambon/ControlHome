@@ -2,6 +2,7 @@ using ControlHome.Connectors.DahuaHttp;
 using ControlHome.Connectors.LgThinQ;
 using ControlHome.Connectors.Mqtt;
 using ControlHome.Connectors.Simulated;
+using ControlHome.Connectors.SmartThings;
 using ControlHome.Infrastructure.Devices;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
@@ -28,6 +29,8 @@ public static class ConnectorSetup
         services.AddOptions<DahuaHttpConnectorOptions>().BindConfiguration(DahuaHttpConnectorOptions.SectionName);
         services.TryAddSingleton(sp => sp.GetRequiredService<IOptions<DahuaHttpConnectorOptions>>().Value);
         services.AddConnector<DahuaHttpConnectorFactory>();
+        // SmartThings: the household's own OAuth-In app (or a dev token), adaptive polling of the cloud API per location.
+        services.AddSmartThingsHttpClient().AddConnector<SmartThingsConnectorFactory>();
 
         return services;
     }

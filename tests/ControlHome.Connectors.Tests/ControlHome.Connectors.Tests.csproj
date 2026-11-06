@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\src\ControlHome.Connectors.Mqtt\ControlHome.Connectors.Mqtt.csproj" />
     <ProjectReference Include="..\..\src\ControlHome.Connectors.LgThinQ\ControlHome.Connectors.LgThinQ.csproj" />
     <ProjectReference Include="..\..\src\ControlHome.Connectors.DahuaHttp\ControlHome.Connectors.DahuaHttp.csproj" />
+    <ProjectReference Include="..\..\src\ControlHome.Connectors.SmartThings\ControlHome.Connectors.SmartThings.csproj" />
   </ItemGroup>
 
   <ItemGroup>
