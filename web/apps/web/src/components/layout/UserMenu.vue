@@ -29,6 +29,12 @@ const roleLabel = computed(() => {
   return role === 'Admin' || role === 'Member' || role === 'Viewer' ? t(`roles.${role}`) : ''
 })
 
+/** Includes the visible name and role: the accessible name must contain the visible text. */
+const triggerLabel = computed(() => {
+  const label = t('shell.userMenu', { name: me.value?.displayName ?? '' })
+  return roleLabel.value ? `${label} (${roleLabel.value})` : label
+})
+
 async function signOut(): Promise<void> {
   await session.logout()
   homeStore.reset()
@@ -43,7 +49,7 @@ async function signOut(): Promise<void> {
       <Button
         variant="ghost"
         class="h-control gap-2 rounded-full px-1.5 has-[>svg]:px-1.5 lg:rounded-md lg:pr-2"
-        :aria-label="t('shell.userMenu', { name: me.displayName })"
+        :aria-label="triggerLabel"
       >
         <UserAvatar :name="me.displayName" :seed="me.userName" class="size-8" />
         <span class="hidden max-w-36 min-w-0 text-left leading-tight lg:grid">
