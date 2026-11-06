@@ -524,10 +524,13 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
             _blockedMessage = null;
         }
 
+        var windows = new List<EnergyWindowReport>();
         foreach (var device in mapped)
         {
-            Report(context, device);
+            Report(context, device, windows);
         }
+
+        await ReportEnergyAsync(context, windows, cancellationToken).ConfigureAwait(false);
 
         Interlocked.Increment(ref _polls);
         var interval = budget.Headroom() < 0.5 ? _options.MaxPollInterval : _settings.PollInterval;
@@ -856,12 +859,15 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
             _devices[deviceId] = device;
         }
 
-        Report(context, device);
+        var windows = new List<EnergyWindowReport>();
+        Report(context, device, windows);
+        await ReportEnergyAsync(context, windows, cancellationToken).ConfigureAwait(false);
     }
 
     // ---- reporting ----------------------------------------------------------------------------------------------------
 
-    private void Report(IConnectorContext context, MappedDevice device)
+    /// <summary>Reports the device's changed availability, values and button presses; adds its new energy windows to <paramref name="windows"/>.</summary>
+    private void Report(IConnectorContext context, MappedDevice device, List<EnergyWindowReport> windows)
     {
         var id = device.Device.ExternalId;
         lock (_lock)
@@ -901,22 +907,50 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
 
             foreach (var window in device.EnergyWindows)
             {
-                var key = (id, window.Endpoint);
-                if (PowerConsumptionReport.IsNew(window, _energyWindows.TryGetValue(key, out var end) ? end : null))
+                if (window.DeltaWh is { } wh
+                    && PowerConsumptionReport.IsNew(window, _energyWindows.TryGetValue((id, window.Endpoint), out var end) ? end : null))
                 {
-                    _energyWindows[key] = window.EndUtc;
-                    OnEnergyWindow(context, id, window);
+                    LogEnergyWindow(context.Logger, id, window.Endpoint, window.StartUtc, window.EndUtc, wh);
+                    windows.Add(new EnergyWindowReport(id, window.Endpoint, window.StartUtc, window.EndUtc, wh));
                 }
             }
         }
     }
 
     /// <summary>
-    /// A new <c>powerConsumptionReport</c> window. The SDK's energy-window report lands in a parallel milestone; until then
-    /// the window is only logged (the cumulative counter already feeds <c>energy.energy</c>).
+    /// Sends new <c>powerConsumptionReport</c> windows to the hourly energy history. The host uses them only for endpoints
+    /// without an energy counter, so the cumulative <c>energy.energy</c> is never counted twice. A window is marked as
+    /// sent only after the report succeeds: a failed report is repeated by the next poll, which reads the same window.
     /// </summary>
-    private static void OnEnergyWindow(IConnectorContext context, string deviceId, PowerConsumptionWindow window) =>
-        LogEnergyWindow(context.Logger, deviceId, window.Endpoint, window.StartUtc, window.EndUtc, window.DeltaWh);
+    private async Task ReportEnergyAsync(IConnectorContext context, List<EnergyWindowReport> windows, CancellationToken cancellationToken)
+    {
+        if (windows.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await context.ReportEnergyWindowsAsync(windows, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            LogEnergyFailed(context.Logger, exception.GetType().Name);
+            return;
+        }
+
+        lock (_lock)
+        {
+            foreach (var window in windows)
+            {
+                var key = (window.ExternalDeviceId, window.EndpointKey);
+                if (!_energyWindows.TryGetValue(key, out var end) || window.EndUtc > end)
+                {
+                    _energyWindows[key] = window.EndUtc;
+                }
+            }
+        }
+    }
 
     private void MarkAllUnknown(IConnectorContext context)
     {
@@ -1088,5 +1122,8 @@ internal sealed partial class SmartThingsRuntime : IConnectorRuntime
     private static partial void LogCommandFailed(ILogger logger, string deviceId, ConnectorErrorKind kind, int status);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "SmartThings energy window {DeviceId}/{Endpoint} {StartUtc:O}–{EndUtc:O}: {DeltaWh} Wh")]
-    private static partial void LogEnergyWindow(ILogger logger, string deviceId, string endpoint, DateTimeOffset startUtc, DateTimeOffset endUtc, double? deltaWh);
+    private static partial void LogEnergyWindow(ILogger logger, string deviceId, string endpoint, DateTimeOffset startUtc, DateTimeOffset endUtc, double deltaWh);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "SmartThings energy windows could not be saved ({Error}); the next poll reports them again")]
+    private static partial void LogEnergyFailed(ILogger logger, string error);
 }

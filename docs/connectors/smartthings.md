@@ -176,9 +176,11 @@ holding a URL with user info or a token/key/signature/password parameter (it rea
 
 - **Polling only**: no webhooks (they need a public HTTPS target with SmartThings' signature handshake; a possible
   future option for installs behind a tunnel) and no SSE (reserved for partner apps such as Home Assistant's).
-- **Energy windows**: `powerConsumptionReport` windows (15–30 min of `deltaEnergy`) are parsed but not yet stored as
-  hourly vendor windows; the cumulative counter feeds the energy history meanwhile. TVs that list the report under
-  `custom.disabledCapabilities` (while still sending real values) have no per-device "show anyway" override yet.
+- **Energy windows**: each new `powerConsumptionReport` window (15–30 min of `deltaEnergy`) goes to the hourly energy
+  history as a vendor window. It is used only for a component without a cumulative energy counter: a counter always
+  wins, so energy is never counted twice. A window that could not be saved is sent again on the next poll. TVs that
+  list the report under `custom.disabledCapabilities` (while still sending real values) have no per-device "show
+  anyway" override yet.
 - Capability definitions are cached in memory (a restart fetches them again, up to 10 per poll); until a definition
   arrives, that capability's generic attributes are left out (never guessed and changed later), so a device made only
   of custom capabilities (a community Edge driver's) appears once its definitions are read. A definition SmartThings

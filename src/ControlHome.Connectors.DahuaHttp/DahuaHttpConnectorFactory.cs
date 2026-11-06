@@ -176,5 +176,5 @@ public sealed class DahuaHttpConnectorDescriptor : IConnectorDescriptor
 
     public IReadOnlyList<FieldSchema> DeviceConfigFields { get; } = [];
 
-    public ConnectorFeatures Features { get; } = new() { SetupFlow = true, Reauth = true, PushInventory = true };
+    public ConnectorFeatures Features { get; } = new() { SetupFlow = true, Reauth = true, PushInventory = true, Experimental = true };
 }

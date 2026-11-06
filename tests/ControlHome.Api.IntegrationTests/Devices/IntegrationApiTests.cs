@@ -26,7 +26,7 @@ public sealed class IntegrationApiTests(DevicesApiFactory factory) : DevicesTest
         simulated.ConfigFields.Select(f => f.Key).ShouldBe(["preset", "language", "seed", "simulateReauth"]);
         simulated.ConfigFields.Where(f => f.Advanced).Select(f => f.Key).ShouldBe(["language", "seed", "simulateReauth"]);
         simulated.ConfigFields[0].Schema.ShouldBeOfType<EnumSchema>().Values.ShouldBe(["basic", "demo"]);
-        (simulated.Features.PushInventory, simulated.Features.SetupFlow, simulated.Features.Reauth).ShouldBe((true, true, true));
+        (simulated.Features.PushInventory, simulated.Features.SetupFlow, simulated.Features.Reauth, simulated.Features.Experimental).ShouldBe((true, true, true, false));
         connectors.Single(c => c.Key == CanaryConnectorFactory.Key).ConfigFields.Single(f => f.Key == "token").Secret.ShouldBeTrue();
     }
 

@@ -23,7 +23,7 @@ public sealed class DahuaHttpConnectorTests(DevicesApiFactory factory) : Devices
 
         dahua.Category.ShouldBe("vendor");
         dahua.DisplayName.PtBr.ShouldBe("Câmeras, gravadores e controle de acesso Intelbras");
-        dahua.Features.ShouldBe(new ConnectorFeaturesDto(SetupFlow: true, Reauth: true, PushInventory: true, PermitJoin: false, Cloud: false, Polling: false));
+        dahua.Features.ShouldBe(new ConnectorFeaturesDto(SetupFlow: true, Reauth: true, PushInventory: true, PermitJoin: false, Cloud: false, Polling: false, Experimental: true));
         dahua.ConfigFields.Select(f => f.Key).ShouldBe(["host", "port", "username", "password", "kind", "channels", "rtspPort", "doorUserId", "language"]);
         dahua.ConfigFields.Where(f => f.Secret).Select(f => f.Key).ShouldBe(["password"]);
         dahua.ConfigFields.Single(f => f.Key == "kind").Schema.ShouldBeOfType<EnumSchema>().Values.ShouldBe(["auto", "camera", "recorder", "accessControl"]);

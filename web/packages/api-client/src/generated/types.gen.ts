@@ -335,6 +335,10 @@ export type ConnectorFeaturesDto = {
     permitJoin: boolean;
     cloud: boolean;
     polling: boolean;
+    /**
+     * Not yet validated against real devices or vendor accounts; the UI labels it.
+     */
+    experimental: boolean;
 };
 
 /**

@@ -146,5 +146,5 @@ public sealed class LgThinQConnectorDescriptor : IConnectorDescriptor
 
     public IReadOnlyList<FieldSchema> DeviceConfigFields { get; } = [];
 
-    public ConnectorFeatures Features { get; } = new() { SetupFlow = true, Reauth = true, PushInventory = true, Cloud = true };
+    public ConnectorFeatures Features { get; } = new() { SetupFlow = true, Reauth = true, PushInventory = true, Cloud = true, Experimental = true };
 }

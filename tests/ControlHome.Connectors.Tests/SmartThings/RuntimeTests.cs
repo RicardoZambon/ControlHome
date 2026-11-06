@@ -66,6 +66,32 @@ public sealed class RuntimeTests : IDisposable
     }
 
     [Fact]
+    public async Task A_new_power_consumption_window_is_reported_once_and_retried_after_a_failed_report()
+    {
+        Rooms();
+        Listing(StFixtures.ListingItem(StFixtures.Ac, Location));
+        await using var st = Harness();
+        st.Context.FailNextEnergyReport = true;
+        st.Start();
+        await st.WaitUntilAsync(() => st.Runtime.Polls == 1, "the first poll");
+        st.Context.EnergyReports.ShouldBeEmpty();
+
+        await NextPollAsync(st);
+
+        var window = st.Context.EnergyReports.ShouldHaveSingleItem().ShouldHaveSingleItem();
+        window.ShouldBe(new EnergyWindowReport(
+            StFixtures.DeviceId(StFixtures.Ac),
+            "main",
+            DateTimeOffset.Parse("2025-02-09T15:45:29Z", System.Globalization.CultureInfo.InvariantCulture),
+            DateTimeOffset.Parse("2025-02-09T16:15:33Z", System.Globalization.CultureInfo.InvariantCulture),
+            400));
+
+        // Polls repeat the same window: it is not reported again.
+        await NextPollAsync(st);
+        st.Context.EnergyReports.Count.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task A_device_gone_from_the_listing_is_orphaned_and_an_empty_location_still_syncs()
     {
         Rooms();

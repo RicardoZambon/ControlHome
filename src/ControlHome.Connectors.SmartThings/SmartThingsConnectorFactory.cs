@@ -169,5 +169,6 @@ public sealed class SmartThingsConnectorDescriptor : IConnectorDescriptor
         PushInventory = true,
         Cloud = true,
         Polling = true,
+        Experimental = true,
     };
 }
