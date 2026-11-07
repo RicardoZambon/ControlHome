@@ -42,7 +42,8 @@ public sealed record FieldSchemaDto(
 /// <c>POST /api/integrations/flows</c>.
 /// </param>
 /// <param name="Reauth">The flow can re-authorize an existing integration (<c>POST /api/integrations/{id}/flows/reauth</c>), keeping its devices.</param>
-public sealed record ConnectorFeaturesDto(bool SetupFlow, bool Reauth, bool PushInventory, bool PermitJoin, bool Cloud, bool Polling);
+/// <param name="Experimental">Not yet validated against real devices or vendor accounts; the UI labels it.</param>
+public sealed record ConnectorFeaturesDto(bool SetupFlow, bool Reauth, bool PushInventory, bool PermitJoin, bool Cloud, bool Polling, bool Experimental);
 
 /// <summary>Creates an integration from a connector's config fields (<c>POST /api/integrations</c>; no setup flow in 1.2).</summary>
 /// <param name="ConnectorKey">A key from <c>GET /api/connectors</c>.</param>
@@ -103,7 +104,8 @@ public sealed class ConnectorCatalog
                 descriptor.Features.PushInventory,
                 descriptor.Features.PermitJoin,
                 descriptor.Features.Cloud,
-                descriptor.Features.Polling));
+                descriptor.Features.Polling,
+                descriptor.Features.Experimental));
     }
 
     public static LocalizedTextDto ToDto(LocalizedText text)

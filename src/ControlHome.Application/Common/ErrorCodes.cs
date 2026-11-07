@@ -83,6 +83,21 @@ public static class ErrorCodes
 
     /// <summary>Not a camera, or the camera has no picture right now.</summary>
     public const string CamerasNoSnapshot = "cameras.no_snapshot";
+
+    /// <summary>Not a camera, or its connector has no live stream for it.</summary>
+    public const string CamerasNoStream = "cameras.no_stream";
+
+    /// <summary>Live view is not set up on this server (no go2rtc restreamer configured: <c>Cameras:Go2Rtc</c>).</summary>
+    public const string CamerasLiveDisabled = "cameras.live_disabled";
+
+    /// <summary>The restreamer (go2rtc) cannot be reached or refused the stream.</summary>
+    public const string CamerasLiveUnavailable = "cameras.live_unavailable";
+
+    /// <summary>Too many live views are open on this server right now.</summary>
+    public const string CamerasLiveBusy = "cameras.live_busy";
+
+    /// <summary>The live-view endpoint was not opened as a WebSocket.</summary>
+    public const string RequestWebSocketRequired = "request.websocket_required";
     public const string IntegrationsNotFound = "integrations.not_found";
 
     // Commands: 400 commands.invalid_arguments carries field errors errors["arguments.<key>"] with the commands.argument_* codes

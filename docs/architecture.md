@@ -64,7 +64,7 @@ The full rationale is in [ADR 0001](adr/0001-stack-and-architecture.md).
 ControlHome.slnx · global.json {sdk 10.0.302, rollForward latestFeature} · Directory.Build.props · Directory.Packages.props
 .config/dotnet-tools.json (dotnet-ef 10.0.x) · .editorconfig · CLAUDE.md · docs/STATUS.md
 src/ControlHome.Domain                   no deps: entities, CapabilityDefinition/ValueSchema, automation definition records
-src/ControlHome.Connectors.Abstractions  → Domain: descriptor/flow/runtime/context contracts, helpers (1.2); ICameraStreamRegistry (later)
+src/ControlHome.Connectors.Abstractions  → Domain: descriptor/flow/runtime/context contracts, helpers (1.2); camera stills/streams (2.2)
 src/ControlHome.Automation               → Domain only: engine + ports (IStateReader, ICommandDispatcher, ISceneRunner,       (later)
                                            INotifier, IAutomationStore, TimeProvider); no EF
 src/ControlHome.Application              → Domain, Automation, Connectors.Abstractions: use-case services incl.
@@ -244,6 +244,7 @@ endpoints and orphaned devices are left out of the rooms.
   - `RefreshAsync(device)`.
 - **`IConnectorContext`**:
   - `ReportState(attr, value, observedAtUtc?)`, `ReportEvent`, `ReportAvailability`.
+  - `ReportEnergyWindowsAsync(EnergyWindowReport[])` for vendor energy history (Wh per past window, see §6).
   - `UpsertDevice` / `RemoveDevice` for connectors that push their own inventory.
   - `SetStatus(Ok | Connecting | Degraded | NeedsReauth | PlanRequired | QuotaExceeded | Error)`.
   - A per-device secret store, and quota counters persisted in the DB.
@@ -278,8 +279,27 @@ endpoints and orphaned devices are left out of the rooms.
   - Likely duplicates across integrations (the same MAC address or serial number, `DeviceIdentity`) are flagged on every
     read: `DeviceSummaryDto` / `DeviceDetailDto.PossibleDuplicateIds`.
 - **Optional runtime/factory interfaces:** `ICameraSnapshotSource` (camera stills, served behind the app's auth as
-  `GET /api/endpoints/{id}/camera/snapshot`, image types only, `no-store`) and `IStaticInventorySource` (a virtual
-  connector's devices from its config alone: the demo seed imports and places them before the runtime first runs).
+  `GET /api/endpoints/{id}/camera/snapshot`, image types only, `no-store`), `ICameraStreamSource` (2.2: a camera's
+  `rtsp://` / `rtsps://` source for `main` or `sub` quality, credentials included — handed only to the restreamer,
+  never to a client, a log or a file; `CameraStreamSource.ToString()` never prints it) and `IStaticInventorySource` (a
+  virtual connector's devices from its config alone: the demo seed imports and places them before the runtime first
+  runs).
+- **Camera live view** (2.2): `CameraStreamService` checks that the endpoint is a camera of a running integration, asks
+  its runtime for the stream source (`ICameraStreamProvider`, the supervisor) and registers it with the restreamer
+  (`ICameraRestreamer` = `Go2RtcRestreamer`, options `Cameras:Go2Rtc:Url/Username/Password`, off while unset) under an
+  opaque name `ch_<endpoint id>_main|sub`. go2rtc is used through exactly three paths: `PATCH /api/streams` (in memory —
+  go2rtc writes `PUT`s into its config file, never `PATCH`es; sources get `#backchannel=0`, so no camera speaker is
+  ever opened), `POST /api/webrtc` and the `api/ws` WebSocket, with Basic credentials (`local_auth`). The Api serves
+  `GET /api/endpoints/{id}/camera/stream` (also HTTP/2 extended `CONNECT`; WebSocket relay: restreamer binary frames
+  pass as is, its signalling text as is and any other text (errors) through the log redactor; from the browser only
+  go2rtc's viewer messages `mse`/`mp4`/`mjpeg`/`webrtc/offer`/`webrtc/candidate`, rewritten as `{type, value}`
+  because Go matches JSON keys case-insensitively, offers receive-only (one direction per section), at most 4 stream
+  starts per view; the session re-checked every minute;
+  pings every 20 s, 40 s to answer; `Cameras:Go2Rtc:MaxLiveSessions` = 32) and
+  `POST /api/endpoints/{id}/camera/webrtc` (receive-only SDP offer → answer), both for Viewers; errors
+  `cameras.no_stream`, `cameras.live_disabled`, `cameras.live_unavailable`, `cameras.live_busy`,
+  `request.websocket_required`. The Simulated demo cameras stream `Simulated:CameraStreamSource` when it is set (a test
+  RTSP server; `{n}` = camera number).
 - **Commands**
   - Each CommandDefinition sets its own timeout; defaults are about 5 s local, 30 s cloud, 90 s for a TV wake.
   - Rapid writes to the same attribute are coalesced (about 300 ms, last one wins); any other command for the same
@@ -325,6 +345,32 @@ endpoints and orphaned devices are left out of the rooms.
   diagnostic `unsupportedTemplates` attribute), and Tasmota native discovery (relays, `ENERGY`, sensors). A retained
   empty config, or a device missing from a newer `bridge/devices`, orphans the device. Vendor properties without a
   catalogue capability (illuminance, voltage, current, …) go to the endpoint's `generic` capability.
+- **LG ThinQ connector** (`lgthinq`, 2.1; [`docs/connectors/lgthinq.md`](connectors/lgthinq.md); port of LG's Apache-2.0
+  pythinqconnect, see its `NOTICE`): PAT + country (region table; BR → `api-aic`) and a persistent client id in the
+  secrets; REST with the SDK's headers through a per-token `TimeProvider` token bucket (5 burst, 1 / 10 s; a 1306 pauses
+  the token for an hour → `QuotaExceeded`), retries for idempotent GETs only. Profiles → curated capabilities (AC
+  thermostat, laundry/dishwasher/robot `applianceCycle`, fridge compartments as endpoints) plus generic attributes;
+  WashTower sub-reports → endpoints, `groupId` devices → children. Outbound MQTT (AWS IoT, stored client certificate
+  issued from a CSR at most once a minute, bundled Amazon Root CA 1) with partial reports merged newest-wins, reconnect
+  with back-off, event subscriptions refreshed daily and on reconnect, `/state` polled at most every 5 min per device;
+  nightly (01:00–05:59 local) DAILY + MONTHLY Wh → energy windows.
+- **Dahua HTTP connector** (`dahuahttp`, 2.2; [`docs/connectors/dahuahttp.md`](connectors/dahuahttp.md)): one
+  integration per physical Intelbras/Dahua-family device — camera, recorder (each channel a camera child
+  `<serial>:ch<n>`) or SS access terminal (`doorOpener` + door `contact` + a momentary generic `access` event) — over
+  the CGI API with HTTP Digest (`SocketsHttpHandler` + `CredentialCache` "Digest", never Basic, no proxy). Setup flow:
+  form → `magicBox.cgi` identification (kind auto-detected) → a checklist step on 401/500/404/403 (credentials,
+  Compatibility auth + MD5, CGI enabled, IP filter) → done; the flow never retries a refused login on its own (30 s
+  between user retries, at most 3). Runtime: one long-lived `eventManager.cgi?action=attach&codes=[All]&heartbeat=5`
+  with a tolerant multipart parser and local filtering (VideoMotion, CrossLine/CrossRegionDetection, AlarmLocal,
+  VideoLoss, AccessControl, DoorStatus), reconnect after 1 s → 5 min with ±20 % jitter (20 s without a heartbeat is a
+  dead stream), state read back after every reconnect (`getEventIndexes`, `getDoorStatus`); a 401 anywhere (stream,
+  still, refresh, command) sets `NeedsReauth` and closes a login gate: nothing logs in again — no reconnect, still,
+  door release or RTSP source for go2rtc — for 30 min. `doorOpener.open` sends one `accessControl.cgi?action=openDoor`
+  (idempotency key, never retried) through `OneShotHttp`, a hand-written HTTP/1.1 GET with a hand-computed Digest
+  answer (`DigestChallenge`), never `SocketsHttpHandler`, which silently re-sends a bodiless request up to three times
+  when a server drops the connection before answering; the XPE 3200 HTTP relay is behind
+  `Connectors:DahuaHttp:XpeRelay` (off, untested on hardware). Stills via `snapshot.cgi` (a camera's 0/1 channel base
+  probed once), live streams `rtsp://…/cam/realmonitor?channel=N&subtype=0|1`.
 
 ---
 
@@ -453,8 +499,14 @@ and deleting an integration never waits on years of history. Times are UTC `date
   - Power-only devices: integrated with the **trapezoid rule between readings at most `PowerInterpolationLimit` (1 min)
     apart**; across a longer gap the earlier reading is held (history keeps changes only, so the value did not change in
     between — a plain trapezoid would smear an off → on step over the whole gap). Flagged `Estimated`.
-  - Vendor windows are spread across hours. LG daily-only data is flagged "not hourly" (Phase 2; until a connector
-    reports windows no endpoint selects them).
+  - Vendor windows (2.1, `IConnectorContext.ReportEnergyWindowsAsync` → `VendorEnergyWriter`, math in
+    `Domain/History/EnergyWindowMath`): windows of up to an hour add to the hour(s) they overlap (measured); longer ones
+    (an LG day or month) are snapped to whole UTC hours and spread evenly over the hours no finer window of the same
+    report covers (a month fills only the days without daily data), flagged `Estimated` ("not hourly"). A report upserts
+    exactly the hours it touches (`Source = vendorWindow`), so re-reporting is idempotent. The writer runs under the
+    rollup's gate and selects `vendorWindow` for an endpoint only when the pick allows it (no energy counter, no user
+    choice of another source — it replaces an automatic integrated-power choice); the rollup then keeps that selection
+    and never recomputes the endpoint's energy. Invalid, future and unknown-endpoint windows are ignored.
 - **Retention** (`RetentionPurge`, hourly on the active runtime, `DELETE TOP (5000)` loops): `StateLog` below
   min(retention, 5-minute watermark, energy watermark) — keeping each existing attribute's last row before the cutoff,
   which is the value carried into later buckets; `StatShortTerm` below min(retention, hourly watermark); `DeviceEvent`
@@ -881,9 +933,13 @@ Setup, logins, lockouts, password/PIN/role changes, secret updates (field names 
   checks for port conflicts at startup.
 - **Optional profiles**
   - `mqtt`: Mosquitto with no anonymous access, a generated password and ACLs.
-  - `cameras`: go2rtc. Its API listens on 127.0.0.1 with random credentials and `local_auth`; the RTSP server is
-    disabled; `exec.allow_paths` is empty and modules are limited. Streams are registered at runtime, and the backend
-    proxies only `/api/cameras/{id}/{ws|webrtc|snapshot}` behind our auth.
+  - `cameras` (2.2): go2rtc 1.9.14 (digest-pinned, host networking, read-only, no capabilities, the app's UID). Its
+    API listens on 127.0.0.1:1984 with random credentials (`GO2RTC_API_USERNAME` / `GO2RTC_API_PASSWORD` in `.env`; it
+    refuses to start without them) and `local_auth`; `allow_paths` registers only `/api/streams`, `/api/ws` and
+    `/api/webrtc`; the RTSP server is disabled; modules `api, ws, rtsp, webrtc, mp4` only; `exec.allow_paths` is empty;
+    WebRTC on TCP/UDP 8555 with the candidate `CONTROLHOME_LAN_IP`. `deploy/go2rtc.yaml` holds no secret (go2rtc fills
+    `${VAR}` from its environment) and is mounted read-only. Streams are registered at runtime, and the backend exposes
+    only `/api/endpoints/{id}/camera/{stream|webrtc|snapshot}` behind our auth.
   - `matter`: matterjs-server on 127.0.0.1.
   - `bundled-db`: SQL Server 2025 Express (x64), bound to `127.0.0.1:1433`.
 - **Dev compose:** `docker-compose.dev.yml` overrides to a bridge network, published ports (`8080:8711`), local build

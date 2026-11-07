@@ -12,7 +12,7 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # web: npm workspace -> web/apps/web/dist
 # ---------------------------------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS web
+FROM --platform=$BUILDPLATFORM node:24.22.0-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS web
 WORKDIR /src/web
 ENV CI=true \
     NPM_CONFIG_AUDIT=false \
@@ -33,7 +33,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------------------------------------------------
 # build: dotnet publish for the target architecture -> /out
 # ---------------------------------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.402-noble@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b AS build
 ARG TARGETARCH
 WORKDIR /src
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
@@ -49,6 +49,9 @@ COPY src/ControlHome.Domain/ControlHome.Domain.csproj src/ControlHome.Domain/
 COPY src/ControlHome.Connectors.Abstractions/ControlHome.Connectors.Abstractions.csproj src/ControlHome.Connectors.Abstractions/
 COPY src/ControlHome.Connectors.Simulated/ControlHome.Connectors.Simulated.csproj src/ControlHome.Connectors.Simulated/
 COPY src/ControlHome.Connectors.Mqtt/ControlHome.Connectors.Mqtt.csproj src/ControlHome.Connectors.Mqtt/
+COPY src/ControlHome.Connectors.LgThinQ/ControlHome.Connectors.LgThinQ.csproj src/ControlHome.Connectors.LgThinQ/
+COPY src/ControlHome.Connectors.DahuaHttp/ControlHome.Connectors.DahuaHttp.csproj src/ControlHome.Connectors.DahuaHttp/
+COPY src/ControlHome.Connectors.SmartThings/ControlHome.Connectors.SmartThings.csproj src/ControlHome.Connectors.SmartThings/
 COPY src/ControlHome.Application/ControlHome.Application.csproj src/ControlHome.Application/
 COPY src/ControlHome.Infrastructure/ControlHome.Infrastructure.csproj src/ControlHome.Infrastructure/
 COPY src/ControlHome.Api/ControlHome.Api.csproj src/ControlHome.Api/

@@ -1,6 +1,7 @@
 using ControlHome.Api.Features.Audit;
 using ControlHome.Api.Features.Auth;
 using ControlHome.Api.Features.HomeBackup;
+using ControlHome.Api.Features.Cameras;
 using ControlHome.Api.Features.Capabilities;
 using ControlHome.Api.Features.Dashboard;
 using ControlHome.Api.Features.Demo;
@@ -117,6 +118,7 @@ try
     builder.Services.AddDashboard();
     builder.Services.AddDemoHome();
     builder.Services.AddBackup();
+    builder.Services.AddCameraLiveView();
 
     var app = builder.Build();
 
@@ -131,6 +133,7 @@ try
     app.UseControlHomeRequestEdge(); // forwarded headers, security headers, network allowlist, origin/header checks
     app.UseMiddleware<ServerTimeHeaderMiddleware>(); // X-ControlHome-Time: the runtime clock, for the UI's "now"
     app.UseControlHomeSpaStaticFiles();
+    app.UseWebSockets(); // camera live view relay (the request edge above already checked the Origin of every upgrade)
     app.UseRouting();
     app.UseMiddleware<DatabaseGateMiddleware>();
     app.UseRateLimiter();
@@ -160,6 +163,7 @@ try
     app.MapSettingsEndpoints();
     app.MapDashboardEndpoints();
     app.MapBackupEndpoints();
+    app.MapCameraEndpoints();
     app.MapHomeHub();
     if (app.Environment.IsEnvironment(TestingEndpoints.EnvironmentName))
     {

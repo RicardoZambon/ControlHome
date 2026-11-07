@@ -41,7 +41,9 @@
     "local": "Local",
     "guided": "Guided setup",
     "discovery": "Finds devices",
-    "pairing": "Pairing"
+    "pairing": "Pairing",
+    "experimental": "Experimental",
+    "experimentalHint": "Not yet tested with real devices or vendor accounts."
   },
   "setup": {
     "title": "Set up an integration",

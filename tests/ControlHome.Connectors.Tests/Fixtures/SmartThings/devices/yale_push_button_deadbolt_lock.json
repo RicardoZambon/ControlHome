@@ -1,0 +1,66 @@
+{
+  "items": [
+    {
+      "deviceId": "00000000-0000-4000-8000-000000000031",
+      "name": "Yale Push Button Deadbolt Lock",
+      "label": "Basement door lock",
+      "manufacturerName": "SmartThingsCommunity",
+      "presentationId": "00000000-0000-4000-8000-000000000032",
+      "deviceManufacturerCode": "Yale",
+      "locationId": "00000000-0000-4000-8000-000000000014 ",
+      "ownerId": "00000000-0000-4000-8000-000000000015",
+      "roomId": "00000000-0000-4000-8000-000000000011",
+      "components": [
+        {
+          "id": "main",
+          "label": "Basement door lock",
+          "capabilities": [
+            {
+              "id": "lock",
+              "version": 1
+            },
+            {
+              "id": "lockCodes",
+              "version": 1
+            },
+            {
+              "id": "battery",
+              "version": 1
+            },
+            {
+              "id": "firmwareUpdate",
+              "version": 1
+            },
+            {
+              "id": "refresh",
+              "version": 1
+            }
+          ],
+          "categories": [
+            {
+              "name": "SmartLock",
+              "categoryType": "manufacturer"
+            }
+          ]
+        }
+      ],
+      "createTime": "2016-11-18T23:01:19Z",
+      "profile": {
+        "id": "00000000-0000-4000-8000-000000000033"
+      },
+      "zigbee": {
+        "eui": "0200000000000006",
+        "networkId": "A007",
+        "driverId": "00000000-0000-4000-8000-000000000034",
+        "executingLocally": true,
+        "hubId": "00000000-0000-4000-8000-00000000002b",
+        "provisioningState": "PROVISIONED"
+      },
+      "type": "ZIGBEE",
+      "restrictionTier": 0,
+      "allowed": [],
+      "executionContext": "LOCAL"
+    }
+  ],
+  "_links": {}
+}

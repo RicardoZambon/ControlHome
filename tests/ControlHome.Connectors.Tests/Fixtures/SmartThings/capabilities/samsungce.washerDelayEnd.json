@@ -1,0 +1,39 @@
+{
+  "id": "samsungce.washerDelayEnd",
+  "version": 1,
+  "status": "proposed",
+  "name": "Washer Delay End",
+  "ephemeral": false,
+  "attributes": {
+    "remainingTime": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "integer", "minimum": 0, "maximum": 1440 },
+          "unit": { "type": "string", "enum": ["min"], "default": "min" }
+        },
+        "additionalProperties": false,
+        "required": ["value"]
+      }
+    },
+    "minimumReservableTime": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "integer", "minimum": 0, "maximum": 1440 },
+          "unit": { "type": "string", "enum": ["min"], "default": "min" }
+        },
+        "additionalProperties": false,
+        "required": ["value"]
+      }
+    }
+  },
+  "commands": {
+    "setDelayEndTime": {
+      "name": "setDelayEndTime",
+      "arguments": [
+        { "name": "endTime", "optional": false, "schema": { "type": "string" } }
+      ]
+    }
+  }
+}

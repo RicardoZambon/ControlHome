@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { listConnectors, type ConnectorDto } from '@controlhome/api-client'
 import { Alert, AlertDescription, Badge, Button, Input, Skeleton } from '@controlhome/ui'
-import { ArrowLeft, ChevronRight, RefreshCw, Search } from '@lucide/vue'
+import { ArrowLeft, ChevronRight, FlaskConical, RefreshCw, Search } from '@lucide/vue'
 import { computed, onMounted, ref, shallowRef, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '../../../components/PageHeader.vue'
@@ -176,6 +176,15 @@ const groups = computed(() => {
               <p v-if="entry.description" class="text-sm text-muted-foreground">{{ entry.description }}</p>
             </div>
             <div class="mt-auto flex flex-wrap gap-1.5">
+              <Badge
+                v-if="entry.connector.features.experimental"
+                class="border-transparent bg-state-warn font-normal text-state-warn-foreground"
+                :title="t('integrations.features.experimentalHint')"
+                data-slot="experimental"
+              >
+                <FlaskConical aria-hidden="true" />
+                {{ t('integrations.features.experimental') }}
+              </Badge>
               <Badge v-for="feature in entry.features" :key="feature" variant="secondary" class="font-normal">
                 {{ feature }}
               </Badge>

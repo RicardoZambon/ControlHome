@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Intelbras (Dahua-family) cameras, recorders (NVR/DVR) and SS access-control terminals over the local HTTP CGI API
+    (Digest auth), plus the XPE intercom HTTP relay behind a feature flag. Like every connector it references
+    Connectors.Abstractions only (enforced by the architecture tests).
+  -->
+  <PropertyGroup>
+    <RootNamespace>ControlHome.Connectors.DahuaHttp</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ControlHome.Connectors.Abstractions\ControlHome.Connectors.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ControlHome.Connectors.Tests" />
+  </ItemGroup>
+
+</Project>

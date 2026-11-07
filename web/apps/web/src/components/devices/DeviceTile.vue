@@ -12,6 +12,8 @@ import { endpointName, useDevicesStore } from '../../stores/devices'
 import { useRealtimeStore } from '../../stores/realtime'
 import { useSessionStore } from '../../stores/session'
 import DeviceIcon from './DeviceIcon.vue'
+import CameraTilePreview from './camera/CameraTilePreview.vue'
+import { useDeviceMotion } from './camera/useDeviceMotion'
 import { CapabilityControl, primaryControl } from './capabilities'
 import { standsOpen, summarizeEndpoint } from './deviceState'
 import { KELVIN_STOPS, isLightEndpoint, lightColorOf, lightLayers } from './lightColor'
@@ -140,6 +142,13 @@ const levelFill = computed(() =>
   lightColor.value ? lightLayers(lightColor.value).solid : KELVIN_STOPS[0].bg,
 )
 const iconTone = computed(() => iconToneOf(summary.value.tone, lit.value))
+/** A camera endpoint shows its refreshing snapshot; activating it opens live view. */
+const camera = computed(() =>
+  props.endpoint.capabilities.find(
+    (capability) => capability.capabilityId === 'camera' && !capability.retired,
+  ),
+)
+const motion = useDeviceMotion(() => props.device)
 </script>
 
 <template>
@@ -221,6 +230,15 @@ const iconTone = computed(() => iconToneOf(summary.value.tone, lit.value))
         <WifiOff />
       </span>
     </div>
+
+    <CameraTilePreview
+      v-if="camera"
+      :endpoint="endpoint"
+      :camera="camera"
+      :name="name"
+      :motion="motion"
+      :offline="offline"
+    />
 
     <div class="grid min-w-0 gap-1">
       <h3

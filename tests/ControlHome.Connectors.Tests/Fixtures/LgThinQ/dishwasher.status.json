@@ -1,0 +1,7 @@
+{
+  "runState": { "currentState": "RUNNING" },
+  "remoteControlEnable": { "remoteControlEnabled": true },
+  "doorStatus": { "doorState": "CLOSE" },
+  "timer": { "remainHour": 1, "remainMinute": 5 },
+  "dishWashingCourse": { "currentDishWashingCourse": "ECO" }
+}

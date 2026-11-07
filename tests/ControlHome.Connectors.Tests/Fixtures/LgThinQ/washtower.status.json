@@ -1,0 +1,12 @@
+{
+  "washer": {
+    "runState": { "currentState": "RUNNING" },
+    "remoteControlEnable": { "remoteControlEnabled": true },
+    "timer": { "remainHour": 0, "remainMinute": 42 }
+  },
+  "dryer": {
+    "runState": { "currentState": "POWER_OFF" },
+    "remoteControlEnable": { "remoteControlEnabled": false },
+    "timer": { "remainHour": 0, "remainMinute": 0 }
+  }
+}
