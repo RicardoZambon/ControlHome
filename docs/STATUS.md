@@ -17,22 +17,22 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-21 — Milestone 1.3 + 1.4-B merged (PR #17): device placement + room auto-assign, integration flows + merge rules (orphaned, replace device), more Simulated types, demo home, backup export/import (passphrase), dashboard v1, history charts, settings pages (home, data retention, backup). 1558 .NET tests, 898 web tests, 83 E2E + 548 screenshots.
 - 2026-10-21 — Tagged **v0.1.0** (Phase 1 complete).
 - 2026-10-21 — Milestone 1.5 merged (PR #19): Umbrel community store template (`deploy/umbrel/`), Dockerfile NuGet layer fix, VersionPrefix 0.2.0.
+- 2026-11-07 — Phase 2 merged (PR #29): LG ThinQ, Intelbras/Dahua HTTP + go2rtc cameras, SmartThings; camera UI; Experimental label on vendor connectors. Tagged **v0.2.0**.
 
-## In progress (2026-11-06)
-- Phase 2 step 2.4 on `milestone/2-vendor-connectors`:
-  - Done: LG ThinQ, Dahua HTTP and SmartThings merged; OpenAPI and client regenerated; SmartThings energy windows go to
-    the hourly energy history; connectors carry an Experimental flag (badge in the catalogue);
-    `docs/connectors/LIVE-VALIDATION.md` written. Integration + connector tests: 1313/1313.
-  - In progress: camera UI (player with WebRTC → MSE, snapshot tiles, live dialog, motion badge) on `wip/p2-camera-ui`.
-  - Next: merge the camera UI, E2E + screenshots + visual review, PR, tag v0.2.0.
-- Dependabot #26 (web minor/patch) pulls axe-core 4.14, which adds the `label-content-name-mismatch` rule; the user
-  and language menus are now named by their content (fix pushed on the PR branch).
+## In progress (2026-11-07)
+- Phase 2 is done and tagged **v0.2.0**. Next: owner review and testing of v0.2.0, then Phase 3 (automation).
+- Dependabot #26 (web minor/patch) pulls axe-core 4.14, which adds the `label-content-name-mismatch` rule. Menus,
+  floor-plan rooms and markers, and the searchable select are now named by their content (fixes on the PR branch).
 - Local note: port 5173 is taken by another app on this machine; `.claude/launch.json` entry `web-5174` is a local-only
   alternative (not committed).
-  - Open issues from the reviews: LG DELETE /client needs an SDK removal hook; LG replace-token keeps an old-account MQTT certificate; Dahua ONVIF fallback, hooks receiver and syslog listener not built; Dahua login lock policy is a fixed 30 min; WebRTC sessions are not cut when a user is disabled; SmartThings rooms quota is per run (no persisted IQuotaCounter) and capability/presentation cache is in memory; Umbrel template lacks the go2rtc profile.
+- Phase 2 follow-ups (not blocking): optional HTTPS listener (was 2.1); LG DELETE /client needs an SDK removal hook;
+  LG replace-token keeps an old-account MQTT certificate; Dahua ONVIF fallback, hooks receiver and syslog listener not
+  built; Dahua login lock policy is a fixed 30 min; WebRTC sessions are not cut when a user is disabled; SmartThings
+  rooms quota is per run (no persisted IQuotaCounter) and its capability/presentation cache is in memory; Umbrel
+  template lacks the go2rtc profile; camera playback not yet checked against a real go2rtc or on iPhone.
 - Roadmap page (live, db-backed): https://claude.ai/artifact/FHB8V8d3pNEXTkor8GqRPW — update task statuses with ArtifactData when milestones move.
 - 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans.
-- Next phases: Phase 2 (docs/plans/phase-2-vendor-connectors.md: LG ThinQ, DahuaHttp + go2rtc, SmartThings), Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
+- Next phases: Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
 - Usage guard: session cron every 10 min, pause at ≥ 90% of the 5-hour limit or ≥ 92% of the weekly limit (TaskStop running tasks, record in STATUS, one-shot resume after the reset).
 - Host notes: default node is now v22 — prepend C:/Users/samur/AppData/Local/nvm/v24.21.0 to PATH for web commands.
 

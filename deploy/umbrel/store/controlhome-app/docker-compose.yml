@@ -3,7 +3,7 @@ version: "3.7"
 services:
   server:
     # Pinned by digest: see "Releasing a new version" in deploy/umbrel/README.md of the ControlHome repository.
-    image: ghcr.io/ricardozambon/controlhome:0.1.0@sha256:6d65547d4a66e44e8b417d7f82d60f95eaf4f0fc861b40eaefcfbc2e9daf66e0
+    image: ghcr.io/ricardozambon/controlhome:0.2.0@sha256:4bd968d2eb9d81941d4ace49c2ff2578799fa6fcd5a0cfa586526bf87e80c980
     # Host networking, like Umbrel's Home Assistant app: device discovery, Wake-on-LAN and device push events need the
     # LAN. No app_proxy: the app has its own sign-in and listens on the manifest's port on every host interface.
     network_mode: host

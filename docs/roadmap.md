@@ -62,11 +62,13 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
 
 ## Phase 2 — Vendor connectors, wave 1 → tag `v0.2`
 
-- [ ] **2.1 LG ThinQ** (plus the optional HTTPS listener).
-- [ ] **2.2 DahuaHttp + go2rtc** (Intelbras cameras / NVR / access): CameraPlayer (WebRTC → MSE), camera tiles on the
-  dashboard and plan, ONVIF fallback.
-- [ ] **2.3 SmartThings** (Samsung + Mibo Smart devices), including the `PlanRequired` state.
-- Per connector: upstream-derived fixture tests (each with a `SOURCE.md`), flow screenshots, docs. Tag **`v0.2`**.
+- [x] **2.1 LG ThinQ** (PR #29). The optional HTTPS listener is moved to later.
+- [x] **2.2 DahuaHttp + go2rtc** (Intelbras cameras / NVR / access): CameraPlayer (WebRTC → MSE), camera tiles on the
+  dashboard and plan (PR #29). Not built yet: ONVIF fallback, hooks receiver, syslog listener.
+- [x] **2.3 SmartThings** (Samsung + Mibo Smart devices), including the `PlanRequired` state (PR #29).
+- Per connector: upstream-derived fixture tests (each with a `SOURCE.md`), flow screenshots, docs. Every vendor
+  connector is labelled **Experimental** until it is checked with real devices (`docs/connectors/LIVE-VALIDATION.md`).
+  Tagged **`v0.2.0`**.
 
 ## Phase 3 — Automation → tag `v0.3`
 
