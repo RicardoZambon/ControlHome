@@ -18,13 +18,17 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 - 2026-10-21 — Tagged **v0.1.0** (Phase 1 complete).
 - 2026-10-21 — Milestone 1.5 merged (PR #19): Umbrel community store template (`deploy/umbrel/`), Dockerfile NuGet layer fix, VersionPrefix 0.2.0.
 
-## In progress (2026-10-22)
-- **Paused by the owner after Phase 2 wave A (2026-10-22): wait for the next command.**
-- Phase 2 wave A connectors are implemented, adversarially reviewed and green on the full suite, each on its own branch from c4a0238 (not merged yet):
-  - `wip/p2-lgthinq` fe1bee0: LG ThinQ (REST + MQTT, vendor energy windows into EnergyHourly via `IConnectorContext.ReportEnergyWindowsAsync`). 1694/1695 tests.
-  - `wip/p2-dahuahttp` 339c026: Intelbras/Dahua HTTP (Digest, event stream, door release at-most-once) + go2rtc live view (`/api/endpoints/{id}/camera/stream|webrtc`, compose profile `cameras`). 1715/1716 tests.
-  - `wip/p2-smartthings` 8fa26bf: SmartThings (OAuth-In + paste-back, single-flight token rotation, adaptive polling). 1687/1688 tests.
-  - Next (2.4): merge the three into `milestone/2-vendor-connectors` (expect conflicts in ControlHome.slnx, Directory.Packages.props, deploy/Dockerfile, ConnectorSetup.cs, test csprojs, architecture tests, api-client), regenerate OpenAPI, wire SmartThings powerConsumptionReport windows to the LG track's energy-window API, add the catalogue Experimental flag + docs/connectors/LIVE-VALIDATION.md, then the UI workflow (camera player and tiles, door open, setup screens), E2E, screenshots, PR, tag v0.2.0.
+## In progress (2026-11-06)
+- Phase 2 step 2.4 on `milestone/2-vendor-connectors`:
+  - Done: LG ThinQ, Dahua HTTP and SmartThings merged; OpenAPI and client regenerated; SmartThings energy windows go to
+    the hourly energy history; connectors carry an Experimental flag (badge in the catalogue);
+    `docs/connectors/LIVE-VALIDATION.md` written. Integration + connector tests: 1313/1313.
+  - In progress: camera UI (player with WebRTC → MSE, snapshot tiles, live dialog, motion badge) on `wip/p2-camera-ui`.
+  - Next: merge the camera UI, E2E + screenshots + visual review, PR, tag v0.2.0.
+- Dependabot #26 (web minor/patch) pulls axe-core 4.14, which adds the `label-content-name-mismatch` rule; the user
+  and language menus are now named by their content (fix pushed on the PR branch).
+- Local note: port 5173 is taken by another app on this machine; `.claude/launch.json` entry `web-5174` is a local-only
+  alternative (not committed).
   - Open issues from the reviews: LG DELETE /client needs an SDK removal hook; LG replace-token keeps an old-account MQTT certificate; Dahua ONVIF fallback, hooks receiver and syslog listener not built; Dahua login lock policy is a fixed 30 min; WebRTC sessions are not cut when a user is disabled; SmartThings rooms quota is per run (no persisted IQuotaCounter) and capability/presentation cache is in memory; Umbrel template lacks the go2rtc profile.
 - Roadmap page (live, db-backed): https://claude.ai/artifact/FHB8V8d3pNEXTkor8GqRPW — update task statuses with ArtifactData when milestones move.
 - 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans.
