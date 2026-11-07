@@ -1,0 +1,31 @@
+{
+  "id": "hca.washerMode",
+  "version": 1,
+  "status": "proposed",
+  "name": "Washer Mode",
+  "ephemeral": false,
+  "attributes": {
+    "mode": {
+      "schema": {
+        "type": "object",
+        "properties": { "value": { "type": "string", "enum": ["normal", "quickWash", "colors", "eco", "twinWash"] } },
+        "additionalProperties": false,
+        "required": ["value"]
+      },
+      "setter": "setMode"
+    },
+    "supportedModes": {
+      "schema": {
+        "type": "object",
+        "properties": { "value": { "type": "array", "items": { "type": "string" } } },
+        "additionalProperties": false
+      }
+    }
+  },
+  "commands": {
+    "setMode": {
+      "name": "setMode",
+      "arguments": [{ "name": "mode", "optional": false, "schema": { "type": "string", "enum": ["normal", "quickWash", "colors", "eco", "twinWash"] } }]
+    }
+  }
+}

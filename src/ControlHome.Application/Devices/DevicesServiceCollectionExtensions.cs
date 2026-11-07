@@ -30,6 +30,9 @@ public static class DevicesServiceCollectionExtensions
         services.TryAddSingleton<IDeviceInventoryAdmin>(NoDeviceInventoryAdmin.Instance);
         services.TryAddSingleton<ICameraSnapshotProvider>(NoDeviceRuntime.Instance);
         services.AddScoped<CameraService>();
+        services.TryAddSingleton<ICameraStreamProvider>(NoDeviceRuntime.Instance);
+        services.TryAddSingleton<ICameraRestreamer>(NoCameraRestreamer.Instance);
+        services.AddScoped<CameraStreamService>();
 
         services.AddScoped<DeviceQueryService>();
         services.AddScoped<DeviceAdminService>();

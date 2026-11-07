@@ -78,6 +78,9 @@ public sealed class PowerOnlyConnectorFactory(PowerOnlySpy spy) : IConnectorFact
         public Task SyncInventoryAsync(IReadOnlyList<DiscoveredDevice> devices, CancellationToken cancellationToken) =>
             inner.SyncInventoryAsync([.. devices.Select(WithoutEnergy)], cancellationToken);
 
+        public Task ReportEnergyWindowsAsync(IReadOnlyList<EnergyWindowReport> windows, CancellationToken cancellationToken) =>
+            inner.ReportEnergyWindowsAsync(windows, cancellationToken);
+
         private static DiscoveredDevice WithoutEnergy(DiscoveredDevice device)
         {
             ArgumentNullException.ThrowIfNull(device);

@@ -27,6 +27,10 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
     <!-- MQTT connector client (v5: no ManagedClient; the connector owns its reconnect/resubscribe loop). -->
     <PackageVersion Include="MQTTnet" Version="5.2.0.1603" />
+    <!-- Cloud connectors (LG ThinQ, SmartThings): IHttpClientFactory, retries of idempotent GETs + per-attempt timeouts; token buckets. -->
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
+    <PackageVersion Include="System.Threading.RateLimiting" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup Label="Imaging">
@@ -50,6 +54,8 @@
     <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
     <!-- Generic containers (MQTT connector tests run eclipse-mosquitto). -->
     <PackageVersion Include="Testcontainers" Version="4.16.0" />
+    <!-- HTTP fakes of vendor APIs (LG ThinQ REST, SmartThings, the Dahua CGI API with Digest auth, the go2rtc API). -->
+    <PackageVersion Include="WireMock.Net" Version="2.19.0" />
   </ItemGroup>
 
   <ItemGroup Label="Transitive security pins">

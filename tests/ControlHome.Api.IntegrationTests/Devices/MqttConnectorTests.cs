@@ -22,7 +22,7 @@ public sealed class MqttConnectorTests(DevicesApiFactory factory) : DevicesTestB
         var mqtt = (await viewer.GetFromJsonAsync<ConnectorDto[]>("/api/connectors", Ct))!.Single(c => c.Key == "mqtt");
 
         mqtt.Category.ShouldBe("protocol");
-        mqtt.Features.ShouldBe(new ConnectorFeaturesDto(SetupFlow: true, Reauth: false, PushInventory: true, PermitJoin: true, Cloud: false, Polling: false));
+        mqtt.Features.ShouldBe(new ConnectorFeaturesDto(SetupFlow: true, Reauth: false, PushInventory: true, PermitJoin: true, Cloud: false, Polling: false, Experimental: true));
         mqtt.ConfigFields.Select(f => f.Key).ShouldBe(
             ["host", "port", "useTls", "username", "password", "clientId", "discoveryPrefix", "zigbee2mqttBaseTopic", "tasmotaDiscovery"]);
         mqtt.ConfigFields.Where(f => f.Secret).Select(f => f.Key).ShouldBe(["password"]);

@@ -59,6 +59,18 @@ public interface IConnectorContext
     void ReportAvailability(string externalDeviceId, Availability availability, string? reason);
 
     /// <summary>
+    /// Stores energy windows (vendor daily/monthly/interval Wh, see <see cref="EnergyWindowReport"/>) in the hourly energy
+    /// history; completes once saved (a failure throws: report the same windows again later). The windows of one call
+    /// replace the hourly energy of every hour they touch for their endpoints: within a call, finer windows win and a
+    /// coarser one (a month) only fills the hours they leave uncovered, so report a vendor's whole span (e.g. every day of
+    /// the last two months plus both month totals) in one call. Reporting the same windows again changes nothing. An
+    /// endpoint whose energy comes from another source (an energy counter, or a user's choice) is skipped, so energy is
+    /// never counted twice; unknown devices or endpoints and invalid windows (negative, not finite, in the future) are
+    /// ignored.
+    /// </summary>
+    Task ReportEnergyWindowsAsync(IReadOnlyList<EnergyWindowReport> windows, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Adds or updates a device (match on the external id; vendor fields update, user fields never do). New endpoints and
     /// capabilities are added; capabilities no longer listed are retired. Completes once the inventory is saved, so states
     /// reported afterwards resolve to attribute ids.

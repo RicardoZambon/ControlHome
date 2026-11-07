@@ -1,0 +1,86 @@
+{
+  "items": [
+    {
+      "deviceId": "00000000-0000-4000-8000-000000000007",
+      "name": "aeotec-ms6",
+      "label": "Bedroom sensor",
+      "manufacturerName": "SmartThingsCommunity",
+      "presentationId": "00000000-0000-4000-8000-000000000008",
+      "deviceManufacturerCode": "0086-0102-0064",
+      "locationId": "00000000-0000-4000-8000-000000000009",
+      "ownerId": "00000000-0000-4000-8000-00000000000a",
+      "roomId": "00000000-0000-4000-8000-00000000000b",
+      "components": [
+        {
+          "id": "main",
+          "label": "main",
+          "capabilities": [
+            {
+              "id": "motionSensor",
+              "version": 1
+            },
+            {
+              "id": "temperatureMeasurement",
+              "version": 1
+            },
+            {
+              "id": "relativeHumidityMeasurement",
+              "version": 1
+            },
+            {
+              "id": "illuminanceMeasurement",
+              "version": 1
+            },
+            {
+              "id": "ultravioletIndex",
+              "version": 1
+            },
+            {
+              "id": "tamperAlert",
+              "version": 1
+            },
+            {
+              "id": "battery",
+              "version": 1
+            },
+            {
+              "id": "refresh",
+              "version": 1
+            }
+          ],
+          "categories": [
+            {
+              "name": "MotionSensor",
+              "categoryType": "manufacturer"
+            }
+          ],
+          "optional": false
+        }
+      ],
+      "createTime": "2025-04-17T05:47:05.803Z",
+      "parentDeviceId": "00000000-0000-4000-8000-00000000000c",
+      "profile": {
+        "id": "00000000-0000-4000-8000-00000000000d"
+      },
+      "zwave": {
+        "networkId": "A001",
+        "driverId": "00000000-0000-4000-8000-00000000000e",
+        "executingLocally": true,
+        "hubId": "00000000-0000-4000-8000-00000000000c",
+        "networkSecurityLevel": "ZWAVE_LEGACY_NON_SECURE",
+        "provisioningState": "PROVISIONED",
+        "manufacturerId": 134,
+        "productType": 258,
+        "productId": 100,
+        "fingerprintType": "ZWAVE_MANUFACTURER",
+        "fingerprintId": "Aeotec/MS6/US"
+      },
+      "type": "ZWAVE",
+      "restrictionTier": 0,
+      "allowed": null,
+      "executionContext": "LOCAL",
+      "relationships": []
+    }
+  ],
+  "_links": {}
+}

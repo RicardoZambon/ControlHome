@@ -17,7 +17,7 @@ namespace ControlHome.Connectors.Simulated;
 /// Deterministic: everything random comes from one <see cref="Random"/> seeded with the configured seed, and all time from
 /// <see cref="IConnectorContext.Time"/>, so the same seed and clock produce the same reports.
 /// </remarks>
-public sealed class SimulatedRuntime : IConnectorRuntime, ICameraSnapshotSource
+public sealed class SimulatedRuntime : IConnectorRuntime, ICameraSnapshotSource, ICameraStreamSource
 {
     public static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(5);
     public static readonly TimeSpan CommandLatency = TimeSpan.FromMilliseconds(150);
@@ -33,10 +33,14 @@ public sealed class SimulatedRuntime : IConnectorRuntime, ICameraSnapshotSource
     private IConnectorContext? _context;
     private long _completedTicks;
 
-    internal SimulatedRuntime(SimulatedSettings settings)
+    private readonly string? _streamSource;
+
+    /// <param name="streamSource">The demo cameras' live stream template (<see cref="SimulatedConnectorOptions.CameraStreamSource"/>), or <c>null</c>.</param>
+    internal SimulatedRuntime(SimulatedSettings settings, string? streamSource = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         _home = new SimulatedHome(settings);
+        _streamSource = string.IsNullOrWhiteSpace(streamSource) ? null : streamSource.Trim();
     }
 
     public SimulatedSettings Settings => _home.Settings;
@@ -233,6 +237,42 @@ public sealed class SimulatedRuntime : IConnectorRuntime, ICameraSnapshotSource
 
         var channel = SimulatedDemoDevices.Cameras.ToList().IndexOf(externalDeviceId) + 1;
         return Task.FromResult<CameraSnapshot?>(new CameraSnapshot(SimulatedSnapshots.ContentType, SimulatedSnapshots.ForChannel(channel), takenAt));
+    }
+
+    /// <summary>
+    /// The configured test stream of a demo camera (its main endpoint), or <c>null</c> when none is configured, the source
+    /// is not an <c>rtsp</c> URL, or it is anything but a demo camera.
+    /// </summary>
+    public Task<CameraStreamSource?> GetStreamSourceAsync(
+        string externalDeviceId,
+        string endpointKey,
+        CameraStreamQuality quality,
+        CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            if (_streamSource is null
+                || _context is null
+                || Settings.SimulateReauth
+                || _home.Find(externalDeviceId) is not SimulatedCamera
+                || !string.Equals(endpointKey, Endpoint.MainKey, StringComparison.Ordinal))
+            {
+                return Task.FromResult<CameraStreamSource?>(null);
+            }
+        }
+
+        var number = SimulatedDemoDevices.Cameras.ToList().IndexOf(externalDeviceId) + 1;
+        var url = _streamSource
+            .Replace("{n}", number.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("{quality}", quality == CameraStreamQuality.Sub ? "sub" : "main", StringComparison.Ordinal);
+        try
+        {
+            return Task.FromResult<CameraStreamSource?>(new CameraStreamSource(url));
+        }
+        catch (ArgumentException)
+        {
+            return Task.FromResult<CameraStreamSource?>(null);
+        }
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;

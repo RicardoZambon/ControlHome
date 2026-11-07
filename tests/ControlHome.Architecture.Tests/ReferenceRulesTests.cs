@@ -6,7 +6,7 @@ namespace ControlHome.Architecture.Tests;
 
 /// <summary>
 /// Enforces the reference graph: Domain (no deps) ← Application ← Infrastructure ← Api; Connectors.Abstractions → Domain;
-/// Connectors.&lt;Vendor&gt; (Simulated, Mqtt) → Connectors.Abstractions only.
+/// Connectors.&lt;Vendor&gt; (Simulated, Mqtt, LgThinQ, DahuaHttp, SmartThings) → Connectors.Abstractions only.
 /// </summary>
 /// <remarks>
 /// Assemblies are inspected from disk (Mono.Cecil via <see cref="Types.FromFile"/>) instead of being loaded into the test
@@ -22,6 +22,9 @@ public sealed class ReferenceRulesTests
     private const string ConnectorsAbstractions = "ControlHome.Connectors.Abstractions";
     private const string SimulatedConnector = "ControlHome.Connectors.Simulated";
     private const string MqttConnector = "ControlHome.Connectors.Mqtt";
+    private const string LgThinQConnector = "ControlHome.Connectors.LgThinQ";
+    private const string DahuaHttpConnector = "ControlHome.Connectors.DahuaHttp";
+    private const string SmartThingsConnector = "ControlHome.Connectors.SmartThings";
     private const string FixturesNamespace = "ControlHome.Architecture.Tests.Fixtures";
 
     /// <summary>What no connector assembly (the SDK included) may depend on: the application layers, EF Core, the web stack.</summary>
@@ -62,12 +65,15 @@ public sealed class ReferenceRulesTests
     [Fact]
     public void Connectors_Abstractions_depends_on_Domain_only()
     {
-        AssertNoTypeDependencies(ConnectorsAbstractions, [.. _connectorForbidden, SimulatedConnector, MqttConnector]);
+        AssertNoTypeDependencies(ConnectorsAbstractions, [.. _connectorForbidden, SimulatedConnector, MqttConnector, LgThinQConnector, DahuaHttpConnector, SmartThingsConnector]);
     }
 
     [Theory]
     [InlineData(SimulatedConnector)]
     [InlineData(MqttConnector)]
+    [InlineData(LgThinQConnector)]
+    [InlineData(DahuaHttpConnector)]
+    [InlineData(SmartThingsConnector)]
     public void Connector_assemblies_never_depend_on_Application_Infrastructure_or_Api(string connector)
     {
         AssertNoTypeDependencies(connector, _connectorForbidden);
@@ -104,6 +110,9 @@ public sealed class ReferenceRulesTests
 
         connectors.ShouldContain(SimulatedConnector);
         connectors.ShouldContain(MqttConnector);
+        connectors.ShouldContain(LgThinQConnector);
+        connectors.ShouldContain(DahuaHttpConnector);
+        connectors.ShouldContain(SmartThingsConnector);
         foreach (var connector in connectors)
         {
             var project = LoadProject(connector);
@@ -192,8 +201,8 @@ public sealed class ReferenceRulesTests
     }
 
     [Theory]
-    [InlineData(Application, new[] { Infrastructure, Api, SimulatedConnector, MqttConnector })]
-    [InlineData(Infrastructure, new[] { Api, SimulatedConnector, MqttConnector })]
+    [InlineData(Application, new[] { Infrastructure, Api, SimulatedConnector, MqttConnector, LgThinQConnector, DahuaHttpConnector, SmartThingsConnector })]
+    [InlineData(Infrastructure, new[] { Api, SimulatedConnector, MqttConnector, LgThinQConnector, DahuaHttpConnector, SmartThingsConnector })]
     public void Project_does_not_reference_outer_layers(string projectName, string[] forbidden)
     {
         var referenced = ProjectReferenceNames(LoadProject(projectName));

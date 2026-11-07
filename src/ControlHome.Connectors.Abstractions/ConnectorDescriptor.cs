@@ -99,4 +99,10 @@ public sealed record ConnectorFeatures
 
     /// <summary>State comes from polling (see <see cref="AdaptivePoller"/>) rather than pushed events.</summary>
     public bool Polling { get; init; }
+
+    /// <summary>
+    /// Not yet validated against real devices or vendor accounts (built from vendor docs and upstream fixtures). The UI
+    /// labels it until the owner checks it with <c>docs/connectors/LIVE-VALIDATION.md</c>.
+    /// </summary>
+    public bool Experimental { get; init; }
 }

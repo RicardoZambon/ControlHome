@@ -73,6 +73,7 @@ const SIMULATED: ConnectorDto = {
     permitJoin: false,
     cloud: false,
     polling: false,
+    experimental: false,
   },
 }
 
@@ -82,7 +83,7 @@ const MQTT: ConnectorDto = {
   displayName: text('MQTT'),
   icon: 'radio-tower',
   category: 'protocol',
-  features: { ...SIMULATED.features, reauth: false, permitJoin: true },
+  features: { ...SIMULATED.features, reauth: false, permitJoin: true, experimental: true },
 }
 
 function step(type: string, extra: Partial<FlowStepDto> = {}): FlowStepDto {
@@ -199,6 +200,8 @@ describe('integration catalogue', () => {
     expect(headings).toEqual(['Protocolos da sua rede', 'Virtuais e demonstração'])
     expect(wrapper.get('a[href="/integrations/add/simulated"]').text()).toBe('Casa simulada')
     expect(wrapper.get('[data-connector="simulated"]').text()).toContain('Configuração guiada')
+    expect(wrapper.find('[data-connector="simulated"] [data-slot="experimental"]').exists()).toBe(false)
+    expect(wrapper.get('[data-connector="mqtt"] [data-slot="experimental"]').text()).toBe('Experimental')
     wrapper.unmount()
   })
 })

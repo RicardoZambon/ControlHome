@@ -16,7 +16,7 @@ public sealed class MqttSettingsTests
 
         descriptor.Key.ShouldBe("mqtt");
         descriptor.Category.ShouldBe(ConnectorCategory.Protocol);
-        descriptor.Features.ShouldBe(new ConnectorFeatures { SetupFlow = true, PushInventory = true, PermitJoin = true });
+        descriptor.Features.ShouldBe(new ConnectorFeatures { SetupFlow = true, PushInventory = true, PermitJoin = true, Experimental = true });
         descriptor.ConfigFields.Select(f => f.Key).ShouldBe(
             ["host", "port", "useTls", "username", "password", "clientId", "discoveryPrefix", "zigbee2mqttBaseTopic", "tasmotaDiscovery"]);
         descriptor.ConfigFields.Where(f => f.Secret).Select(f => f.Key).ShouldBe(["password"]);

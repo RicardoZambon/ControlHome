@@ -130,5 +130,5 @@ public sealed class MqttConnectorDescriptor : IConnectorDescriptor
 
     public IReadOnlyList<FieldSchema> DeviceConfigFields { get; } = [];
 
-    public ConnectorFeatures Features { get; } = new() { SetupFlow = true, PushInventory = true, PermitJoin = true };
+    public ConnectorFeatures Features { get; } = new() { SetupFlow = true, PushInventory = true, PermitJoin = true, Experimental = true };
 }

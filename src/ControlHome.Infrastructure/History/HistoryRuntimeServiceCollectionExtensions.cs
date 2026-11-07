@@ -15,6 +15,8 @@ public static class HistoryRuntimeServiceCollectionExtensions
         services.AddOptions<HistoryOptions>().BindConfiguration(HistoryOptions.SectionName);
         services.TryAddSingleton<IPendingHistory>(sp => sp.GetRequiredService<StateWriteBehind>());
         services.TryAddSingleton<HistoryRollup>();
+        services.TryAddSingleton<VendorEnergyWriter>();
+        services.TryAddSingleton<IEnergyWindowSink>(sp => sp.GetRequiredService<VendorEnergyWriter>());
         services.TryAddSingleton<RetentionPurge>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRetentionPurgeTarget, StateLogPurgeTarget>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IRetentionPurgeTarget, ShortTermPurgeTarget>());
