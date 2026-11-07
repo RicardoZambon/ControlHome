@@ -29,12 +29,6 @@ const roleLabel = computed(() => {
   return role === 'Admin' || role === 'Member' || role === 'Viewer' ? t(`roles.${role}`) : ''
 })
 
-/** Includes the visible name and role: the accessible name must contain the visible text. */
-const triggerLabel = computed(() => {
-  const label = t('shell.userMenu', { name: me.value?.displayName ?? '' })
-  return roleLabel.value ? `${label} (${roleLabel.value})` : label
-})
-
 async function signOut(): Promise<void> {
   await session.logout()
   homeStore.reset()
@@ -49,10 +43,14 @@ async function signOut(): Promise<void> {
       <Button
         variant="ghost"
         class="h-control gap-2 rounded-full px-1.5 has-[>svg]:px-1.5 lg:rounded-md lg:pr-2"
-        :aria-label="triggerLabel"
       >
+        <!--
+          Named by screen-reader text, not aria-label: an aria-label must contain the visible initials, name and role
+          (axe label-content-name-mismatch); the visible parts are hidden from the accessibility tree instead.
+        -->
+        <span class="sr-only">{{ t('shell.userMenu', { name: me.displayName }) }}</span>
         <UserAvatar :name="me.displayName" :seed="me.userName" class="size-8" />
-        <span class="hidden max-w-36 min-w-0 text-left leading-tight lg:grid">
+        <span class="hidden max-w-36 min-w-0 text-left leading-tight lg:grid" aria-hidden="true">
           <span class="truncate text-sm font-medium">{{ me.displayName }}</span>
           <span class="truncate text-xs text-muted-foreground">{{ roleLabel }}</span>
         </span>

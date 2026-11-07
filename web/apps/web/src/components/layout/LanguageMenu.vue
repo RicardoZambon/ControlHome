@@ -10,7 +10,6 @@ import {
   toast,
 } from '@controlhome/ui'
 import { Languages } from '@lucide/vue'
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isAppLocale, setLocale } from '../../i18n'
 import { useSessionStore } from '../../stores/session'
@@ -22,9 +21,6 @@ const options = [
   { value: 'en', labelKey: 'locales.en', short: 'EN' },
   { value: 'pt-BR', labelKey: 'locales.ptBR', short: 'PT' },
 ] as const
-
-/** The visible code (EN, PT); the accessible name must contain the visible text. */
-const currentShort = computed(() => options.find((option) => option.value === locale.value)?.short ?? '')
 
 /** Applies the language at once; when signed in, also saves it to the profile. */
 async function select(value: unknown): Promise<void> {
@@ -45,12 +41,13 @@ async function select(value: unknown): Promise<void> {
       <Button
         variant="ghost"
         class="gap-1.5 px-2.5 text-muted-foreground hover:text-accent-foreground has-[>svg]:px-2.5"
-        :aria-label="`${t('shell.chooseLanguage')} (${currentShort})`"
         :title="t('shell.chooseLanguage')"
       >
-        <Languages />
-        <span class="text-xs font-semibold tracking-wide" aria-hidden="true">
-          {{ currentShort }}
+        <!-- Named by its content, not aria-label: the name must contain the visible code (axe label-content-name-mismatch). -->
+        <span class="sr-only">{{ t('shell.chooseLanguage') }}: </span>
+        <Languages aria-hidden="true" />
+        <span class="text-xs font-semibold tracking-wide">
+          {{ options.find((option) => option.value === locale)?.short }}
         </span>
       </Button>
     </DropdownMenuTrigger>
