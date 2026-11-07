@@ -83,11 +83,11 @@ function onKeydown(event: KeyboardEvent): void {
     :data-room-key="roomKey"
     :role="focusable ? 'button' : undefined"
     :tabindex="focusable ? 0 : undefined"
-    :aria-label="focusable ? t('floorplan.roomLabel', { name: room.name, area }) : undefined"
     :aria-pressed="focusable ? selected : undefined"
     class="group/room outline-none"
     @keydown="focusable ? onKeydown($event) : undefined"
   >
+    <title v-if="focusable">{{ t('floorplan.roomLabel', { name: room.name, area }) }}</title>
     <polygon v-if="underlay" :points="points" class="fill-card/85" />
     <polygon
       :points="points"

@@ -13,7 +13,8 @@ export interface SearchableOption {
 }
 
 /**
- * A select for long lists (time zones, currencies): a button that opens a popover with a search box and a listbox
+ * A select for long lists (time zones, currencies): a combobox button, named by its label and showing the value, that
+ * opens a popover with a search box and a listbox
  * (combobox pattern with aria-activedescendant). Attributes (id, aria-*) go to the button, so it works inside
  * <FormControl>.
  */
@@ -115,7 +116,8 @@ function onKeydown(event: KeyboardEvent): void {
         v-bind="$attrs"
         type="button"
         variant="outline"
-        :aria-label="selected ? `${label}: ${selected.label}` : label"
+        role="combobox"
+        :aria-label="label"
         :class="
           cn(
             'w-full justify-between gap-2 border-input px-3 text-base font-normal shadow-xs aria-invalid:border-destructive md:text-sm',

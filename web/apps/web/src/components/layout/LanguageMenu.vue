@@ -41,11 +41,12 @@ async function select(value: unknown): Promise<void> {
       <Button
         variant="ghost"
         class="gap-1.5 px-2.5 text-muted-foreground hover:text-accent-foreground has-[>svg]:px-2.5"
-        :aria-label="t('shell.chooseLanguage')"
         :title="t('shell.chooseLanguage')"
       >
-        <Languages />
-        <span class="text-xs font-semibold tracking-wide" aria-hidden="true">
+        <!-- Named by its content, not aria-label: the name must contain the visible code (axe label-content-name-mismatch). -->
+        <span class="sr-only">{{ t('shell.chooseLanguage') }}: </span>
+        <Languages aria-hidden="true" />
+        <span class="text-xs font-semibold tracking-wide">
           {{ options.find((option) => option.value === locale)?.short }}
         </span>
       </Button>

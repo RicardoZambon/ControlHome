@@ -121,8 +121,8 @@ describe.each(['en', 'pt-BR'] as const)('floor pages (%s)', (locale) => {
     const { wrapper } = await open('/floors/3', locale)
     expect(wrapper.find('h1').text()).toBe('Térreo')
     expect(wrapper.find('svg[role="group"]').exists()).toBe(true)
-    // Rooms are keyboard-reachable buttons named by name and area (jsdom has no layout, so labels stay hidden).
-    expect(wrapper.findAll('svg [role="button"]').map((room) => room.attributes('aria-label'))).toEqual([
+    // Rooms are keyboard-reachable buttons named by name and area (an SVG title; jsdom has no layout, so labels stay hidden).
+    expect(wrapper.findAll('svg [role="button"]').map((room) => room.find('title').text())).toEqual([
       'Sala, 25 m²',
       'Cozinha, 16 m²',
     ])

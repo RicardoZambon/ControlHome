@@ -127,7 +127,6 @@ const offline = computed(() => summary.value.tone === 'offline')
     :data-active="summary.active || undefined"
     :role="focusable ? 'button' : undefined"
     :tabindex="focusable ? 0 : undefined"
-    :aria-label="focusable ? label : undefined"
     :aria-hidden="focusable ? undefined : 'true'"
     :class="
       cn(
@@ -140,7 +139,7 @@ const offline = computed(() => summary.value.tone === 'offline')
     @keydown.enter.prevent="emit('activate')"
     @keydown.space.prevent="emit('activate')"
   >
-    <title v-if="!compact">{{ label }}</title>
+    <title v-if="!compact || focusable">{{ label }}</title>
 
     <template v-if="compact">
       <circle
