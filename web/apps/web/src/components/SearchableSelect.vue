@@ -115,7 +115,7 @@ function onKeydown(event: KeyboardEvent): void {
         v-bind="$attrs"
         type="button"
         variant="outline"
-        :aria-label="selected ? `${label}: ${selected.label}` : label"
+        :aria-label="selected ? [`${label}: ${selected.label}`, selected.hint].filter(Boolean).join(' ') : label"
         :class="
           cn(
             'w-full justify-between gap-2 border-input px-3 text-base font-normal shadow-xs aria-invalid:border-destructive md:text-sm',
