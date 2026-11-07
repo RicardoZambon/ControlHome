@@ -29,7 +29,9 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
   LG replace-token keeps an old-account MQTT certificate; Dahua ONVIF fallback, hooks receiver and syslog listener not
   built; Dahua login lock policy is a fixed 30 min; WebRTC sessions are not cut when a user is disabled; SmartThings
   rooms quota is per run (no persisted IQuotaCounter) and its capability/presentation cache is in memory; Umbrel
-  template lacks the go2rtc profile; camera playback not yet checked against a real go2rtc or on iPhone.
+  template lacks the go2rtc profile; camera playback not yet checked against a real go2rtc or on iPhone; the LG test
+  `Connections_that_drop_right_away_back_off…` is timing-sensitive on the local 2 GB Docker VM (passes in CI) and needs
+  a hook that says when the backoff timer is armed.
 - Roadmap page (live, db-backed): https://claude.ai/artifact/FHB8V8d3pNEXTkor8GqRPW — update task statuses with ArtifactData when milestones move.
 - 1.3 follow-ups (not blocking): concurrent PUT of placements can return 500; backup option to include history; redacting logger for flow inputs; database size estimate on Data retention; kebab menu for Remove on mobile; small-room labels truncated on phone floor plans.
 - Next phases: Phase 3 automation (draft in session scratchpad phase-3-automation.md — copy into docs/plans when starting).
