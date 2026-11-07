@@ -1,5 +1,9 @@
 import { defineComponent } from 'vue'
 import { afterEach, describe, expect, it } from 'vitest'
+import { accessTerminal, cameraDevice } from '../../../test/devices'
+import { layoutOf } from '../endpointLayout'
+import CameraControl from './CameraControl.vue'
+import DoorOpenerControl from './DoorOpenerControl.vue'
 import GenericCapabilityControl from './GenericCapabilityControl.vue'
 import { registerBuiltinControls } from './builtins'
 import {
@@ -80,5 +84,24 @@ describe('capability-control registry', () => {
     // Sensors only: no quick action.
     expect(primaryControl(['contact', 'battery'])).toBeUndefined()
     expect(primaryControl([])).toBeUndefined()
+  })
+
+  it('reaches the door opener (PIN step-up) on a Dahua-like access terminal', () => {
+    registerBuiltinControls()
+    const terminal = accessTerminal().endpoints[0]!
+    const ids = terminal.capabilities.map((capability) => capability.capabilityId)
+    expect(primaryControl(ids)?.capabilityId).toBe('doorOpener')
+    expect(primaryControl(ids)?.component).toBe(DoorOpenerControl)
+    expect(layoutOf(terminal).controls.map((entry) => entry.capability.capabilityId)).toContain('doorOpener')
+  })
+
+  it('lays out a camera: the camera control full width, its motion as a reading', () => {
+    registerBuiltinControls()
+    const camera = cameraDevice().endpoints[0]!
+    expect(resolveControl('camera').component).toBe(CameraControl)
+    const layout = layoutOf(camera)
+    expect(layout.controls).toEqual([expect.objectContaining({ full: true })])
+    expect(layout.controls[0]!.capability.capabilityId).toBe('camera')
+    expect(layout.readings.map((capability) => capability.capabilityId)).toEqual(['motion'])
   })
 })

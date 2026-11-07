@@ -501,8 +501,30 @@
     "camera": {
       "streamAvailable": "Transmissão disponível",
       "noStream": "Sem transmissão",
-      "placeholder": "Imagens e vídeo ao vivo chegam em uma versão futura.",
-      "snapshotTaken": "Captura solicitada."
+      "placeholder": "Nenhuma imagem desta câmera no momento.",
+      "snapshotTaken": "Captura solicitada.",
+      "snapshotAlt": "Imagem mais recente de {name}",
+      "watchLive": "Ver ao vivo",
+      "watchLiveOf": "Ver {name} ao vivo",
+      "showSnapshot": "Mostrar imagem",
+      "motion": "Movimento",
+      "quality": {
+        "label": "Qualidade do vídeo",
+        "main": "HD",
+        "sub": "SD"
+      },
+      "live": {
+        "videoLabel": "Vídeo ao vivo de {name}",
+        "dialogDescription": "Vídeo ao vivo da câmera, sem som.",
+        "connecting": "Conectando ao vídeo ao vivo…",
+        "badge": "Ao vivo",
+        "liveVia": "Ao vivo via {transport}",
+        "failed": "O vídeo ao vivo parou ou não conseguiu iniciar. Tente de novo.",
+        "transport": {
+          "webrtc": "WebRTC",
+          "mse": "MSE"
+        }
+      }
     },
     "generic": {
       "empty": "Nada para mostrar aqui ainda."
