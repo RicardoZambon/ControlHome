@@ -501,8 +501,30 @@
     "camera": {
       "streamAvailable": "Stream available",
       "noStream": "No stream",
-      "placeholder": "Snapshots and live view arrive in a later version.",
-      "snapshotTaken": "Snapshot requested."
+      "placeholder": "No picture from this camera right now.",
+      "snapshotTaken": "Snapshot requested.",
+      "snapshotAlt": "Latest picture from {name}",
+      "watchLive": "Watch live",
+      "watchLiveOf": "Watch {name} live",
+      "showSnapshot": "Show snapshot",
+      "motion": "Motion",
+      "quality": {
+        "label": "Video quality",
+        "main": "HD",
+        "sub": "SD"
+      },
+      "live": {
+        "videoLabel": "Live video from {name}",
+        "dialogDescription": "Live video from the camera, muted.",
+        "connecting": "Connecting to live video…",
+        "badge": "Live",
+        "liveVia": "Live via {transport}",
+        "failed": "Live video stopped or couldn't start. Try again.",
+        "transport": {
+          "webrtc": "WebRTC",
+          "mse": "MSE"
+        }
+      }
     },
     "generic": {
       "empty": "Nothing to show here yet."

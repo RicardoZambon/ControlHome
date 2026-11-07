@@ -304,6 +304,27 @@ export function basicHome(): DeviceSummaryDto[] {
   ]
 }
 
+/** A Dahua-like camera: the main endpoint has the camera (with a stream) and its own motion detection. */
+export function cameraDevice(options: { motion?: boolean; stream?: boolean } = {}): DeviceSummaryDto {
+  return device('d-cam', 'Garden camera', 'camera', [
+    endpoint('e-cam', [
+      capability(40, 'camera', [attr(40, 'streamAvailable', bool(options.stream ?? true))]),
+      capability(41, 'motion', [attr(41, 'motion', bool(options.motion ?? false))]),
+    ]),
+  ])
+}
+
+/** A Dahua-like access terminal: the door release, the door contact and the vendor's access events. */
+export function accessTerminal(): DeviceSummaryDto {
+  return device('d-vto', 'Gate terminal', 'intercom', [
+    endpoint('e-vto', [
+      capability(50, 'doorOpener', []),
+      capability(51, 'contact', [attr(51, 'open', bool(false))]),
+      capability(52, 'generic', []),
+    ]),
+  ])
+}
+
 export const ROOMS = [
   { id: 10, name: 'Living room', floorId: 1, floorName: 'Ground floor' },
   { id: 11, name: 'Kitchen', floorId: 1, floorName: 'Ground floor' },
