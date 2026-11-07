@@ -283,8 +283,14 @@ public sealed class LgRuntimeTests : IDisposable
 
         // The session goes on: commands work and appliances are polled every 5 minutes.
         (await lg.ExecuteAsync(Ac, CapabilityIds.Switch, "turnOff")).ShouldBe(CommandOutcome.AcceptedOutcome);
-        lg.Time.Advance(TimeSpan.FromMinutes(5));
-        await lg.WaitUntilAsync(() => _cloud.Requests("GET", $"/devices/{Ac}/state").Count == 2, "the appliance is polled again");
+        // Fake time moves in poll-check steps, so a step taken before the poll loop waits again is not lost.
+        await lg.WaitUntilAsync(
+            () =>
+            {
+                lg.Time.Advance(TimeSpan.FromSeconds(30));
+                return _cloud.Requests("GET", $"/devices/{Ac}/state").Count >= 2;
+            },
+            "the appliance is polled again");
         lg.Running.IsCompleted.ShouldBeFalse();
     }
 

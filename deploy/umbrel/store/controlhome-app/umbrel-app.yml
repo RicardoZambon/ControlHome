@@ -2,7 +2,7 @@ manifestVersion: 1
 id: controlhome-app
 category: automation
 name: ControlHome
-version: "0.1.0"
+version: "0.2.0"
 tagline: Control your home's devices, floor plans and energy in one place
 icon: https://raw.githubusercontent.com/RicardoZambon/ControlHome/main/deploy/umbrel/icon.svg
 description: >-
@@ -19,8 +19,8 @@ description: >-
   The setup code the wizard asks for is this app's password, shown by Umbrel. Household accounts have the roles Admin,
   Member and Viewer. Available in English and Portuguese (Brazil).
 releaseNotes: >-
-  First release: devices with live state and control, floor plans, the dashboard, history and energy charts, backups,
-  and the MQTT connector.
+  New connectors for LG ThinQ appliances, Intelbras cameras, recorders and access terminals, and Samsung SmartThings,
+  plus live camera view. The vendor connectors are marked Experimental until they are tested with real devices.
 developer: Ricardo Zambon
 website: https://github.com/RicardoZambon/ControlHome
 dependencies: []
