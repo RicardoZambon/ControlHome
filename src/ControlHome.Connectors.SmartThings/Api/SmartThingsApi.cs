@@ -191,6 +191,73 @@ internal sealed class SmartThingsApi
             : [];
     }
 
+    /// <summary>
+    /// Creates the household's own OAuth-In ("API Access") app, as <c>smartthings smartapps:create</c> does:
+    /// <c>POST /apps</c> (or <c>/smartapps</c>, the SDK's newer name, when <c>/apps</c> is not found) with an
+    /// <c>API_ONLY</c> / <c>CONNECTED_SERVICE</c> app for one location. Sent once, never retried (a retry could make two
+    /// apps). SmartThings shows the client secret only in this answer.
+    /// </summary>
+    public async Task<CreatedApp> CreateOAuthAppAsync(string displayName, string description, IReadOnlyList<string> scopes, string redirectUri, CancellationToken cancellationToken)
+    {
+        const string Operation = "POST /apps";
+        var body = new System.Text.Json.Nodes.JsonObject
+        {
+            ["appName"] = $"controlhome-{Guid.NewGuid():n}",
+            ["displayName"] = displayName,
+            ["description"] = description,
+            ["appType"] = "API_ONLY",
+            ["classifications"] = new System.Text.Json.Nodes.JsonArray("CONNECTED_SERVICE"),
+            ["singleInstance"] = true,
+            ["principalType"] = "LOCATION",
+            ["oauth"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["clientName"] = displayName,
+                ["scope"] = new System.Text.Json.Nodes.JsonArray([.. scopes.Select(s => (System.Text.Json.Nodes.JsonNode)s)]),
+                ["redirectUris"] = new System.Text.Json.Nodes.JsonArray(redirectUri),
+            },
+        }.ToJsonString();
+
+        var token = await _tokens.GetAccessTokenAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var path in (string[])["apps", "smartapps"])
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, Relative(path))
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await SendOnceAsync(request, Operation, cancellationToken).ConfigureAwait(false);
+            var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.NotFound && path == "apps")
+            {
+                continue; // Nothing was created: try the newer resource name.
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw SmartThingsErrors.From(response, text, _time, Operation);
+            }
+
+            if (Json.TryParse(text) is { } document
+                && document.Str("oauthClientId") is { Length: > 0 } clientId
+                && document.Str("oauthClientSecret") is { Length: > 0 } clientSecret)
+            {
+                return new CreatedApp(document.Get("app").Str("appId"), clientId, clientSecret);
+            }
+
+            throw new SmartThingsApiException(
+                new ConnectorError(ConnectorErrorKind.Permanent, IntegrationStatus.Error, null),
+                response.StatusCode,
+                null,
+                "SmartThings created the app but its answer has no OAuth client id or secret.");
+        }
+
+        throw new SmartThingsApiException(
+            new ConnectorError(ConnectorErrorKind.Permanent, IntegrationStatus.Error, null),
+            HttpStatusCode.NotFound,
+            null,
+            "SmartThings has no app creation endpoint (POST /apps, /smartapps).");
+    }
+
     private async Task<JsonElement> GetAsync(string bucketName, Uri url, string operation, CancellationToken cancellationToken)
     {
         var bucket = Limits[bucketName];
@@ -315,6 +382,13 @@ internal sealed class SmartThingsApi
                 ? url
                 : null;
     }
+}
+
+/// <summary>An app created by <see cref="SmartThingsApi.CreateOAuthAppAsync"/>; the secret is shown by SmartThings only once.</summary>
+internal sealed record CreatedApp(string? AppId, string ClientId, string ClientSecret)
+{
+    /// <summary>Never prints the secret.</summary>
+    public override string ToString() => $"CreatedApp {{ AppId = {AppId}, ClientId = {ClientId} }}";
 }
 
 /// <summary>The devices of one listing.</summary>

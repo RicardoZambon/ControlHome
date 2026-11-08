@@ -21,6 +21,10 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 
 ## In progress (2026-11-07)
 - Phase 2 is done and tagged **v0.2.0**. Next: owner review and testing of v0.2.0, then Phase 3 (automation).
+- Owner feedback (2026-11-08): the SmartThings wizard can now create the household's app from a short-lived token
+  (no CLI), the CLI path uses the renamed `smartapps:create`, and wizard instructions show one step per line. App
+  creation is unverified against a real account (token permission name, paid-plan answer). Alexa: planned as a Matter
+  bridge (roadmap 6.1b), not a cloud skill.
 - Dependabot #26 (web minor/patch) pulls axe-core 4.14, which adds the `label-content-name-mismatch` rule. Menus,
   floor-plan rooms and markers, and the searchable select are now named by their content (fixes on the PR branch).
 - Local note: port 5173 is taken by another app on this machine; `.claude/launch.json` entry `web-5174` is a local-only

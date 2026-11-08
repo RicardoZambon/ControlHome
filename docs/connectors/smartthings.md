@@ -23,24 +23,45 @@ connector **polls** — every device every 30 s, and a device you just commanded
 
 ## Create your own SmartThings app
 
-You do this once, on any computer with a current [Node.js](https://nodejs.org) LTS release. Samsung's Developer Workspace
-cannot create OAuth-In apps ("coming soon"), so the SmartThings CLI is the way.
+Every household uses its own app. There are two ways to make it.
 
-1. Run `npx @smartthings/cli apps:create`. The first time, the CLI opens a browser to sign in with your Samsung account
+### Let ControlHome create it (easiest)
+
+In the wizard, choose **Let ControlHome create your app**.
+
+1. Open [account.smartthings.com/tokens](https://account.smartthings.com/tokens) and sign in with your Samsung account
    (the one your SmartThings devices are in).
-2. When it asks what kind of app, choose **`OAuth-In App`**.
-3. Give it a display name (for example `ControlHome`) and a short description. The icon and the target URL can stay
-   empty (the target URL is only for webhooks, which ControlHome does not use).
-4. Select the scopes **`r:locations:*`**, **`r:devices:*`** and **`x:devices:*`** (read locations and rooms, read devices,
-   send commands). Nothing else is needed today.
-5. Add the redirect URI **`https://httpbin.org/get`** — or an HTTPS page you control (see
-   [the redirect URL](#the-redirect-url-and-your-privacy)). It must match exactly what you enter in ControlHome.
-6. The CLI prints the **OAuth Client Id** and the **OAuth Client Secret** once: copy both now.
+2. Generate a new token with any name. Under **Apps**, tick every permission.
+3. Paste the token into ControlHome.
 
-Useful later: `npx @smartthings/cli apps` lists your apps; `npx @smartthings/cli apps:oauth:update <appId>` changes the
-scopes or redirect URIs; `npx @smartthings/cli apps:oauth:generate <appId>` regenerates the OAuth client id and secret
-(then sign in again in ControlHome with the new ones). The wizard shows these instructions from data
-(`src/ControlHome.Connectors.SmartThings/Resources/setup-instructions.json`), so they can follow Samsung's changes.
+ControlHome uses the token once. It creates an app called *ControlHome* with the scopes and redirect URI listed below,
+then continues straight to the SmartThings sign-in. The token is never stored, and it expires by itself after 24 hours.
+The redirect URI is always `https://httpbin.org/get` on this path; to use your own page, create the app with the CLI.
+
+This is the same request the CLI sends (`POST /apps`, falling back to `/smartapps`). It has not been tried against a
+real account yet. If SmartThings refuses (a missing permission, or the paid plan described above), the wizard says so;
+use the CLI instead.
+
+### With the SmartThings CLI
+
+In the wizard, choose **I already have a SmartThings app**. You need a computer with a current
+[Node.js](https://nodejs.org) LTS release. Samsung's Developer Workspace cannot create these apps ("coming soon").
+
+1. Run `npx @smartthings/cli smartapps:create`. The first time, the CLI opens a browser to sign in with your Samsung
+   account.
+2. The CLI creates an **`API Access`** app (what Samsung used to call an OAuth-In app). Give it a display name (for
+   example `ControlHome`) and a short description. Leave the icon, target URL and privacy policy URL empty (the target
+   URL is only for webhooks, which ControlHome does not use).
+3. Select the scopes **`r:locations:*`**, **`r:devices:*`** and **`x:devices:*`** (read locations and rooms, read devices,
+   send commands). Nothing else is needed today.
+4. Add the redirect URI **`https://httpbin.org/get`**, or an HTTPS page you control (see
+   [the redirect URL](#the-redirect-url-and-your-privacy)). It must match exactly what you enter in ControlHome.
+5. The CLI prints the **OAuth Client Id** and the **OAuth Client Secret** once: copy both now.
+
+Useful later: `npx @smartthings/cli smartapps` lists your apps; `npx @smartthings/cli smartapps:oauth:update <appId>`
+changes the scopes or redirect URIs; `npx @smartthings/cli smartapps:oauth:generate <appId>` regenerates the OAuth
+client id and secret (then sign in again in ControlHome with the new ones). The wizard shows these instructions from
+data (`src/ControlHome.Connectors.SmartThings/Resources/setup-instructions.json`), so they can follow Samsung's changes.
 
 ## The redirect URL and your privacy
 
@@ -61,8 +82,9 @@ ControlHome's `state`) in the address. You then copy that address back into Cont
 
 *Integrations → Add → Samsung SmartThings*, then:
 
-1. **Your own SmartThings app (recommended)**. The instructions above are shown with a link to this page.
-2. Fill in the form:
+1. **Let ControlHome create your app (recommended)**: paste the token as described above, then go on with step 3.
+   Or **I already have a SmartThings app**: the CLI instructions are shown with a link to this page.
+2. With your own CLI app, fill in the form:
 
    | Field | Value | Notes |
    | --- | --- | --- |
@@ -187,7 +209,7 @@ holding a URL with user info or a token/key/signature/password parameter (it rea
   refuses to give (404, 403, 400, …) is asked again after 6 hours; meanwhile the attributes are shown read-only from
   their values.
 - Scenes are not exposed yet (they will become automation actions); they will need the `r:scenes:*` and `x:scenes:*`
-  scopes (add them with `apps:oauth:update`, then sign in again).
+  scopes (add them with `smartapps:oauth:update`, then sign in again).
 - Generic controls of lock-, door- or valve-like vendor capabilities are read-only by design.
 - A rotated token pair that could not be saved is carried on in memory only: if the whole ControlHome process stops
   (crash, power cut, container stop) after a refresh and before the pair reached the database — a sub-second window
@@ -220,8 +242,9 @@ holding a URL with user info or a token/key/signature/password parameter (it rea
 
 Tick each item with a real account (record the date and firmware where relevant):
 
-1. [ ] `npx @smartthings/cli apps:create` creates an OAuth-In app with the three scopes and `https://httpbin.org/get` as
-   redirect URI; the client id/secret are printed.
+1. [ ] *Let ControlHome create your app* with a fresh token works: note which token permissions it needed, and the
+   status and body if SmartThings refused. Then `npx @smartthings/cli smartapps:create` creates an API Access app with
+   the three scopes and `https://httpbin.org/get` as redirect URI; the client id/secret are printed.
 2. [ ] Sign-in with the `documented` preset works (else: which preset works — `homeAssistant` or a custom
    `account.smartthings.com` authorize URL); the pasted httpbin address (address bar and JSON text) is accepted.
 3. [ ] A pasted address from an earlier sign-in is refused (state mismatch).
@@ -239,7 +262,7 @@ Tick each item with a real account (record the date and firmware where relevant)
    429 during a day of normal use (diagnostics: API call counter).
 9. [ ] Token refresh: after ~21 h the access token is refreshed once, the integration keeps working, and a restart after
    the refresh still works (the rotated pair was saved).
-10. [ ] Removing the app in the SmartThings app (or `apps:oauth:generate`) leads to *Needs re-authorization*; *Sign in
+10. [ ] Removing the app in the SmartThings app (or `smartapps:oauth:generate`) leads to *Needs re-authorization*; *Sign in
     again* keeps every device, room and automation.
 11. [ ] Personal access token mode works and shows the 24-hour warning; after expiry it shows *Needs re-authorization*.
 12. [ ] What a paid-plan rejection looks like, if Samsung enforces it (status code and body) — adjust the plan detection

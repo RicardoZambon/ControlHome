@@ -99,6 +99,10 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
 ## Phase 6 — Matter and v1.0 → tag `v1.0`
 
 - [ ] **6.1 Matter connector** (matterjs-server sidecar, multi-admin codes).
+- [ ] **6.1b Matter bridge for voice assistants**: ControlHome exposes chosen devices as a Matter bridge, so Alexa,
+  Google Home and Apple Home control them over the LAN. No cloud account, public address or AWS Lambda; paired with a
+  setup code in the assistant's app. Start with lights, plugs, switches, sensors and thermostats (the types Alexa
+  supports most reliably). A custom Alexa skill was ruled out: it needs a public HTTPS endpoint and AWS.
 - [ ] **6.2 Hardening**: security review, WCAG AA, performance (history queries, hub fan-out), full E2E, user docs in
   pt-BR and English, and store publishing. Tag **`v1.0`**.
 
@@ -118,5 +122,6 @@ Plan: [`plans/phase-0-foundation.md`](plans/phase-0-foundation.md)
 | 4.3 | Intelbras Izy (Tuya LAN + cloud keys), IGD 110 gate, Izy Zigbee sensors |
 | 4.4 | Network presence (ARP/DHCP, Twibi experimental) |
 | 6.1 | Matter |
+| 6.1b | Alexa / Google Home / Apple Home (through a Matter bridge) |
 
 Details and risks: [architecture § Integration matrix](architecture.md#14-integration-matrix).
