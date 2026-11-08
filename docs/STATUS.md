@@ -59,7 +59,9 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 ## Needs you (non-blocking)
 - Live validation of each vendor connector with your own accounts (`docs/connectors/LIVE-VALIDATION.md`, from Phase 2).
 - Optional: enable branch protection on `main` + secret-scanning push protection (repo settings).
-- Umbrel: create a public `controlhome-umbrel-store` repo and copy `deploy/umbrel/store/` into it (steps in `deploy/umbrel/README.md`); then add it in umbrelOS (App Store → Community App Stores).
+- Umbrel: ControlHome is in the store RicardoZambon/umbrel-store as `zambon-controlhome`. Add the repository secret
+  `UMBREL_STORE_TOKEN` (fine-grained token, Contents read/write on that repository only) so release tags publish there
+  automatically (`deploy/umbrel/README.md`).
 - Later: create a least-privilege `ControlHome_App` SQL login for production.
 - SmartThings may require the paid Personal Plan ($4.99/mo) — decide when we reach milestone 2.3.
 
