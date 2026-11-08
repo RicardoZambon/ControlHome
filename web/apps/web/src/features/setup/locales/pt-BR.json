@@ -116,6 +116,7 @@
       "login_failed": "O SQL Server recusou o login. Confira o login e a senha, e se a autenticação do SQL Server está ativada.",
       "certificate": "O certificado do servidor não é confiável. Ligue “Confiar no certificado do servidor” ou dê ao SQL Server um certificado em que sua rede confia.",
       "unreachable": "Nada respondeu nesse endereço. Confira o servidor e a porta, e se o SQL Server aceita conexões TCP deste servidor.",
+      "local_name": "O ControlHome não consegue resolver nomes terminados em .local de dentro do container. Use o endereço IP do SQL Server. Se ele roda nesta mesma máquina (por exemplo no seu Umbrel), use 127.0.0.1.",
       "no_database_access": "O banco de dados existe, mas este login não consegue abri-lo. Use um login com acesso ou dê acesso a este.",
       "other": "O SQL Server recusou a conexão. O log do ControlHome tem os detalhes."
     },

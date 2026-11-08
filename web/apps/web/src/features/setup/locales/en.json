@@ -116,6 +116,7 @@
       "login_failed": "SQL Server refused the login. Check the login and the password, and that SQL Server authentication is turned on.",
       "certificate": "The server's certificate isn't trusted. Turn on “Trust the server's certificate”, or give SQL Server a certificate your network trusts.",
       "unreachable": "Nothing answered at that address. Check the server and the port, and that SQL Server accepts TCP connections from this server.",
+      "local_name": "ControlHome can't look up names ending in .local from inside its container. Use the SQL Server's IP address instead. If it runs on this same machine (for example on your Umbrel), use 127.0.0.1.",
       "no_database_access": "The database exists, but this login can't open it. Use a login that can, or give this one access.",
       "other": "SQL Server refused the connection. The ControlHome log has the details."
     },
