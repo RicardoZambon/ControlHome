@@ -178,6 +178,15 @@ public sealed partial class DatabaseConnectionSetup(
             || message.Contains("timeout", StringComparison.OrdinalIgnoreCase)
             || message.Contains("server was not found", StringComparison.OrdinalIgnoreCase))
         {
+            // mDNS names (umbrel.local, nas.local) resolve on the LAN's computers but not inside a container, which has no
+            // mDNS resolver: say so instead of "nothing answered".
+            if (request.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
+            {
+                return new ConnectionFailure(
+                    "local_name",
+                    $"{request.Host} is a .local (mDNS) name, which the ControlHome server cannot look up from inside its container. Use the SQL Server's IP address instead; when it runs on the same machine as ControlHome (for example the same Umbrel), use 127.0.0.1.");
+            }
+
             return new ConnectionFailure(
                 "unreachable",
                 $"SQL Server did not answer at {endpoint}: check the host and port, and that the server accepts TCP connections from the ControlHome server.");
@@ -210,7 +219,7 @@ public sealed partial class DatabaseConnectionSetup(
             new Dictionary<string, object?> { [ReasonExtension] = failure.Reason });
 
     /// <summary>
-    /// <paramref name="Reason"/>: <c>login_failed</c>, <c>certificate</c>, <c>unreachable</c>, <c>no_database_access</c> or <c>other</c>.
+    /// <paramref name="Reason"/>: <c>login_failed</c>, <c>certificate</c>, <c>unreachable</c>, <c>local_name</c> (an unreachable .local host), <c>no_database_access</c> or <c>other</c>.
     /// </summary>
     internal sealed record ConnectionFailure(string Reason, string Message);
 

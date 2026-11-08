@@ -161,6 +161,28 @@ public sealed class DatabaseConnectionSetupTests
         failure.Message.ShouldNotContain(message);
     }
 
+    [Theory]
+    [InlineData("umbrel.local")]
+    [InlineData("NAS.LOCAL")]
+    public void An_unreachable_local_name_says_containers_cannot_resolve_it(string host)
+    {
+        var request = Request() with { Host = host };
+
+        var failure = DatabaseConnectionSetup.DescribeFailure(0, "A network-related or instance-specific error occurred.", false, request);
+
+        failure.Reason.ShouldBe("local_name");
+        failure.Message.ShouldContain(host);
+        failure.Message.ShouldContain("127.0.0.1");
+    }
+
+    [Fact]
+    public void A_local_name_that_was_reached_keeps_the_real_reason()
+    {
+        var request = Request() with { Host = "umbrel.local" };
+
+        DatabaseConnectionSetup.DescribeFailure(18456, "Login failed for user 'controlhome'.", false, request).Reason.ShouldBe("login_failed");
+    }
+
     private DatabaseConnectionSetup Setup() => new(_connections, _probe, NullLogger<DatabaseConnectionSetup>.Instance);
 
     private async Task<AppError> FailAsync(DatabaseSetupRequest? request = null)

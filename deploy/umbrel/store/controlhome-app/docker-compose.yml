@@ -7,6 +7,10 @@ services:
     # Host networking, like Umbrel's Home Assistant app: device discovery, Wake-on-LAN and device push events need the
     # LAN. No app_proxy: the app has its own sign-in and listens on the manifest's port on every host interface.
     network_mode: host
+    # Containers have no mDNS resolver, so umbrel.local (the name people type for this Umbrel) would not resolve. On host
+    # networking, 127.0.0.1 is the Umbrel itself, e.g. its SQL Server app on port 1433.
+    extra_hosts:
+      - "umbrel.local:127.0.0.1"
     user: "1000:1000"
     environment:
       ASPNETCORE_HTTP_PORTS: 8711

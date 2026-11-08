@@ -14,8 +14,9 @@ this folder is its source.
 - **Data**: `${APP_DATA_DIR}/data` is mounted at `/data`, owned by `1000:1000`. It holds the Data Protection key
   certificate (without it the stored secrets cannot be read), the encrypted database settings, uploads and backups.
 - **Database**: SQL Server 2025 is required, and it is not bundled because its images are x64-only.
-  - If SQL Server runs on the same Umbrel, enter host `127.0.0.1` and its host port in the wizard. On host networking,
-    `umbrel.local` and other `*.local` names may not resolve inside containers.
+  - If SQL Server runs on the same Umbrel, enter host `127.0.0.1` (or `umbrel.local`) and its host port in the wizard.
+    Containers cannot resolve mDNS (`*.local`) names, so the app maps `umbrel.local` to `127.0.0.1` (`extra_hosts`);
+    other `*.local` names do not work, and the wizard says so. Use an IP address for SQL Server elsewhere.
   - The wizard creates the database when the login has `dbcreator`. Otherwise it shows the T-SQL to run, which creates
     the database plus a `ControlHome_App` login that owns only it. That least-privilege login is the recommended setup.
 - Hardened the same way as `deploy/docker-compose.yml`: read-only root filesystem, tmpfs `/tmp`, all capabilities
