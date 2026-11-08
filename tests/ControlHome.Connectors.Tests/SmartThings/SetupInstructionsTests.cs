@@ -14,7 +14,11 @@ public sealed class SetupInstructionsTests
         instructions.StepsEn.Count.ShouldBe(instructions.StepsPtBr.Count);
         instructions.Description.En.ShouldNotContain("{");
         instructions.Description.PtBr.ShouldNotContain("{");
-        instructions.Description.En.ShouldContain("1) ");
+        instructions.Description.En.ShouldStartWith("1. ");
+        instructions.Description.En.ShouldContain("\n2. ");
+        instructions.CreateDescription.En.ShouldStartWith("1. ");
+        instructions.CreateDescription.PtBr.ShouldNotContain("{");
+        instructions.Create.TokensUrl.Scheme.ShouldBe("https");
         instructions.Title.PtBr.ShouldNotBe(instructions.Title.En);
     }
 

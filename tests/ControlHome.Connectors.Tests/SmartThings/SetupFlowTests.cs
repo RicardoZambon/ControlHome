@@ -31,16 +31,16 @@ public sealed class SetupFlowTests : IDisposable
         await using var flow = Flow();
 
         var mode = (ChooseStep)await flow.StartAsync(Context(), Ct);
-        mode.Choices.Select(c => c.Key).ShouldBe(["oauth", "pat"]);
+        mode.Choices.Select(c => c.Key).ShouldBe(["createApp", "oauth", "pat"]);
         mode.Choices.ShouldAllBe(c => c.Label.PtBr.Length > 0 && c.Label.En != c.Label.PtBr);
 
         var instructions = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("oauth"), Ct);
         instructions.Url.Scheme.ShouldBe("https");
         instructions.Url.AbsoluteUri.ShouldEndWith("docs/connectors/smartthings.md#create-your-own-smartthings-app");
         instructions.PasteBack.ShouldBeNull();
-        instructions.Description!.En.ShouldContain("npx @smartthings/cli apps:create");
+        instructions.Description!.En.ShouldContain("npx @smartthings/cli smartapps:create");
         instructions.Description.En.ShouldContain("r:locations:* r:devices:* x:devices:*");
-        instructions.Description.PtBr.ShouldContain("npx @smartthings/cli apps:create");
+        instructions.Description.PtBr.ShouldContain("npx @smartthings/cli smartapps:create");
         instructions.Description.PtBr.ShouldContain("https://httpbin.org/get");
 
         var app = (FormStep)await flow.ContinueAsync(SmartThingsSetupFlow.InstructionsStep, Empty(), Ct);
@@ -48,6 +48,121 @@ public sealed class SetupFlowTests : IDisposable
         app.Values!.Value.GetProperty("endpoints").GetString().ShouldBe("documented");
         app.Fields.Single(f => f.Key == "clientSecret").Secret.ShouldBeTrue();
         app.Fields.Single(f => f.Key == "redirectUri").Help!.En.ShouldContain("httpbin.org receives the one-time sign-in code");
+    }
+
+    [Fact]
+    public async Task ControlHome_creates_the_app_with_the_token_and_signs_in_with_it_without_keeping_the_token()
+    {
+        CreateAppEndpoint("/v1/apps", 200);
+        TokenEndpoint();
+        Locations(Location1);
+        await using var flow = Flow();
+        await flow.StartAsync(Context(), Ct);
+
+        var create = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("createApp"), Ct);
+        create.StepId.ShouldBe(SmartThingsSetupFlow.CreateAppStep);
+        create.Url.AbsoluteUri.ShouldBe("https://account.smartthings.com/tokens");
+        create.Description!.En.ShouldStartWith("1. ");
+        create.Description.En.ShouldContain("\n2. ");
+        create.PasteBack!.Key.ShouldBe(SmartThingsSetupFlow.CreatorTokenField);
+        create.PasteBack.Secret.ShouldBeTrue();
+
+        var authorize = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.CreateAppStep, CreatorToken("creator-token-0001"), Ct);
+
+        authorize.StepId.ShouldBe(SmartThingsSetupFlow.AuthorizeStep);
+        authorize.Description!.En.ShouldStartWith("Your SmartThings app \"ControlHome\" was created.");
+        authorize.Url.Query.ShouldContain("client_id=" + FakeSmartThings.ClientId);
+        authorize.Url.Query.ShouldContain("redirect_uri=https%3A%2F%2Fhttpbin.org%2Fget");
+
+        // The app, as smartthings smartapps:create makes it: API_ONLY, CONNECTED_SERVICE, one location, our scopes and redirect.
+        var request = _fake.Requests("/v1/apps", "POST").ShouldHaveSingleItem().RequestMessage!;
+        request.Headers!["Authorization"].ShouldHaveSingleItem().ShouldBe("Bearer creator-token-0001");
+        var body = JsonDocument.Parse(request.Body!).RootElement;
+        body.GetProperty("appName").GetString()!.ShouldMatch("^controlhome-[0-9a-f]{32}$");
+        body.GetProperty("displayName").GetString().ShouldBe("ControlHome");
+        body.GetProperty("appType").GetString().ShouldBe("API_ONLY");
+        body.GetProperty("classifications").EnumerateArray().Select(c => c.GetString()).ShouldBe(["CONNECTED_SERVICE"]);
+        body.GetProperty("principalType").GetString().ShouldBe("LOCATION");
+        body.GetProperty("singleInstance").GetBoolean().ShouldBeTrue();
+        var oauth = body.GetProperty("oauth");
+        oauth.GetProperty("clientName").GetString().ShouldBe("ControlHome");
+        oauth.GetProperty("scope").EnumerateArray().Select(s => s.GetString()).ShouldBe(["r:locations:*", "r:devices:*", "x:devices:*"]);
+        oauth.GetProperty("redirectUris").EnumerateArray().Select(s => s.GetString()).ShouldBe(["https://httpbin.org/get"]);
+
+        var done = (DoneStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"https://httpbin.org/get?code=code-0001&state={flow.State}"), Ct);
+
+        done.Config.GetProperty("mode").GetString().ShouldBe("oauth");
+        done.Config.GetProperty("clientId").GetString().ShouldBe(FakeSmartThings.ClientId);
+        done.Config.GetProperty("redirectUri").GetString().ShouldBe("https://httpbin.org/get");
+        done.Secrets[SecretKeys.ClientSecret].ShouldBe(FakeSmartThings.ClientSecret);
+        done.Secrets.ShouldNotContainKey(SecretKeys.PersonalAccessToken);
+        JsonSerializer.Serialize<FlowStep>(done).ShouldNotContain("creator-token-0001");
+        done.Secrets.Values.ShouldNotContain("creator-token-0001");
+    }
+
+    [Fact]
+    public async Task Creating_the_app_falls_back_to_the_smartapps_resource_when_apps_is_not_found()
+    {
+        CreateAppEndpoint("/v1/apps", 404);
+        CreateAppEndpoint("/v1/smartapps", 200);
+        await using var flow = Flow();
+        await flow.StartAsync(Context(), Ct);
+        await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("createApp"), Ct);
+
+        var authorize = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.CreateAppStep, CreatorToken("creator-token-0001"), Ct);
+
+        authorize.StepId.ShouldBe(SmartThingsSetupFlow.AuthorizeStep);
+        _fake.Requests("/v1/apps", "POST").Count.ShouldBe(1);
+        _fake.Requests("/v1/smartapps", "POST").Count.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(401, "SmartThings rejected this token")]
+    [InlineData(403, "Check that the token has every Apps permission")]
+    [InlineData(422, "SmartThings refused to create the app (ConstraintViolationError)")]
+    public async Task A_refused_app_creation_stays_on_the_token_step_and_says_why(int status, string message)
+    {
+        CreateAppEndpoint("/v1/apps", status);
+        await using var flow = Flow();
+        await flow.StartAsync(Context(), Ct);
+        await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("createApp"), Ct);
+
+        var again = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.CreateAppStep, CreatorToken("creator-token-0001"), Ct);
+
+        again.StepId.ShouldBe(SmartThingsSetupFlow.CreateAppStep);
+        again.Description!.En.ShouldContain(message);
+        again.Description.En.ShouldContain("\n\n1. ");
+        again.Description.PtBr.ShouldNotBe(again.Description.En);
+        _fake.Requests("/v1/smartapps").ShouldBeEmpty();
+        _fake.Requests("/oauth/token").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_rejected_client_after_app_creation_keeps_the_created_secret_when_the_field_is_left_blank()
+    {
+        CreateAppEndpoint("/v1/apps", 200);
+        _fake.Server.Given(Request.Create().WithPath("/oauth/token").UsingPost())
+            .RespondWith(Response.Create().WithStatusCode(401).WithHeader("Content-Type", "application/json").WithBody("""{"error":"invalid_client"}"""));
+        await using var flow = Flow();
+        await flow.StartAsync(Context(), Ct);
+        await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("createApp"), Ct);
+        await flow.ContinueAsync(SmartThingsSetupFlow.CreateAppStep, CreatorToken("creator-token-0001"), Ct);
+
+        var form = (FormStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=code-0001&state={flow.State}"), Ct);
+        form.Fields.Single(f => f.Key == "clientSecret").Required.ShouldBeFalse();
+
+        // Another preset with the same app: the secret SmartThings showed once is still in hand.
+        var authorize = (ExternalUrlStep)await flow.ContinueAsync(
+            SmartThingsSetupFlow.AppStep,
+            Json(new JsonObject
+            {
+                ["clientId"] = FakeSmartThings.ClientId,
+                ["redirectUri"] = "https://httpbin.org/get",
+                ["endpoints"] = "homeAssistant",
+            }),
+            Ct);
+        authorize.StepId.ShouldBe(SmartThingsSetupFlow.AuthorizeStep);
+        authorize.Url.AbsolutePath.ShouldBe("/ha/authorize");
     }
 
     [Fact]
@@ -517,6 +632,24 @@ public sealed class SetupFlowTests : IDisposable
         _fake.Server.Given(Request.Create().WithPath("/v1/locations").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200).WithHeader("Content-Type", "application/json").WithBody(body));
     }
+
+    private void CreateAppEndpoint(string path, int status)
+    {
+        var body = status == 200
+            ? new JsonObject
+            {
+                ["app"] = new JsonObject { ["appId"] = "00000000-0000-4000-8000-0000000a9901", ["appName"] = "controlhome-x" },
+                ["oauthClientId"] = FakeSmartThings.ClientId,
+                ["oauthClientSecret"] = FakeSmartThings.ClientSecret,
+            }.ToJsonString()
+            : status == 422
+                ? """{"requestId":"r1","error":{"code":"ConstraintViolationError","message":"invalid"}}"""
+                : """{"requestId":"r1","error":{"code":"Forbidden","message":"no"}}""";
+        _fake.Server.Given(Request.Create().WithPath(path).UsingPost())
+            .RespondWith(Response.Create().WithStatusCode(status).WithHeader("Content-Type", "application/json").WithBody(body));
+    }
+
+    private static JsonElement CreatorToken(string token) => Json(new JsonObject { [SmartThingsSetupFlow.CreatorTokenField] = token });
 
     private static JsonElement Choice(string key) => Json(new JsonObject { ["choice"] = key });
 

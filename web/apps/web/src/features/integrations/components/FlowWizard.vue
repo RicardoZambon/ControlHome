@@ -178,7 +178,9 @@ const abortMessage = computed(
         <h2 class="font-serif text-2xl leading-tight font-medium tracking-tight text-balance sm:text-3xl">
           {{ title || connectorName }}
         </h2>
-        <p v-if="description" class="max-w-prose text-pretty text-muted-foreground">{{ description }}</p>
+        <p v-if="description" class="max-w-prose text-pretty whitespace-pre-line text-muted-foreground">
+          {{ description }}
+        </p>
       </header>
 
       <FormAlert v-if="requestError && type !== 'progress'" :message="requestError" />

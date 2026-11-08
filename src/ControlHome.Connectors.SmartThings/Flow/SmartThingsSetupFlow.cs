@@ -31,7 +31,14 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     public const string TokenStep = "token";
     public const string LocationStep = "location";
     public const string LocationsRetryStep = "locationsRetry";
+    public const string CreateAppStep = "createApp";
     public const string RedirectedUrlField = "redirectedUrl";
+
+    /// <summary>The first step's choice "ControlHome creates the app" (an OAuth sign-in with an app made from a token).</summary>
+    public const string CreateAppChoice = "createApp";
+
+    /// <summary>The short-lived personal access token ControlHome creates the app with (used once, never stored).</summary>
+    public const string CreatorTokenField = "creatorToken";
 
     /// <summary>Pasted URLs whose state does not match before the flow gives up.</summary>
     public const int MaxStateMismatches = 5;
@@ -70,6 +77,9 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 Reset();
                 switch (input.Str("choice"))
                 {
+                    case CreateAppChoice:
+                        _mode = SmartThingsAuthMode.OAuth;
+                        return CreateApp(null);
                     case SmartThingsSettings.OAuthMode:
                         _mode = SmartThingsAuthMode.OAuth;
                         return new ExternalUrlStep(InstructionsStep, instructions.Title, instructions.Description, instructions.DocsUrl, null);
@@ -80,6 +90,8 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                         return new AbortStep("unknown_choice", new LocalizedText("Unknown choice.", "Opção desconhecida."));
                 }
 
+            case CreateAppStep when _mode == SmartThingsAuthMode.OAuth:
+                return await SubmitCreateAppAsync(context, input, cancellationToken).ConfigureAwait(false);
             case InstructionsStep when _mode == SmartThingsAuthMode.OAuth:
                 return AppForm(AppDefaults(context), new Dictionary<string, LocalizedText>());
             case AppStep when _mode == SmartThingsAuthMode.OAuth:
@@ -137,11 +149,17 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 "O ControlHome lê e controla os dispositivos de um local da SmartThings pela nuvem da Samsung."),
         [
             new FlowChoice(
-                SmartThingsSettings.OAuthMode,
-                new LocalizedText("Your own SmartThings app (recommended)", "O seu próprio app SmartThings (recomendado)"),
+                CreateAppChoice,
+                new LocalizedText("Let ControlHome create your app (recommended)", "Deixe o ControlHome criar o seu app (recomendado)"),
                 new LocalizedText(
-                    "Create an OAuth app with the SmartThings CLI once; ControlHome then keeps its tokens fresh by itself.",
-                    "Crie uma vez um app OAuth com a CLI da SmartThings; depois o ControlHome mantém os tokens válidos sozinho.")),
+                    "Paste a SmartThings token once. ControlHome creates your own app with it, then keeps the sign-in fresh by itself.",
+                    "Cole um token da SmartThings uma vez. O ControlHome cria o seu próprio app com ele e depois mantém o acesso válido sozinho.")),
+            new FlowChoice(
+                SmartThingsSettings.OAuthMode,
+                new LocalizedText("I already have a SmartThings app", "Já tenho um app SmartThings"),
+                new LocalizedText(
+                    "Use the client id and secret of an app you created with the SmartThings CLI.",
+                    "Use o client id e o secret de um app que você criou com a CLI da SmartThings.")),
             new FlowChoice(
                 SmartThingsSettings.PatMode,
                 new LocalizedText("Personal access token (development only)", "Token de acesso pessoal (só para desenvolvimento)"),
@@ -149,6 +167,84 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                     "Expires 24 hours after you created it; then the integration asks you to sign in again.",
                     "Expira 24 horas depois de criado; então a integração pede para entrar novamente.")),
         ]);
+
+    /// <summary>The tokens page and the field for the token ControlHome creates the app with.</summary>
+    private ExternalUrlStep CreateApp(LocalizedText? problem)
+    {
+        var text = instructions.CreateDescription;
+        return new ExternalUrlStep(
+            CreateAppStep,
+            instructions.Create.Title,
+            problem is null ? text : new LocalizedText(problem.En + "\n\n" + text.En, problem.PtBr + "\n\n" + text.PtBr),
+            instructions.Create.TokensUrl,
+            new FieldSchema(
+                CreatorTokenField,
+                new LocalizedText("SmartThings token", "Token da SmartThings"),
+                new StringSchema(256),
+                Required: true,
+                Secret: true,
+                new LocalizedText(
+                    "Used once to create the app; never stored. It expires by itself after 24 hours.",
+                    "Usado uma vez para criar o app; nunca é guardado. Ele expira sozinho depois de 24 horas.")));
+    }
+
+    private async Task<FlowStep> SubmitCreateAppAsync(FlowContext context, JsonElement input, CancellationToken cancellationToken)
+    {
+        var token = input.Str(CreatorTokenField)?.Trim();
+        if (string.IsNullOrEmpty(token) || token.Length > 256 || token.Any(char.IsWhiteSpace))
+        {
+            return CreateApp(new LocalizedText("Paste the token.", "Cole o token."));
+        }
+
+        CreatedApp created;
+        try
+        {
+            var api = new SmartThingsApi(Http(), options with { GetRetries = 0 }, new PersonalAccessToken(token), context.Time, new RateLimitTracker());
+            created = await api.CreateOAuthAppAsync(
+                instructions.Create.AppDisplayName,
+                instructions.Create.AppDescription,
+                instructions.Scopes,
+                instructions.DefaultRedirectUri,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (SmartThingsApiException exception)
+        {
+            LogCreateAppFailed(context.Logger, exception.Kind, exception.Status is { } status ? (int)status : null);
+            var manual = new LocalizedText(
+                " If it keeps failing, go back and choose \"I already have a SmartThings app\" to create it with the CLI.",
+                " Se continuar falhando, volte e escolha \"Já tenho um app SmartThings\" para criá-lo com a CLI.");
+            var message = exception switch
+            {
+                { Kind: ConnectorErrorKind.Unauthorized } => new LocalizedText(
+                    "SmartThings rejected this token (expired, revoked or mistyped).",
+                    "A SmartThings recusou este token (expirado, revogado ou digitado errado)."),
+                { Kind: ConnectorErrorKind.PlanRequired } or { Status: System.Net.HttpStatusCode.Forbidden } => new LocalizedText(
+                    "SmartThings did not allow creating the app. Check that the token has every Apps permission. SmartThings may also require its paid Personal Plan to create apps." + manual.En,
+                    "A SmartThings não permitiu criar o app. Confira se o token tem todas as permissões de Apps. A SmartThings também pode exigir o Personal Plan pago para criar apps." + manual.PtBr),
+                { Kind: ConnectorErrorKind.Transient or ConnectorErrorKind.RateLimited } => new LocalizedText(
+                    "SmartThings could not be reached. Try again in a moment.",
+                    "Não foi possível falar com a SmartThings. Tente de novo daqui a pouco."),
+                _ => new LocalizedText(
+                    $"SmartThings refused to create the app{(exception.VendorCode is { } code ? $" ({SmartThingsErrors.Sanitize(code)})" : "")}." + manual.En,
+                    $"A SmartThings recusou criar o app{(exception.VendorCode is { } code2 ? $" ({SmartThingsErrors.Sanitize(code2)})" : "")}." + manual.PtBr),
+            };
+            return CreateApp(message);
+        }
+
+        LogAppCreated(context.Logger, created.AppId);
+
+        // The new app, with the defaults its redirect URI was registered with; the token is not kept.
+        _tokens = null;
+        _locations = [];
+        _app = new OAuthApp(created.ClientId, created.ClientSecret, options.DocumentedEndpoints);
+        _redirectUri = instructions.DefaultRedirectUri;
+        _preset = SmartThingsSettings.DocumentedPreset;
+        _customAuthorizeUrl = null;
+        _customTokenUrl = null;
+        return NewSignIn(new LocalizedText(
+            $"Your SmartThings app \"{instructions.Create.AppDisplayName}\" was created.",
+            $"O seu app SmartThings \"{instructions.Create.AppDisplayName}\" foi criado."));
+    }
 
     private IReadOnlyList<FieldSchema> AppFields(bool existing) =>
     [
@@ -208,7 +304,7 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
         new LocalizedText(
             "SmartThings will send your browser to the redirect URL with a one-time code in its address; you then paste that address back here. Redirects to localhost or LAN addresses are reported not to work.",
             "A SmartThings vai mandar o seu navegador para a URL de redirecionamento com um código de uso único no endereço; depois você cola esse endereço aqui. Redirecionamentos para localhost ou endereços da rede local não funcionam, segundo relatos."),
-        AppFields(_context?.Existing is not null))
+        AppFields(_context?.Existing is not null || _app is not null))
     {
         Values = values,
         Errors = errors,
@@ -239,7 +335,7 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     {
         var errors = new Dictionary<string, LocalizedText>(StringComparer.Ordinal);
         var values = Without(input, SmartThingsSettings.ClientSecretField);
-        var fields = AppFields(context.Existing is not null);
+        var fields = AppFields(context.Existing is not null || _app is not null);
         var validation = FieldSchemaValidator.Validate(fields, input);
         foreach (var error in validation.Errors)
         {
@@ -276,12 +372,15 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 "Informe uma URL https:// em smartthings.com.");
         }
 
-        // A blank secret keeps the stored one only for the same app: admins never see it, so another client id never gets it.
+        // A blank secret keeps the one in hand (this sign-in's app, e.g. one ControlHome just created) or the stored one,
+        // only for the same app: admins never see it, so another client id never gets it.
         var secret = input.Str(SmartThingsSettings.ClientSecretField) is { Length: > 0 } typed
             ? typed.Trim()
-            : context.Existing is { } existing && string.Equals(existing.Config.Str(SmartThingsSettings.ClientIdField), clientId, StringComparison.Ordinal)
-                ? await existing.Secrets.GetAsync(SecretKeys.ClientSecret, cancellationToken).ConfigureAwait(false)
-                : null;
+            : _app is { } current && string.Equals(current.ClientId, clientId, StringComparison.Ordinal)
+                ? current.ClientSecret
+                : context.Existing is { } existing && string.Equals(existing.Config.Str(SmartThingsSettings.ClientIdField), clientId, StringComparison.Ordinal)
+                    ? await existing.Secrets.GetAsync(SecretKeys.ClientSecret, cancellationToken).ConfigureAwait(false)
+                    : null;
         if (string.IsNullOrEmpty(secret))
         {
             errors[SmartThingsSettings.ClientSecretField] = new LocalizedText("Required.", "Obrigatório.");
@@ -320,7 +419,7 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
         return new ExternalUrlStep(
             AuthorizeStep,
             new LocalizedText("Sign in to SmartThings", "Entre na SmartThings"),
-            problem is null ? text : new LocalizedText(problem.En + " " + text.En, problem.PtBr + " " + text.PtBr),
+            problem is null ? text : new LocalizedText(problem.En + "\n\n" + text.En, problem.PtBr + "\n\n" + text.PtBr),
             url,
             new FieldSchema(
                 RedirectedUrlField,
@@ -602,6 +701,12 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "SmartThings setup: the code exchange failed ({Kind}, {VendorCode})")]
     private static partial void LogExchangeFailed(ILogger logger, ConnectorErrorKind kind, string? vendorCode);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "SmartThings setup: creating the app failed ({Kind}, HTTP {Status})")]
+    private static partial void LogCreateAppFailed(ILogger logger, ConnectorErrorKind kind, int? status);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "SmartThings setup: created the household's app {AppId}")]
+    private static partial void LogAppCreated(ILogger logger, string? appId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "SmartThings setup: listing locations failed ({Kind})")]
     private static partial void LogLocationsFailed(ILogger logger, ConnectorErrorKind kind);
