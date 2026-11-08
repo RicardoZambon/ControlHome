@@ -30,6 +30,9 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,3 +102,72 @@ jobs:
             echo "::warning title=Anonymous pull failed::${IMAGE}@${DIGEST} cannot be pulled without credentials. Make the GHCR package public (Package settings > Change visibility)."
             exit 1
           fi
+
+  # On a release tag, publishes the new version to the Umbrel community store (RicardoZambon/umbrel-store): copies the
+  # app template from deploy/umbrel/store/controlhome-app into the store's app folder, pins the image just built by its
+  # digest, sets the version and pushes to the store's default branch. Needs the secret UMBREL_STORE_TOKEN: a
+  # fine-grained token with Contents read/write on the store repository only. Without it the job only warns.
+  umbrel-store:
+    name: Publish to the Umbrel store
+    needs: image
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      STORE_REPO: RicardoZambon/umbrel-store
+      APP_ID: zambon-controlhome
+      VERSION: ${{ needs.image.outputs.version }}
+      DIGEST: ${{ needs.image.outputs.digest }}
+      HAS_TOKEN: ${{ secrets.UMBREL_STORE_TOKEN != '' }}
+    steps:
+      - name: Check the token
+        id: token
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::warning title=Umbrel store not updated::Add the secret UMBREL_STORE_TOKEN (Contents read/write on ${STORE_REPO}) to publish releases to the Umbrel store."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout ControlHome (the app template)
+        if: steps.token.outputs.skip != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: controlhome
+
+      - name: Checkout the store
+        if: steps.token.outputs.skip != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.STORE_REPO }}
+          token: ${{ secrets.UMBREL_STORE_TOKEN }}
+          path: store
+
+      - name: Update the app and push
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          # Only a plain release version and a real digest ever reach the store (no pre-release tags, no stray input).
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Not a release version: '$VERSION'"; exit 1; }
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::Not an image digest: '$DIGEST'"; exit 1; }
+
+          app="store/${APP_ID}"
+          rm -rf "$app"
+          cp -r controlhome/deploy/umbrel/store/controlhome-app "$app"
+          sed -i -E "s/^id: .*/id: ${APP_ID}/; s/^version: .*/version: \"${VERSION}\"/" "$app/umbrel-app.yml"
+          sed -i -E "s#(image: ghcr\.io/ricardozambon/controlhome):[^ ]+#\1:${VERSION}@${DIGEST}#" "$app/docker-compose.yml"
+          grep -q "^id: ${APP_ID}$" "$app/umbrel-app.yml"
+          grep -q "^version: \"${VERSION}\"$" "$app/umbrel-app.yml"
+          grep -q "controlhome:${VERSION}@${DIGEST}" "$app/docker-compose.yml"
+
+          cd store
+          git add -A "${APP_ID}"
+          if git diff --cached --quiet; then
+            echo "The store already has ControlHome ${VERSION}."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "ControlHome ${VERSION}" -m "Published by the ControlHome release workflow for tag v${VERSION}."
+          git push origin HEAD

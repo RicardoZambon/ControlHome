@@ -21,21 +21,23 @@ this folder is its source.
 - Hardened the same way as `deploy/docker-compose.yml`: read-only root filesystem, tmpfs `/tmp`, all capabilities
   dropped, and `no-new-privileges`.
 
-## Publishing the store (one-time, by the repository owner)
+## Where it is published
 
-1. Create a public repository, for example `RicardoZambon/controlhome-umbrel-store`.
-2. Copy the contents of `deploy/umbrel/store/` to its root: `umbrel-app-store.yml` and `controlhome-app/`.
-3. Check that the image line in `controlhome-app/docker-compose.yml` names the release you want, pinned by digest. Get a digest with
-   `docker buildx imagetools inspect ghcr.io/ricardozambon/controlhome:<version>`; the digest is on the `Digest:` line.
-4. In umbrelOS, open **App Store → ⋯ → Community App Stores**, paste the repository URL, and install **ControlHome**.
+The owner's store [RicardoZambon/umbrel-store](https://github.com/RicardoZambon/umbrel-store) (store id `zambon`)
+carries the app as `zambon-controlhome`. In umbrelOS, open **App Store → ⋯ → Community App Stores**, add
+`https://github.com/RicardoZambon/umbrel-store` and install **ControlHome**. `store/` here also works as a standalone
+store with the id `controlhome`.
+
+The app's icon is `icon.svg` and its gallery is `gallery/` (screenshots of the demo home, 1440 × 900), both served from
+`main` of this repository.
 
 ## Releasing a new version
 
-1. Tag `vX.Y.Z` in this repository; `release.yml` publishes `ghcr.io/ricardozambon/controlhome:X.Y.Z`.
-2. In the store repository, edit `controlhome-app`:
-   - in `docker-compose.yml`, set the image to `X.Y.Z@sha256:<digest>`;
-   - in `umbrel-app.yml`, bump `version` and write the `releaseNotes`.
-3. Commit. Umbrel offers the update on its next store refresh.
+1. Write the `releaseNotes` in `store/controlhome-app/umbrel-app.yml` and merge it.
+2. Tag `vX.Y.Z`. `release.yml` publishes `ghcr.io/ricardozambon/controlhome:X.Y.Z`, then its *Publish to the Umbrel
+   store* job copies `store/controlhome-app/` to `zambon-controlhome/` in the store, sets the id and version, pins the
+   image by its digest and pushes to the store's default branch. Umbrel offers the update on its next store refresh.
 
-Automating step 2, with release.yml opening the bump PR on the store repository, needs a token with write access to that
-repository. That is listed under *Needs you* in `docs/STATUS.md`.
+The job needs the repository secret `UMBREL_STORE_TOKEN`: a fine-grained personal access token with access to
+`RicardoZambon/umbrel-store` only and the permission *Contents: Read and write*. Without it, the job warns and the store
+is left alone.

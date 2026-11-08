@@ -1,8 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <!-- The app mark: lucide "house" (ISC) on the primary color of web/packages/ui/src/styles/tokens.css. -->
-  <rect width="256" height="256" fill="#1a7a7b"/>
-  <g transform="translate(56 58) scale(6)" fill="none" stroke="#f6fbfb" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
-    <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+  <!--
+    The app mark: a house whose inside is a floor plan (three rooms) with one live device glowing, on the primary
+    color of web/packages/ui/src/styles/tokens.css. Umbrel rounds the corners itself, so the square is full bleed.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22918f"/>
+      <stop offset="1" stop-color="#14605f"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd27a" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ffd27a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="256" height="256" fill="url(#bg)"/>
+  <!-- House outline -->
+  <path d="M48 116 L128 50 L208 116 V198 a10 10 0 0 1 -10 10 H58 a10 10 0 0 1 -10 -10 Z"
+        fill="#f6fbfb" fill-opacity="0.08" stroke="#f6fbfb" stroke-width="12" stroke-linejoin="round"/>
+  <!-- Floor plan: rooms -->
+  <g fill="none" stroke="#f6fbfb" stroke-opacity="0.75" stroke-width="6" stroke-linecap="round">
+    <path d="M128 116 V208"/>
+    <path d="M128 158 H208"/>
+    <path d="M48 140 H100"/>
   </g>
+  <!-- A live device -->
+  <circle cx="168" cy="183" r="30" fill="url(#glow)"/>
+  <circle cx="168" cy="183" r="11" fill="#ffd27a"/>
 </svg>

@@ -7,27 +7,32 @@ tagline: Control your home's devices, floor plans and energy in one place
 icon: https://raw.githubusercontent.com/RicardoZambon/ControlHome/main/deploy/umbrel/icon.svg
 description: >-
   ControlHome is a self-hosted home control app for your local network. Add devices from several vendors (MQTT and
-  Zigbee2MQTT today; LG ThinQ, Intelbras cameras and access terminals, and Samsung SmartThings next), see their state
-  live, control them, and place them on floor plans of every level of your home. History and energy charts show what
-  each device did and used.
+  Zigbee2MQTT, LG ThinQ, Intelbras cameras and access terminals, and Samsung SmartThings), see their state live, control
+  them, and place them on floor plans of every level of your home. History and energy charts show what each device did
+  and used.
 
 
   Requirements: a SQL Server 2025 database (another app on this Umbrel or a server on your network). The first-run
-  wizard asks for it; when SQL Server runs on this Umbrel, use 127.0.0.1 and its port as the host.
+  wizard asks for it; when SQL Server runs on this Umbrel, use 127.0.0.1 as the host and the port it publishes
+  (usually 1433).
 
 
   The setup code the wizard asks for is this app's password, shown by Umbrel. Household accounts have the roles Admin,
   Member and Viewer. Available in English and Portuguese (Brazil).
 releaseNotes: >-
-  New connectors for LG ThinQ appliances, Intelbras cameras, recorders and access terminals, and Samsung SmartThings,
-  plus live camera view. The vendor connectors are marked Experimental until they are tested with real devices.
+  SmartThings is easier to connect: ControlHome can now create your SmartThings app from a token, with no command line.
+  Setup instructions show one step per line. Accessibility fixes in menus, floor plans and searchable lists.
 developer: Ricardo Zambon
 website: https://github.com/RicardoZambon/ControlHome
 dependencies: []
 repo: https://github.com/RicardoZambon/ControlHome
 support: https://github.com/RicardoZambon/ControlHome/issues
 port: 8711
-gallery: []
+gallery:
+  - https://raw.githubusercontent.com/RicardoZambon/ControlHome/main/deploy/umbrel/gallery/1-dashboard.jpg
+  - https://raw.githubusercontent.com/RicardoZambon/ControlHome/main/deploy/umbrel/gallery/2-floor-plan.jpg
+  - https://raw.githubusercontent.com/RicardoZambon/ControlHome/main/deploy/umbrel/gallery/3-device.jpg
+  - https://raw.githubusercontent.com/RicardoZambon/ControlHome/main/deploy/umbrel/gallery/4-integrations.jpg
 path: ""
 defaultUsername: ""
 defaultPassword: ""
