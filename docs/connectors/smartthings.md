@@ -166,8 +166,11 @@ may still have been carried out: it is reported as failed with that warning and 
 read every 5 s for 30 s so its real state (an unlocked door too) shows up at once. Unlocking needs the step-up PIN like
 every safety-critical command.
 
-**Devices.** Each enabled component becomes an endpoint (`main`, `freezer`, `cooler`, …); components and capabilities
-listed in `custom.disabledComponents` / `custom.disabledCapabilities` are hidden.
+**Devices.** Each enabled component becomes an endpoint (`main`, `freezer`, `cooler`, …). The app shows an appliance as
+one device: one tile in the grid, with a section per component on its page. A component label that only repeats its id
+is not used as a name; the app names those sections in the user's language ("Congelador", "Freezer"). Components and
+capabilities listed in `custom.disabledComponents` / `custom.disabledCapabilities` are hidden. So are Samsung's
+`hca.*` components when the plain twin exists (`hca.main` next to `main`): they only copy part of its state.
 
 | SmartThings capability | ControlHome capability |
 | --- | --- |
@@ -185,7 +188,7 @@ listed in `custom.disabledComponents` / `custom.disabledCapabilities` are hidden
 | `button` | button press events (`pushed` → single, `double`, `held` → long), from the timestamp of the last press |
 | `powerMeter`, `energyMeter` | power (W), energy (kWh → Wh) |
 | `powerConsumptionReport` | its cumulative counter → energy (Wh) and its power → power (W) where the device has no meter (EHS heat pumps report kW: × 1000, like Home Assistant) |
-| anything else | the endpoint's `generic` capability, built from the capability's definition (`GET /v1/capabilities/{id}/{version}`, cached for 3 days): enums, ranges (a sibling `…Range` narrows its value: a fridge compartment's setpoint), units converted; a setter or a value → command table makes it writable. Option lists (`supported…`, `available…`) are not attributes. Capabilities that may lock or open something (lock, door, garage, gate, security, alarm, valve, siren, keypad, code) get **no** generic commands. Without a definition (custom namespaces) the attributes are inferred from their values, read-only. |
+| anything else | the endpoint's `generic` capability, built from the capability's definition (`GET /v1/capabilities/{id}/{version}`, cached for 3 days): enums, ranges (a sibling `…Range` narrows its value: a fridge compartment's setpoint), units converted; a setter or a value → command table makes it writable. Option lists (`supported…`, `available…`) are not attributes. Capabilities that may lock or open something (lock, door, garage, gate, security, alarm, valve, siren, keypad, code) get **no** generic commands. Without a definition (custom namespaces) the attributes are inferred from their values, read-only. Metadata is diagnostic and read-only: shown under the device's info, not as a setting (JSON values, `…ReferenceTable`, `…UsageStep`, `…ResetType`, `washerDelayEnd.minimumReservableTime`, and the metadata capabilities such as `custom.energyType`, `samsungce.washerCycle`, `samsungce.detergent*`, `samsungce.fridgeIcemakerInfo`). |
 
 Plumbing and diagnostics (`ocf`, `healthCheck`, `refresh`, `execute`, firmware and software update, device identification,
 …) are not shown. The firmware, model and manufacturer come from them; a Samsung appliance's serial number becomes a
@@ -250,8 +253,8 @@ Tick each item with a real account (record the date and firmware where relevant)
 3. [ ] A pasted address from an earlier sign-in is refused (state mismatch).
 4. [ ] The token exchange returns `expires_in` ≈ 86 399 and an `installed_app_id`; the location list shows only the
    authorized location (one integration per location).
-5. [ ] All devices import with sensible names, rooms, classes and endpoints (fridge compartments, washer `hca.main`);
-   disabled components/capabilities are hidden.
+5. [ ] All devices import with sensible names, rooms, classes and endpoints (fridge compartments as sections of one
+   device, no washer `hca.main`); disabled components/capabilities are hidden.
 6. [ ] States match the SmartThings app: lights (level, colour), plugs (W/Wh), AC (mode, setpoint, fan, room
    temperature), fridge compartments (°C), washer (state, remaining time, remote control), TV (power, volume, source),
    locks, sensors.
