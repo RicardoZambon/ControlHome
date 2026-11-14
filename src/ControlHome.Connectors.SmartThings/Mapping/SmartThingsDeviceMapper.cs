@@ -8,7 +8,8 @@ namespace ControlHome.Connectors.SmartThings.Mapping;
 /// Maps a SmartThings device (description + status) to the canonical model: each enabled component becomes an endpoint
 /// (<c>main</c> keeps that key), known capabilities become catalogue capabilities, the rest the endpoint's
 /// <c>generic</c> capability (from the capability definitions). Disabled components and capabilities
-/// (<c>custom.disabledComponents</c>, <c>custom.disabledCapabilities</c>) are hidden. Pure: no I/O, never throws on
+/// (<c>custom.disabledComponents</c>, <c>custom.disabledCapabilities</c>) are hidden, and so are Samsung's
+/// compatibility copies of a component (<c>hca.main</c> next to <c>main</c>). Pure: no I/O, never throws on
 /// vendor data — unknown or malformed values degrade to unknown (<c>null</c>) or are skipped.
 /// </summary>
 internal static class SmartThingsDeviceMapper
@@ -50,7 +51,7 @@ internal static class SmartThingsDeviceMapper
         foreach (var component in device.Components)
         {
             var isMain = ReferenceEquals(component, main);
-            if (!isMain && disabledComponents.Contains(component.Id))
+            if (!isMain && (disabledComponents.Contains(component.Id) || IsCompatibilityCopy(device, component)))
             {
                 continue;
             }
@@ -102,6 +103,22 @@ internal static class SmartThingsDeviceMapper
             device.RoomId is { } room && context.Rooms.TryGetValue(room, out var roomName) ? roomName : null,
             endpoints);
         return new MappedDevice(device, discovered, readings, AvailabilityOf(device, status, main), plans, missing, buttons, windows);
+    }
+
+    /// <summary>
+    /// An <c>hca.*</c> component whose plain twin exists (<c>hca.main</c> and <c>main</c>): Samsung's copy for its home
+    /// appliance profile, with a subset of the twin's state.
+    /// </summary>
+    private static bool IsCompatibilityCopy(SmartThingsDevice device, DeviceComponent component)
+    {
+        const string Prefix = "hca.";
+        if (!component.Id.StartsWith(Prefix, StringComparison.Ordinal) || component.Id.Length == Prefix.Length)
+        {
+            return false;
+        }
+
+        var twin = component.Id[Prefix.Length..];
+        return device.Components.Any(c => string.Equals(c.Id, twin, StringComparison.Ordinal));
     }
 
     private static Availability AvailabilityOf(SmartThingsDevice device, DeviceStatus status, DeviceComponent main)

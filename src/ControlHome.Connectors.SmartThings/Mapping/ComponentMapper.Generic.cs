@@ -10,8 +10,9 @@ namespace ControlHome.Connectors.SmartThings.Mapping;
 /// capability definition (value schemas, setters, commands). Lists of options (<c>supported…</c>, <c>available…</c>) and
 /// ranges with a sibling attribute (<c>coolingSetpointRange</c>) are not attributes of their own; a range narrows its
 /// sibling. Sensitive attributes and commands are skipped; capabilities that may open or unlock something get no
-/// generic commands (<see cref="StCapabilities.IsSensitiveToControl"/>). Without a definition (custom namespaces) the
-/// attributes are inferred from their values, read-only.
+/// generic commands (<see cref="StCapabilities.IsSensitiveToControl"/>). Metadata (<see cref="StCapabilities.IsDiagnostic"/>)
+/// is a read-only diagnostic attribute. Without a definition (custom namespaces) the attributes are inferred from their
+/// values, read-only.
 /// </summary>
 internal sealed partial class ComponentMapper
 {
@@ -58,6 +59,20 @@ internal sealed partial class ComponentMapper
             var (schema, conversion) = ValueSchemaFor(attribute.Value, state?.Unit ?? attribute.DefaultUnit, range);
             if (schema is null)
             {
+                continue;
+            }
+
+            // Metadata is read-only and shown with the device's info; its setters are not offered as actions either.
+            if (StCapabilities.IsDiagnostic(capabilityId, attribute.Name, schema is JsonValueSchema))
+            {
+                var diagnosticKey = Builder.AddGenericAttribute(Naming.GenericKey(capabilityId, attribute.Name), schema, writable: false, AttributeCategory.Diagnostic);
+                Report(CapabilityIds.Generic, diagnosticKey, GenericValue(state, schema, conversion), state?.Timestamp);
+                if (attribute.Setter is { } unused)
+                {
+                    usedCommands.Add(unused);
+                }
+
+                usedCommands.UnionWith(attribute.EnumCommands.Select(c => c.Command));
                 continue;
             }
 
@@ -152,7 +167,8 @@ internal sealed partial class ComponentMapper
                 JsonValueKind.String => new StringSchema(),
                 _ => JsonValueSchema.Instance,
             };
-            var key = Builder.AddGenericAttribute(Naming.GenericKey(capabilityId, name), schema, writable: false);
+            var category = StCapabilities.IsDiagnostic(capabilityId, name, schema is JsonValueSchema) ? AttributeCategory.Diagnostic : AttributeCategory.Primary;
+            var key = Builder.AddGenericAttribute(Naming.GenericKey(capabilityId, name), schema, writable: false, category);
             Report(CapabilityIds.Generic, key, GenericValue(state, schema, conversion), state.Timestamp);
         }
     }
