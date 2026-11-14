@@ -75,6 +75,7 @@ try
     builder.Services.AddSetupInfrastructure();
     builder.Services.AddDeviceRuntime();
     builder.Services.AddControlHomeConnectors();
+    builder.AddDevelopmentVendorFakes();
     builder.Services.AddControlHomeRealtime();
     if (!BuildContext.IsOpenApiGeneration)
     {

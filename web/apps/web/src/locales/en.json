@@ -204,6 +204,18 @@
       "applianceCycle": "Appliance",
       "generic": "Other settings"
     },
+    "applianceDoor": "Door",
+    "endpoints": {
+      "freezer": "Freezer",
+      "cooler": "Fridge",
+      "icemaker": "Ice maker",
+      "icemaker-02": "Ice maker 2",
+      "icemaker-03": "Ice maker 3",
+      "onedoor": "Single door",
+      "cvroom": "Flex zone",
+      "pantry-01": "Pantry 1",
+      "pantry-02": "Pantry 2"
+    },
     "attributes": {
       "on": "Power",
       "level": "Brightness",
@@ -243,7 +255,32 @@
       "machineState": "State",
       "phase": "Phase",
       "remainingMinutes": "Time left",
-      "remoteControlEnabled": "Remote control"
+      "remoteControlEnabled": "Remote control",
+      "refrigerationDefrost": "Defrost",
+      "refrigerationRapidCooling": "Rapid cooling",
+      "refrigerationRapidFreezing": "Rapid freezing",
+      "powerCoolActivated": "Power Cool",
+      "powerFreezeActivated": "Power Freeze",
+      "sabbathModeStatus": "Sabbath mode",
+      "waterFilterStatus": "Water filter",
+      "waterFilterUsage": "Water filter use",
+      "coolingSetpoint": "Target temperature",
+      "kidsLockLockState": "Child lock",
+      "washerRinseCycles": "Rinses",
+      "washerSoilLevel": "Soil level",
+      "washerSpinLevel": "Spin",
+      "washerWaterTemperature": "Water temperature",
+      "washerDelayEndRemainingTime": "Delayed finish in",
+      "pictureMode": "Picture mode",
+      "soundMode": "Sound mode",
+      "tvChannel": "Channel",
+      "tvChannelName": "Channel name",
+      "autoCleaningMode": "Auto clean",
+      "fanOscillationMode": "Swing",
+      "spiMode": "Air purification (S Plasma ion)",
+      "airConditionerOptionalModeAcOptionalMode": "Special mode",
+      "airConditionerTropicalNightModeAcTropicalNightModeLevel": "Tropical night mode",
+      "audioVolume": "Volume"
     },
     "attributesIn": {
       "switch": {
@@ -287,7 +324,9 @@
       "next": "Next",
       "previous": "Previous",
       "snapshot": "Take snapshot",
-      "start": "Start"
+      "start": "Start",
+      "setWasherSpinLevel": "Set spin",
+      "setCoolingSetpoint": "Set target temperature"
     },
     "values": {
       "mode": {
@@ -391,6 +430,45 @@
       "remoteControlEnabled": {
         "true": "Enabled",
         "false": "Disabled"
+      },
+      "generic": {
+        "on": "On",
+        "off": "Off",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "auto": "Auto",
+        "none": "None",
+        "normal": "Normal",
+        "good": "Good",
+        "replace": "Replace",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "extraHigh": "Extra high",
+        "turbo": "Turbo",
+        "cold": "Cold",
+        "tapCold": "Tap cold",
+        "warm": "Warm",
+        "hot": "Hot",
+        "extraHot": "Extra hot",
+        "extraLight": "Extra light",
+        "light": "Light",
+        "heavy": "Heavy",
+        "extraHeavy": "Extra heavy",
+        "rinseHold": "Rinse hold",
+        "noSpin": "No spin",
+        "quickWash": "Quick wash",
+        "locked": "Locked",
+        "unlocked": "Unlocked",
+        "fixed": "Fixed",
+        "all": "All directions",
+        "vertical": "Vertical",
+        "horizontal": "Horizontal",
+        "windFree": "WindFree",
+        "Dynamic": "Dynamic",
+        "Standard": "Standard",
+        "Natural": "Natural",
+        "Movie": "Movie"
       }
     },
     "reading": {

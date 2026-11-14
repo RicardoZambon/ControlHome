@@ -111,6 +111,48 @@ internal static class StCapabilities
     };
 
     /// <summary>
+    /// Metadata capabilities: the appliance describes itself (energy program type, the ice maker's internal name, a
+    /// compartment's zone id) or keeps detergent bookkeeping. Their generic attributes are diagnostic: shown under the
+    /// device's info, not as settings.
+    /// </summary>
+    public static IReadOnlySet<string> Metadata { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "custom.energyType",
+        "custom.supportedOptions",
+        "samsungce.fridgeIcemakerInfo",
+        "samsungce.fridgeZoneInfo",
+        "samsungce.fridgePantryInfo",
+        "samsungce.detergentOrder",
+        "samsungce.detergentState",
+        "samsungce.detergentAutoReplenishment",
+        "samsungce.softenerOrder",
+        "samsungce.softenerState",
+        "samsungce.softenerAutoReplenishment",
+
+        // The cycle is a course id ("Table_00_Course_01") that means nothing without the vendor's table.
+        "samsungce.washerCycle",
+    };
+
+    /// <summary>Metadata attributes of otherwise useful capabilities (capability id, attribute name).</summary>
+    private static readonly HashSet<(string Capability, string Attribute)> _metadataAttributes =
+    [
+        ("samsungce.washerDelayEnd", "minimumReservableTime"),
+    ];
+
+    /// <summary>Attribute name endings that mark bookkeeping: a lookup table's id, a filter's counter step and reset kind.</summary>
+    private static readonly string[] _metadataSuffixes = ["referenceTable", "UsageStep", "ResetType"];
+
+    /// <summary>
+    /// A generic attribute that is metadata rather than state a person reads or sets: a JSON value, an attribute of a
+    /// <see cref="Metadata"/> capability, or bookkeeping (<c>…ReferenceTable</c>, <c>…UsageStep</c>, <c>…ResetType</c>).
+    /// </summary>
+    public static bool IsDiagnostic(string capabilityId, string attribute, bool jsonValue) =>
+        jsonValue
+        || Metadata.Contains(capabilityId)
+        || _metadataAttributes.Contains((capabilityId, attribute))
+        || _metadataSuffixes.Any(suffix => attribute.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
     /// Unmapped capabilities that may open or unlock something: their generic attributes are read-only (no generic
     /// command can bypass the safety policy that the catalogue's <c>lock</c>, <c>cover</c> and <c>doorOpener</c> apply).
     /// </summary>

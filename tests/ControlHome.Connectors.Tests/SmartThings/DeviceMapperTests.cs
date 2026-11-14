@@ -92,7 +92,8 @@ public sealed class DeviceMapperTests
         var device = StFixtures.Map(StFixtures.Washer, StFixtures.Definitions());
 
         device.Device.DeviceClass.ShouldBe(DeviceClasses.Washer);
-        device.Device.Endpoints.Select(e => e.Key).ShouldBe(["main", "hca_main"]);
+        // hca.main is Samsung's compatibility copy of main: not an endpoint of its own.
+        device.Device.Endpoints.Select(e => e.Key).ShouldBe(["main"]);
         var main = device.Device.Endpoints[0];
         main.Capabilities.Select(c => c.CapabilityId).ShouldContain(CapabilityIds.ApplianceCycle);
         main.Capabilities.Select(c => c.CapabilityId).ShouldContain(CapabilityIds.Switch);
@@ -113,14 +114,56 @@ public sealed class DeviceMapperTests
         Value(device, CapabilityIds.Generic, "washerSpinLevel").ShouldBe(StateValue.String("high"));
         generic.Attributes.Single(a => a.Key == "washerDelayEndRemainingTime").Schema.ShouldBe(new NumberSchema(0, 1440, 1, Units.Minute, Integer: true));
 
+        // setDelayEndTime takes a free-text time in the vendor's own format: not offered.
+        generic.Commands.ShouldNotContain(c => c.Name == "setDelayEndTime");
+        generic.Commands.SelectMany(c => c.Arguments).Select(a => a.Schema).OfType<StringSchema>().ShouldBeEmpty();
+
         // A capability that may lock or open something never gets a generic command.
         generic.Attributes.Single(a => a.Key == "kidsLockLockState").Writable.ShouldBeFalse();
         generic.Commands.ShouldNotContain(c => c.Name.Contains("lock", StringComparison.OrdinalIgnoreCase));
 
-        // The hca.main component: its own endpoint with the washer mode.
-        var hca = Generic(device.Device.Endpoints[1]);
-        hca.FindSetter("washerMode")!.Name.ShouldBe("setMode");
+        device.Readings.ShouldNotContain(r => r.Endpoint == "hca_main");
         device.MissingDefinitions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_component_with_a_label_of_its_own_names_its_endpoint()
+    {
+        var device = Build(
+            """{"deviceId":"sw-2","label":"Wall switch","components":[{"id":"main","capabilities":[{"id":"switch","version":1}],"categories":[{"name":"Switch","categoryType":"manufacturer"}]},{"id":"switch1","label":"Porch","capabilities":[{"id":"switch","version":1}],"categories":[]},{"id":"switch2","label":"switch2","capabilities":[{"id":"switch","version":1}],"categories":[]},{"id":"switch3","capabilities":[{"id":"switch","version":1}],"categories":[]}]}""",
+            """{"components":{"main":{"switch":{"switch":{"value":"on"}}},"switch1":{"switch":{"switch":{"value":"off"}}},"switch2":{"switch":{"switch":{"value":"off"}}},"switch3":{"switch":{"switch":{"value":"off"}}}}}""");
+
+        device.Device.Endpoints.Select(e => (e.Key, e.Name)).ShouldBe(new (string, string?)[] { ("main", null), ("switch1", "Porch"), ("switch2", null), ("switch3", null) });
+    }
+
+    [Fact]
+    public void Appliance_metadata_is_diagnostic_and_read_only()
+    {
+        var washer = Generic(StFixtures.Map(StFixtures.Washer, StFixtures.Definitions()).Device.Endpoints[0]);
+        var category = washer.Attributes.ToDictionary(a => a.Key, a => a.Category);
+
+        // A JSON value, a lookup table's id, a metadata capability and a metadata attribute.
+        category["supportedOptionsReferenceTable"].ShouldBe(AttributeCategory.Diagnostic);
+        category["washerCycle"].ShouldBe(AttributeCategory.Diagnostic);
+        category["washerCycleReferenceTable"].ShouldBe(AttributeCategory.Diagnostic);
+        category["energyType"].ShouldBe(AttributeCategory.Diagnostic);
+        category["detergentStateRemainingAmount"].ShouldBe(AttributeCategory.Diagnostic);
+        var minimum = washer.Attributes.Single(a => a.Key == "washerDelayEndMinimumReservableTime");
+        minimum.Category.ShouldBe(AttributeCategory.Diagnostic);
+        minimum.Writable.ShouldBeFalse();
+
+        // What a person reads or sets stays primary.
+        category["washerSpinLevel"].ShouldBe(AttributeCategory.Primary);
+        category["washerDelayEndRemainingTime"].ShouldBe(AttributeCategory.Primary);
+        category["kidsLockLockState"].ShouldBe(AttributeCategory.Primary);
+
+        var fridge = StFixtures.Map(StFixtures.Fridge, StFixtures.Definitions()).Device;
+        var main = Generic(fridge.Endpoints.Single(e => e.Key == "main")).Attributes.ToDictionary(a => a.Key, a => a.Category);
+        main["waterFilterUsageStep"].ShouldBe(AttributeCategory.Diagnostic);
+        main["waterFilterResetType"].ShouldBe(AttributeCategory.Diagnostic);
+        main["waterFilterStatus"].ShouldBe(AttributeCategory.Primary);
+        main["refrigerationRapidCooling"].ShouldBe(AttributeCategory.Primary);
+        Generic(fridge.Endpoints.Single(e => e.Key == "icemaker")).Attributes.ShouldAllBe(a => a.Category == AttributeCategory.Diagnostic);
     }
 
     [Fact]
@@ -143,6 +186,9 @@ public sealed class DeviceMapperTests
         device.Device.DeviceClass.ShouldBe("refrigerator");
         // icemaker-02, pantry-01, pantry-02, cvroom and onedoor are disabled.
         device.Device.Endpoints.Select(e => e.Key).ShouldBe(["main", "freezer", "cooler", "icemaker"], ignoreOrder: true);
+
+        // The component labels only repeat their ids: no vendor name, so the app names the sections in the user's language.
+        device.Device.Endpoints.ShouldAllBe(e => e.Name == null);
 
         Value(device, CapabilityIds.Temperature, "temperature", "freezer").ShouldBe(StateValue.Number(-17.78)); // 0 °F
         Value(device, CapabilityIds.Temperature, "temperature", "cooler").ShouldBe(StateValue.Number(2.78)); // 37 °F

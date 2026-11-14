@@ -97,6 +97,16 @@ the setup code is printed in the API log and written to `.data/setup-code.txt`; 
 **Don't run two copies at once** — e.g. the dev servers and the dev compose stack. Ports are fixed (Vite uses
 `strictPort`), and only one runtime per database may be active.
 
+### Fake SmartThings cloud
+
+To try Samsung appliances without a Samsung account, run a fake SmartThings cloud. It serves the connector's test
+fixtures (a fridge, a washer, a TV, an air conditioner and more) and accepts any token. Nothing leaves your machine.
+
+1. Start it: `node scripts/fake-smartthings/server.mjs` (port 18090; pass another port as the first argument).
+2. Run the API in Development with `Development__SmartThingsApiUrl=http://localhost:18090/`. Only a loopback URL is
+   accepted, and only in Development.
+3. Add a SmartThings integration in personal-access-token mode with any token, e.g. `fake-token`.
+
 ## Building and testing
 
 ### Backend

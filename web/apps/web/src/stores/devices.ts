@@ -13,13 +13,17 @@ import {
 } from '@controlhome/api-client'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef, watch } from 'vue'
+import { translateIfPresent } from '../i18n'
 import { unwrap } from '../lib/problem'
 import { useRealtimeStore } from './realtime'
 
-/** One controllable part of a device, as the device grid shows it (a tile per endpoint). */
+/** One tile of the device grid: an endpoint, or a whole device shown by its main endpoint. */
 export interface EndpointEntry {
   device: DeviceSummaryDto
+  /** The endpoint the tile shows and controls. */
   endpoint: EndpointDto
+  /** The endpoints the tile stands for (filters and search look at all of them); default `[endpoint]`. */
+  parts?: readonly EndpointDto[]
   /** The endpoint's room (its own, else the device's), or `null`. */
   roomId: number | null
 }
@@ -27,13 +31,73 @@ export interface EndpointEntry {
 /** How long a burst of `DevicesChanged` messages is collected before the lists reload. */
 export const RELOAD_DEBOUNCE_MS = 300
 
-/** The device's own name, or the endpoint's when it has one; multi-endpoint devices name each endpoint. */
+/** The key of a device's only (or primary) endpoint. */
+export const MAIN_ENDPOINT = 'main'
+
+/**
+ * Device classes whose endpoints are independent actuators (the channels of a 3-gang switch, a double outlet): a tile
+ * each. Other devices with several endpoints (a fridge and its compartments) are one tile, sections on their page.
+ */
+const PER_ENDPOINT_CLASSES = new Set(['switch', 'outlet', 'light', 'blind', 'curtain', 'garage'])
+
+/** An endpoint whose integration no longer reports any of its capabilities (kept for its history). */
+export function isRetiredEndpoint(endpoint: Pick<EndpointDto, 'capabilities'>): boolean {
+  return endpoint.capabilities.length > 0 && endpoint.capabilities.every((capability) => capability.retired)
+}
+
+/** The endpoints still reported (all of them when none is). */
+export function liveEndpoints<T extends Pick<EndpointDto, 'capabilities'>>(endpoints: readonly T[]): T[] {
+  const live = endpoints.filter((endpoint) => !isRetiredEndpoint(endpoint))
+  return live.length > 0 ? live : [...endpoints]
+}
+
+/** The device grid's tiles of a device: one per endpoint for independent actuators (and unknown classes), else one. */
+export function deviceTiles(device: DeviceSummaryDto): EndpointEntry[] {
+  const endpoints = liveEndpoints(device.endpoints)
+  const entry = (endpoint: EndpointDto, parts?: readonly EndpointDto[]): EndpointEntry => ({
+    device,
+    endpoint,
+    parts,
+    roomId: endpoint.effectiveRoomId ?? device.roomId,
+  })
+  if (endpoints.length <= 1 || !device.deviceClass || PER_ENDPOINT_CLASSES.has(device.deviceClass))
+    return endpoints.map((endpoint) => entry(endpoint))
+  const main = endpoints.find((endpoint) => endpoint.key === MAIN_ENDPOINT) ?? endpoints[0]!
+  return [entry(main, endpoints)]
+}
+
+/**
+ * Whether a stored endpoint name is only the vendor's id for it (`freezer`, `hca.main`), not a name a person chose:
+ * connectors used to store those, and the app names such endpoints itself.
+ */
+function isVendorIdName(name: string, key: string): boolean {
+  const asKey = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '_')
+    .replace(/^_+|_+$/g, '')
+  return asKey === key
+}
+
+/**
+ * The name of a part of an appliance from its key (`device.endpoints.<key>`: "Freezer", "Ice maker 2"), or
+ * `undefined` when the key has no translation.
+ */
+export function endpointKeyLabel(key: string): string | undefined {
+  return /^[a-z0-9_-]+$/i.test(key) ? translateIfPresent(`device.endpoints.${key}`) : undefined
+}
+
+/**
+ * What an endpoint is called: the name a person gave it; else the device's name for a device's only or main endpoint;
+ * else its part's name ("Freezer"); else the device name with the key.
+ */
 export function endpointName(
   device: Pick<DeviceSummaryDto, 'name' | 'endpoints'>,
-  endpoint: EndpointDto,
+  endpoint: Pick<EndpointDto, 'name' | 'key'>,
 ): string {
-  if (endpoint.name) return endpoint.name
-  return device.endpoints.length > 1 ? `${device.name} · ${endpoint.key}` : device.name
+  if (endpoint.name && !isVendorIdName(endpoint.name, endpoint.key)) return endpoint.name
+  if (device.endpoints.length <= 1 || endpoint.key === MAIN_ENDPOINT) return device.name
+  return endpointKeyLabel(endpoint.key) ?? `${device.name} · ${endpoint.key}`
 }
 
 /**
@@ -42,10 +106,10 @@ export function endpointName(
  */
 export function fullEndpointName(
   device: Pick<DeviceSummaryDto, 'name' | 'endpoints'>,
-  endpoint: EndpointDto,
+  endpoint: Pick<EndpointDto, 'name' | 'key'>,
 ): string {
   const name = endpointName(device, endpoint)
-  return endpoint.name && device.endpoints.length > 1 && endpoint.name !== device.name
+  return device.endpoints.length > 1 && name !== device.name && !name.startsWith(`${device.name} · `)
     ? `${device.name} · ${name}`
     : name
 }
@@ -147,10 +211,13 @@ export const useDevicesStore = defineStore('devices', () => {
   const integrationsById = computed(() => new Map(integrations.value.map((entry) => [entry.id, entry])))
   const devicesById = computed(() => new Map(devices.value.map((device) => [device.id, device])))
 
-  /** Every endpoint as a grid entry, in the server's order. */
-  const entries = computed<EndpointEntry[]>(() =>
+  /** The device grid's tiles, in the server's order (see `deviceTiles`). */
+  const entries = computed<EndpointEntry[]>(() => devices.value.flatMap(deviceTiles))
+
+  /** Every endpoint still reported, one entry each (favorites can be any part of a device). */
+  const endpointEntries = computed<EndpointEntry[]>(() =>
     devices.value.flatMap((device) =>
-      device.endpoints.map((endpoint) => ({
+      liveEndpoints(device.endpoints).map((endpoint) => ({
         device,
         endpoint,
         roomId: endpoint.effectiveRoomId ?? device.roomId,
@@ -225,6 +292,7 @@ export const useDevicesStore = defineStore('devices', () => {
     loading,
     error,
     entries,
+    endpointEntries,
     roomsById,
     integrationsById,
     devicesById,

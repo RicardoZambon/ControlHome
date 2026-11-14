@@ -4,7 +4,7 @@ import { useCommand } from '../../../composables/useCommand'
 import { useCapabilityState } from '../../../composables/useStateValue'
 import { endpointName, useDevicesStore } from '../../../stores/devices'
 import { constraintFor } from '../../schema/schema'
-import { attributeLabel, commandLabel, formatMeasurement, valueLabel } from '../format'
+import { attributeLabel, commandLabel, formatMeasurement, translatedValue, valueLabel } from '../format'
 import type { CapabilityControlProps } from './types'
 
 /**
@@ -56,6 +56,8 @@ export function useControl(props: CapabilityControlProps) {
     },
     measure: (value: number, unit: string | null | undefined) => formatMeasurement(value, unit, locale.value),
     valueLabel: (attributeKey: string, value: string) => valueLabel(attributeKey, value, t, te),
+    /** A text value translated when it is a known token ("replace", "off"), else as it is. */
+    textLabel: (attributeKey: string, value: string) => translatedValue(attributeKey, value, t, te) ?? value,
     commandLabel: (command: string) => commandLabel(command, t, te),
     attributeLabel: (key: string) => attributeLabel(key, t, te, props.capability.capabilityId),
   }

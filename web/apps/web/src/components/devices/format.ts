@@ -5,8 +5,20 @@ import { fromStateValue } from '../../lib/stateValue'
 export type Translate = (key: string, named?: Record<string, unknown>) => string
 export type HasTranslation = (key: string) => boolean
 
-/** Translated label of a capability (`device.capabilities.<id>`), else its id humanized. */
-export function capabilityLabel(id: string, t: Translate, te: HasTranslation): string {
+/** Appliances whose `contact` is their own door (a fridge, a washer), never a window. */
+const APPLIANCE_CLASSES = new Set(['refrigerator', 'washer', 'dryer', 'dishwasher', 'oven', 'microwave'])
+
+/**
+ * Translated label of a capability (`device.capabilities.<id>`), else its id humanized. An appliance's `contact` is
+ * its "Door" (`device.applianceDoor`), not "Door or window".
+ */
+export function capabilityLabel(
+  id: string,
+  t: Translate,
+  te: HasTranslation,
+  deviceClass?: string | null,
+): string {
+  if (id === 'contact' && deviceClass && APPLIANCE_CLASSES.has(deviceClass)) return t('device.applianceDoor')
   return te(`device.capabilities.${id}`) ? t(`device.capabilities.${id}`) : humanize(id)
 }
 
@@ -44,10 +56,28 @@ export function commandLabel(name: string, t: Translate, te: HasTranslation): st
   return te(`device.commands.${name}`) ? t(`device.commands.${name}`) : humanize(name)
 }
 
-/** Translated label of an enum value or event of an attribute (`device.values.<key>.<value>`), else humanized. */
+/**
+ * Translated label of a value of an attribute: the attribute's own wording (`device.values.<key>.<value>`), else the
+ * shared wording of common vendor tokens (`device.values.generic.<value>`: "off", "replace", "windFree"), else
+ * `undefined`.
+ */
+export function translatedValue(
+  attributeKey: string,
+  value: string,
+  t: Translate,
+  te: HasTranslation,
+): string | undefined {
+  // Only plain tokens are looked up: a free text ("PlayStation 4", "a.b") is no message key.
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) return undefined
+  const own = `device.values.${attributeKey}.${value}`
+  if (te(own)) return t(own)
+  const shared = `device.values.generic.${value}`
+  return te(shared) ? t(shared) : undefined
+}
+
+/** Translated label of an enum value or event of an attribute (see `translatedValue`), else humanized. */
 export function valueLabel(attributeKey: string, value: string, t: Translate, te: HasTranslation): string {
-  const key = `device.values.${attributeKey}.${value}`
-  return te(key) ? t(key) : humanize(value)
+  return translatedValue(attributeKey, value, t, te) ?? humanize(value)
 }
 
 /**
@@ -144,8 +174,8 @@ export function formatStateValue(
     return formatMeasurement(plain, unit, locale)
   }
   if (typeof plain === 'string') {
-    if (te(`device.values.${options.attributeKey}.${plain}`))
-      return t(`device.values.${options.attributeKey}.${plain}`)
+    const translated = translatedValue(options.attributeKey, plain, t, te)
+    if (translated !== undefined) return translated
     return options.schema?.type === 'enum' || options.schema?.type === 'momentary' ? humanize(plain) : plain
   }
   if (Array.isArray(plain) && plain.every((entry) => typeof entry === 'string'))

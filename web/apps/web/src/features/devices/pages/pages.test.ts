@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../../App.vue'
 import type { AppLocale } from '../../../i18n'
 import { mountWithApp } from '../../../test/app'
-import { CATALOGUE, INTEGRATIONS, OBSERVED, ROOMS, basicHome } from '../../../test/devices'
+import { CATALOGUE, INTEGRATIONS, OBSERVED, ROOMS, basicHome, fridge, tv } from '../../../test/devices'
 
 // The device pages mounted in the real app (router, guards, i18n that throws on a missing
 // key), in both languages and for each role, against a mocked API.
@@ -273,6 +273,76 @@ describe.each(['en', 'pt-BR'] as const)('device page (%s)', (locale) => {
     expect(wrapper.get('[data-slot="attributes-table"]').text()).toContain('#7')
     // Breadcrumb: home › Devices › device.
     expect(wrapper.get('[data-slot="breadcrumb"]').find('a[href="/devices"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+})
+
+describe.each([
+  ['en', 'Picture mode', 'Dynamic', 'Sound mode', 'Standard', 'Channel'],
+  ['pt-BR', 'Modo de imagem', 'Dinâmico', 'Modo de som', 'Padrão', 'Canal'],
+] as const)('a TV (%s)', (locale, picture, dynamic, sound, standard, channel) => {
+  it('shows its vendor settings beside the media player, without the empty channel', async () => {
+    api.listDevices.mockResolvedValue(ok([...basicHome(), tv()]))
+    api.getDevice.mockResolvedValue(ok(detail(tv())))
+    signedIn('Member', locale)
+    const { wrapper } = await open('/devices/d-tv', locale)
+    expect(wrapper.find('[data-capability="mediaPlayer"]').exists()).toBe(true)
+    const settings = wrapper.get('[data-capability="generic"] [data-slot="generic-control"]').text()
+    expect(settings).toContain(picture)
+    expect(settings).toContain(dynamic)
+    expect(settings).toContain(sound)
+    expect(settings).toContain(standard)
+    expect(settings).not.toContain(channel)
+    wrapper.unmount()
+  })
+})
+
+describe.each([
+  ['en', 'Freezer', 'Replace', 'Target temperature', '-17.8', 'Door'],
+  ['pt-BR', 'Congelador', 'Trocar', 'Temperatura desejada', '-17,8', 'Porta'],
+] as const)('an appliance (%s)', (locale, freezer, replace, setpoint, freezerSetpoint, door) => {
+  beforeEach(() => {
+    api.listDevices.mockResolvedValue(ok([...basicHome(), fridge()]))
+    api.getDevice.mockResolvedValue(ok(detail(fridge())))
+  })
+
+  it('is one tile in the grid', async () => {
+    signedIn('Admin', locale)
+    const { wrapper } = await open('/devices', locale)
+    const names = wrapper.findAll('[data-slot="device-tile"]').map((tile) => tile.text())
+    expect(names.filter((name) => name.includes('Kitchen fridge'))).toHaveLength(1)
+    expect(wrapper.findAll('[data-slot="device-tile"]')).toHaveLength(6)
+    wrapper.unmount()
+  })
+
+  it('shows its parts as sections, its settings translated and its metadata only in the device info', async () => {
+    signedIn('Admin', locale)
+    const { wrapper } = await open('/devices/d-fridge', locale)
+    // main, freezer and ice maker; the endpoint the integration dropped is gone.
+    const sections = wrapper.findAll('[data-slot="endpoint"]')
+    expect(sections.map((section) => section.get('h2').text())).toEqual([
+      'Kitchen fridge',
+      freezer,
+      locale === 'en' ? 'Ice maker 2' : 'Máquina de gelo 2',
+    ])
+    const settings = sections[0]!.get('[data-slot="generic-control"]').text()
+    expect(settings).toContain(replace)
+    expect(settings).not.toContain('Energy type')
+    expect(settings).not.toContain('replaceable')
+    expect(settings).not.toContain('Display message')
+    // The freezer's setpoint shows its value, to a tenth of a degree.
+    const field = sections[1]!.get('[data-slot="generic-control"] [data-slot="schema-field"]')
+    expect(field.text()).toContain(setpoint)
+    expect((field.get('input').element as HTMLInputElement).value).toBe(freezerSetpoint)
+    // The ice maker has nothing but metadata in its generic part: no settings card at all.
+    expect(sections[2]!.find('[data-slot="generic-control"]').exists()).toBe(false)
+    // A fridge's contact is its door, not "door or window".
+    expect(sections[0]!.get('[data-slot="readings"]').text()).toContain(door)
+    expect(sections[0]!.get('[data-slot="readings"]').text()).not.toContain(
+      locale === 'en' ? 'Door or window' : 'Porta ou janela',
+    )
+    // The device info still lists the metadata.
+    expect(wrapper.get('[data-slot="attributes-table"]').text()).toContain('Energy type')
     wrapper.unmount()
   })
 })

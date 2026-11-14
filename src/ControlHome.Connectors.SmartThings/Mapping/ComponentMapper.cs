@@ -27,13 +27,25 @@ internal sealed partial class ComponentMapper
         _component = component;
         _status = status;
         _context = context;
-        Builder = new EndpointBuilder(key, isMain ? null : Naming.Limit(component.Label ?? component.Id, DeviceLimits.NameMaxLength));
+        Builder = new EndpointBuilder(key, isMain ? null : VendorLabel(component));
         Plan = new EndpointPlan(component.Id);
         var disabled = Json.Strings(Attr(StCapabilities.DisabledCapabilities, "disabledCapabilities")?.Value).ToHashSet(StringComparer.Ordinal);
         _available = component.Capabilities
             .Select(c => c.Id)
             .Where(id => !disabled.Contains(id) && !StCapabilities.Ignored.Contains(id))
             .ToHashSet(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The component's own label, or <c>null</c> when SmartThings gives none or only repeats the id (<c>freezer</c>,
+    /// <c>icemaker-02</c>): the web app names those sections itself, in the user's language.
+    /// </summary>
+    private static string? VendorLabel(DeviceComponent component)
+    {
+        var label = component.Label?.Trim();
+        return string.IsNullOrEmpty(label) || string.Equals(label, component.Id, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : Naming.Limit(label, DeviceLimits.NameMaxLength);
     }
 
     public EndpointBuilder Builder { get; }

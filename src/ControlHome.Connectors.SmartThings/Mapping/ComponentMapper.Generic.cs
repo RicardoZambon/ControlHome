@@ -10,8 +10,9 @@ namespace ControlHome.Connectors.SmartThings.Mapping;
 /// capability definition (value schemas, setters, commands). Lists of options (<c>supported…</c>, <c>available…</c>) and
 /// ranges with a sibling attribute (<c>coolingSetpointRange</c>) are not attributes of their own; a range narrows its
 /// sibling. Sensitive attributes and commands are skipped; capabilities that may open or unlock something get no
-/// generic commands (<see cref="StCapabilities.IsSensitiveToControl"/>). Without a definition (custom namespaces) the
-/// attributes are inferred from their values, read-only.
+/// generic commands (<see cref="StCapabilities.IsSensitiveToControl"/>). Metadata (<see cref="StCapabilities.IsDiagnostic"/>)
+/// is a read-only diagnostic attribute. Without a definition (custom namespaces) the attributes are inferred from their
+/// values, read-only.
 /// </summary>
 internal sealed partial class ComponentMapper
 {
@@ -61,6 +62,20 @@ internal sealed partial class ComponentMapper
                 continue;
             }
 
+            // Metadata is read-only and shown with the device's info; its setters are not offered as actions either.
+            if (StCapabilities.IsDiagnostic(capabilityId, attribute.Name, schema is JsonValueSchema))
+            {
+                var diagnosticKey = Builder.AddGenericAttribute(Naming.GenericKey(capabilityId, attribute.Name), schema, writable: false, AttributeCategory.Diagnostic);
+                Report(CapabilityIds.Generic, diagnosticKey, GenericValue(state, schema, conversion), state?.Timestamp);
+                if (attribute.Setter is { } unused)
+                {
+                    usedCommands.Add(unused);
+                }
+
+                usedCommands.UnionWith(attribute.EnumCommands.Select(c => c.Command));
+                continue;
+            }
+
             // A setter with exactly one argument makes the attribute writable; so does a value → command table.
             CapabilityCommandDocument? setter = null;
             ValueSchema? argumentSchema = null;
@@ -102,7 +117,8 @@ internal sealed partial class ComponentMapper
             return;
         }
 
-        // The remaining commands are actions (no state to wait for).
+        // The remaining commands are actions (no state to wait for). One that takes free text is left out: the vendor
+        // expects an exact format nobody can guess (washerDelayEnd's endTime), so the app offers no field for it.
         foreach (var command in definition.Commands.Where(c => !c.Sensitive && !usedCommands.Contains(c.Name)).OrderBy(c => c.Name, StringComparer.Ordinal))
         {
             var arguments = new List<ArgumentDefinition>();
@@ -111,7 +127,7 @@ internal sealed partial class ComponentMapper
             var usable = true;
             foreach (var argument in command.Arguments)
             {
-                if (ArgumentSchemaFor(argument.Schema, UnitConversion.None) is not { } schema)
+                if (ArgumentSchemaFor(argument.Schema, UnitConversion.None) is not { } schema || schema is StringSchema)
                 {
                     usable = false;
                     break;
@@ -152,7 +168,8 @@ internal sealed partial class ComponentMapper
                 JsonValueKind.String => new StringSchema(),
                 _ => JsonValueSchema.Instance,
             };
-            var key = Builder.AddGenericAttribute(Naming.GenericKey(capabilityId, name), schema, writable: false);
+            var category = StCapabilities.IsDiagnostic(capabilityId, name, schema is JsonValueSchema) ? AttributeCategory.Diagnostic : AttributeCategory.Primary;
+            var key = Builder.AddGenericAttribute(Naming.GenericKey(capabilityId, name), schema, writable: false, category);
             Report(CapabilityIds.Generic, key, GenericValue(state, schema, conversion), state.Timestamp);
         }
     }

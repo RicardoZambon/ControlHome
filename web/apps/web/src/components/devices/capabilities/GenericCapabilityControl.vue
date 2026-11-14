@@ -13,7 +13,8 @@ import { useControl } from './useControl'
 /**
  * The fallback control for any capability without its own (and for `generic` vendor properties): every attribute as a
  * `<SchemaField>` — editable when it is writable and has a setter command, read-only otherwise — and every other
- * command as a button, or as a small form when it takes arguments.
+ * command as a button, or as a small form when it takes arguments. Diagnostic attributes (a vendor's metadata) and
+ * empty texts are left out: the device's info lists them.
  */
 const props = defineProps<CapabilityControlProps>()
 const control = useControl(props)
@@ -33,23 +34,31 @@ interface AttributeRow {
   key: string
   schema: ValueSchema
   setter?: CommandDefinitionDto
+  diagnostic?: boolean
 }
 
-const attributes = computed<AttributeRow[]>(() => {
+const allAttributes = computed<AttributeRow[]>(() => {
   const definition = control.definition.value
   if (definition) {
     return definition.attributes.map((attribute) => ({
       key: attribute.key,
       schema: attribute.schema,
       setter: attribute.writable ? setterOf(attribute) : undefined,
+      diagnostic: attribute.category === 'diagnostic',
     }))
   }
   // No definition known: show what the endpoint reported, read-only.
   return props.capability.attributes.map((attribute) => ({ key: attribute.key, schema: JSON_SCHEMA }))
 })
 
+/** What a person reads or sets here: not diagnostics, and not a text that is empty (a TV's channel off-air). */
+const attributes = computed(() =>
+  allAttributes.value.filter((row) => !row.diagnostic && control.state.plain(row.key) !== ''),
+)
+
+// Setters of every attribute, shown or not: a hidden attribute's setter is no action of its own either.
 const setterNames = computed(
-  () => new Set(attributes.value.flatMap((row) => (row.setter ? [row.setter.name] : []))),
+  () => new Set(allAttributes.value.flatMap((row) => (row.setter ? [row.setter.name] : []))),
 )
 const otherCommands = computed(() =>
   (control.definition.value?.commands ?? []).filter((command) => !setterNames.value.has(command.name)),
@@ -123,6 +132,7 @@ const needsPin = (command: CommandDefinitionDto) => isSafetyCritical(command, pr
         :constraint="control.constraint(row.key)"
         :error="errors[row.key]"
         :option-label="(value: string) => control.valueLabel(row.key, value)"
+        :text-label="(value: string) => control.textLabel(row.key, value)"
         :class="row.schema.type === 'json' ? 'sm:col-span-2' : undefined"
         @commit="(value) => commitAttribute(row, value)"
       />

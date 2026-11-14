@@ -21,6 +21,9 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 
 ## In progress (2026-11-07)
 - Phase 2 is done and tagged **v0.2.0**. Next: owner review and testing of v0.2.0, then Phase 3 (automation).
+- Owner feedback (2026-11-13): Samsung appliances show as one device with translated sections; hca.* copies hidden;
+  vendor metadata moved to device info; generic settings and values translated (en, pt-BR); a fake SmartThings cloud
+  (scripts/fake-smartthings) reproduces it locally without an account.
 - Owner feedback (2026-11-08): the SmartThings wizard can now create the household's app from a short-lived token
   (no CLI), the CLI path uses the renamed `smartapps:create`, and wizard instructions show one step per line. App
   creation is unverified against a real account (token permission name, paid-plan answer). Alexa: planned as a Matter

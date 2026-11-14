@@ -84,7 +84,12 @@
     "alarm_panel": "Alarm panel",
     "doorbell": "Doorbell",
     "intercom": "Intercom",
-    "button": "Button"
+    "button": "Button",
+    "refrigerator": "Refrigerator",
+    "dishwasher": "Dishwasher",
+    "fan": "Fan",
+    "air_purifier": "Air purifier",
+    "robot_cleaner": "Robot vacuum"
   },
   "attributes": {
     "attribute": "Attribute",

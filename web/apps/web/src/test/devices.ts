@@ -325,6 +325,147 @@ export function accessTerminal(): DeviceSummaryDto {
   ])
 }
 
+/** A `generic` capability (a vendor's own attributes) with its definition. */
+function generic(
+  id: number,
+  attributes: {
+    key: string
+    schema: ValueSchema
+    value: StateValue
+    diagnostic?: boolean
+    writable?: boolean
+  }[],
+  commands: CommandDefinitionDto[] = [],
+): EndpointCapabilityDto {
+  return {
+    ...capability(
+      id,
+      'generic',
+      attributes.map((entry, index) => attr(id * 10 + index, entry.key, entry.value)),
+    ),
+    genericDefinition: {
+      id: 'generic',
+      version: 1,
+      attributes: attributes.map((entry) =>
+        attribute(entry.key, entry.schema, {
+          category: entry.diagnostic ? 'diagnostic' : 'primary',
+          writable: entry.writable ?? false,
+        }),
+      ),
+      commands,
+    },
+  }
+}
+
+/**
+ * A SmartThings-like fridge: the main endpoint (door, settings and the vendor's metadata), the freezer and the ice maker
+ * (unnamed: the connector used to store the component id as the name), and `hca_main`, an endpoint the integration no
+ * longer reports.
+ */
+export function fridge(): DeviceSummaryDto {
+  const text: ValueSchema = { type: 'string', maxLength: null }
+  return device(
+    'd-fridge',
+    'Kitchen fridge',
+    'refrigerator',
+    [
+      endpoint(
+        'e-fridge',
+        [
+          capability(60, 'contact', [attr(60, 'open', bool(false))]),
+          generic(61, [
+            { key: 'waterFilterStatus', schema: text, value: str('replace') },
+            { key: 'refrigerationRapidCooling', schema: text, value: str('off') },
+            // An empty text (a TV's channel name while it shows an input) says nothing.
+            { key: 'displayMessage', schema: text, value: str('') },
+            { key: 'energyType', schema: text, value: str('2.0'), diagnostic: true },
+            {
+              key: 'waterFilterResetType',
+              schema: { type: 'json' },
+              value: { kind: 'json', j: ['replaceable'] } as StateValue,
+              diagnostic: true,
+            },
+          ]),
+        ],
+        { effectiveRoomId: 11 },
+      ),
+      endpoint(
+        'e-freezer',
+        [
+          capability(62, 'temperature', [attr(62, 'temperature', num(-17.78))]),
+          generic(
+            63,
+            [
+              {
+                key: 'coolingSetpoint',
+                schema: { type: 'number', min: -22.22, max: -15, step: null, unit: '°C', integer: false },
+                value: num(-17.78),
+                writable: true,
+              },
+            ],
+            [
+              command('setCoolingSetpoint', {
+                arguments: [
+                  {
+                    key: 'coolingSetpoint',
+                    schema: { type: 'number', min: -22.22, max: -15, step: null, unit: '°C', integer: false },
+                    required: true,
+                    attribute: 'coolingSetpoint',
+                  },
+                ],
+              }),
+            ],
+          ),
+        ],
+        { key: 'freezer', name: 'freezer', effectiveRoomId: 11, sortOrder: 1 },
+      ),
+      endpoint(
+        'e-icemaker',
+        [
+          capability(64, 'switch', [attr(64, 'on', bool(true))]),
+          generic(65, [
+            { key: 'fridgeIcemakerInfoName', schema: text, value: str('ICE_MAKER'), diagnostic: true },
+          ]),
+        ],
+        { key: 'icemaker-02', effectiveRoomId: 11, sortOrder: 2 },
+      ),
+      endpoint(
+        'e-hca',
+        [{ ...generic(66, [{ key: 'washerMode', schema: text, value: str('normal') }]), retired: true }],
+        { key: 'hca_main', name: 'hca.main', effectiveRoomId: 11, sortOrder: 3 },
+      ),
+    ],
+    { roomId: 11 },
+  )
+}
+
+/** A Samsung-like TV: the media player and the vendor's picture and sound modes (no channel while on an input). */
+export function tv(): DeviceSummaryDto {
+  const text: ValueSchema = { type: 'string', maxLength: null }
+  return device('d-tv', 'Living room TV', 'tv', [
+    endpoint('e-tv', [
+      capability(80, 'mediaPlayer', [attr(80, 'power', bool(true)), attr(81, 'source', str('HDMI1'))]),
+      generic(82, [
+        { key: 'tvChannel', schema: text, value: str('') },
+        { key: 'tvChannelName', schema: text, value: str('') },
+        { key: 'pictureMode', schema: text, value: str('Dynamic') },
+        { key: 'soundMode', schema: text, value: str('Standard') },
+      ]),
+    ]),
+  ])
+}
+
+/** A 3-gang wall switch: three channels, each its own tile (the first one named). */
+export function wallSwitch(): DeviceSummaryDto {
+  const channel = (index: number, extra: Partial<EndpointDto> = {}) =>
+    endpoint(`e-gang-${index}`, [capability(70 + index, 'switch', [attr(70 + index, 'on', bool(false))])], {
+      key: `l${index}`,
+      sortOrder: index,
+      ...extra,
+    })
+  return device('d-gang', 'Wall switch', 'switch', [channel(1, { name: 'Ceiling' }), channel(2), channel(3)])
+}
+
 export const ROOMS = [
   { id: 10, name: 'Living room', floorId: 1, floorName: 'Ground floor' },
   { id: 11, name: 'Kitchen', floorId: 1, floorName: 'Ground floor' },

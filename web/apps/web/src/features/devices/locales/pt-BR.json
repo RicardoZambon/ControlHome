@@ -84,7 +84,12 @@
     "alarm_panel": "Central de alarme",
     "doorbell": "Campainha",
     "intercom": "Interfone",
-    "button": "Botão"
+    "button": "Botão",
+    "refrigerator": "Geladeira",
+    "dishwasher": "Lava-louças",
+    "fan": "Ventilador",
+    "air_purifier": "Purificador de ar",
+    "robot_cleaner": "Robô aspirador"
   },
   "attributes": {
     "attribute": "Atributo",

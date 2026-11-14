@@ -5,6 +5,7 @@ import {
   AppWindow,
   BellRing,
   Blinds,
+  Bot,
   CircleDot,
   CircuitBoard,
   Coffee,
@@ -34,6 +35,7 @@ import {
   Thermometer,
   ToggleRight,
   Tv,
+  Utensils,
   Warehouse,
   WashingMachine,
   Wind,
@@ -109,6 +111,12 @@ const byClass: Record<string, Component> = {
   doorbell: BellRing,
   intercom: Phone,
   button: CircleDot,
+  // Appliance classes some connectors (SmartThings) report beyond the common ones.
+  refrigerator: Refrigerator,
+  dishwasher: Utensils,
+  fan: Fan,
+  air_purifier: Wind,
+  robot_cleaner: Bot,
 }
 
 /** By the first capability that says what the device is. */

@@ -72,8 +72,10 @@ public sealed class CommandPlannerTests
         Plan(washer, StFixtures.Command("main", CapabilityIds.ApplianceCycle, "stop")).ShouldBe(["""main/washerOperatingState/setMachineState["stop"]"""]);
         Plan(washer, StFixtures.Command("main", CapabilityIds.Generic, "setWasherSpinLevel", """{"washerSpinLevel":"low"}"""))
             .ShouldBe(["""main/custom.washerSpinLevel/setWasherSpinLevel["low"]"""]);
-        Plan(washer, StFixtures.Command("hca_main", CapabilityIds.Generic, "setMode", """{"washerMode":"quickWash"}"""))
-            .ShouldBe(["""hca.main/hca.washerMode/setMode["quickWash"]"""]);
+
+        // hca.main (Samsung's copy of main) is no endpoint, so nothing can be sent to it.
+        Rejection(washer, StFixtures.Command("hca_main", CapabilityIds.Generic, "setMode", """{"washerMode":"quickWash"}"""))
+            .ShouldBe(CommandRejectionCodes.UnknownEndpoint);
     }
 
     [Fact]
