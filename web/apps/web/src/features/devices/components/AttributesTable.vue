@@ -16,7 +16,7 @@ import { useRealtimeStore } from '../../../stores/realtime'
  * loaded from the database that the running connector has not confirmed yet.
  */
 const props = defineProps<{
-  device: Pick<DeviceSummaryDto, 'name' | 'endpoints'>
+  device: Pick<DeviceSummaryDto, 'name' | 'endpoints' | 'deviceClass'>
   endpoints: readonly EndpointDto[]
   /** Show the AttributeIds (a diagnostic detail for Admins). */
   showIds?: boolean
@@ -39,7 +39,7 @@ const rows = computed(() =>
         return {
           id: attribute.attributeId,
           endpoint: props.endpoints.length > 1 ? endpointName(props.device, endpoint) : undefined,
-          capability: capabilityLabel(capability.capabilityId, t, te),
+          capability: capabilityLabel(capability.capabilityId, t, te, props.device.deviceClass),
           retired: capability.retired,
           attribute: attributeLabel(attribute.key, t, te, capability.capabilityId),
           key: `${capability.capabilityId}.${attribute.key}`,

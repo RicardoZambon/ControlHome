@@ -204,6 +204,7 @@
       "applianceCycle": "Eletrodoméstico",
       "generic": "Outros ajustes"
     },
+    "applianceDoor": "Porta",
     "endpoints": {
       "freezer": "Congelador",
       "cooler": "Refrigerador",
@@ -323,7 +324,9 @@
       "next": "Próximo",
       "previous": "Anterior",
       "snapshot": "Capturar imagem",
-      "start": "Iniciar"
+      "start": "Iniciar",
+      "setWasherSpinLevel": "Ajustar centrifugação",
+      "setCoolingSetpoint": "Ajustar temperatura desejada"
     },
     "values": {
       "mode": {

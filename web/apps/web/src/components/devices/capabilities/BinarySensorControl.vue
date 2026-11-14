@@ -82,7 +82,7 @@ const face = computed<Face | undefined>(() =>
 <template>
   <ReadingTile
     :icon="face?.icon ?? config.no.icon"
-    :label="capabilityLabel(capability.capabilityId, t, te)"
+    :label="capabilityLabel(capability.capabilityId, t, te, device.deviceClass)"
     :value="face ? t(face.label) : t('device.state.unknown')"
     :tone="face?.tone ?? 'neutral'"
     :caption="updated(control.state.live(config.key))"

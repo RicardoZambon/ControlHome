@@ -439,6 +439,22 @@ export function fridge(): DeviceSummaryDto {
   )
 }
 
+/** A Samsung-like TV: the media player and the vendor's picture and sound modes (no channel while on an input). */
+export function tv(): DeviceSummaryDto {
+  const text: ValueSchema = { type: 'string', maxLength: null }
+  return device('d-tv', 'Living room TV', 'tv', [
+    endpoint('e-tv', [
+      capability(80, 'mediaPlayer', [attr(80, 'power', bool(true)), attr(81, 'source', str('HDMI1'))]),
+      generic(82, [
+        { key: 'tvChannel', schema: text, value: str('') },
+        { key: 'tvChannelName', schema: text, value: str('') },
+        { key: 'pictureMode', schema: text, value: str('Dynamic') },
+        { key: 'soundMode', schema: text, value: str('Standard') },
+      ]),
+    ]),
+  ])
+}
+
 /** A 3-gang wall switch: three channels, each its own tile (the first one named). */
 export function wallSwitch(): DeviceSummaryDto {
   const channel = (index: number, extra: Partial<EndpointDto> = {}) =>

@@ -5,8 +5,20 @@ import { fromStateValue } from '../../lib/stateValue'
 export type Translate = (key: string, named?: Record<string, unknown>) => string
 export type HasTranslation = (key: string) => boolean
 
-/** Translated label of a capability (`device.capabilities.<id>`), else its id humanized. */
-export function capabilityLabel(id: string, t: Translate, te: HasTranslation): string {
+/** Appliances whose `contact` is their own door (a fridge, a washer), never a window. */
+const APPLIANCE_CLASSES = new Set(['refrigerator', 'washer', 'dryer', 'dishwasher', 'oven', 'microwave'])
+
+/**
+ * Translated label of a capability (`device.capabilities.<id>`), else its id humanized. An appliance's `contact` is
+ * its "Door" (`device.applianceDoor`), not "Door or window".
+ */
+export function capabilityLabel(
+  id: string,
+  t: Translate,
+  te: HasTranslation,
+  deviceClass?: string | null,
+): string {
+  if (id === 'contact' && deviceClass && APPLIANCE_CLASSES.has(deviceClass)) return t('device.applianceDoor')
   return te(`device.capabilities.${id}`) ? t(`device.capabilities.${id}`) : humanize(id)
 }
 

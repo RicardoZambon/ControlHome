@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createAppI18n } from '../../i18n'
 import {
   UNIT_SPACE,
+  capabilityLabel,
   formatMeasurement,
   formatStateValue,
   measurement,
@@ -47,5 +48,15 @@ describe.each([
     }
     expect(formatStateValue({ kind: 'string', s: 'off' }, text)).toBe(off)
     expect(formatStateValue({ kind: 'string', s: 'Samsung QLED' }, text)).toBe('Samsung QLED')
+  })
+})
+
+describe('capabilityLabel', () => {
+  it("calls an appliance's contact its door", () => {
+    const { t, te } = createAppI18n({ locale: 'pt-BR' }).global
+    expect(capabilityLabel('contact', t, te, 'refrigerator')).toBe('Porta')
+    expect(capabilityLabel('contact', t, te, 'washer')).toBe('Porta')
+    expect(capabilityLabel('contact', t, te, 'door')).toBe('Porta ou janela')
+    expect(capabilityLabel('contact', t, te)).toBe('Porta ou janela')
   })
 })

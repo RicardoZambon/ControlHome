@@ -204,6 +204,7 @@
       "applianceCycle": "Appliance",
       "generic": "Other settings"
     },
+    "applianceDoor": "Door",
     "endpoints": {
       "freezer": "Freezer",
       "cooler": "Fridge",
@@ -323,7 +324,9 @@
       "next": "Next",
       "previous": "Previous",
       "snapshot": "Take snapshot",
-      "start": "Start"
+      "start": "Start",
+      "setWasherSpinLevel": "Set spin",
+      "setCoolingSetpoint": "Set target temperature"
     },
     "values": {
       "mode": {
