@@ -114,6 +114,10 @@ public sealed class DeviceMapperTests
         Value(device, CapabilityIds.Generic, "washerSpinLevel").ShouldBe(StateValue.String("high"));
         generic.Attributes.Single(a => a.Key == "washerDelayEndRemainingTime").Schema.ShouldBe(new NumberSchema(0, 1440, 1, Units.Minute, Integer: true));
 
+        // setDelayEndTime takes a free-text time in the vendor's own format: not offered.
+        generic.Commands.ShouldNotContain(c => c.Name == "setDelayEndTime");
+        generic.Commands.SelectMany(c => c.Arguments).Select(a => a.Schema).OfType<StringSchema>().ShouldBeEmpty();
+
         // A capability that may lock or open something never gets a generic command.
         generic.Attributes.Single(a => a.Key == "kidsLockLockState").Writable.ShouldBeFalse();
         generic.Commands.ShouldNotContain(c => c.Name.Contains("lock", StringComparison.OrdinalIgnoreCase));

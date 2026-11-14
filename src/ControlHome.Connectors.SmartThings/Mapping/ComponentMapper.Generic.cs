@@ -117,7 +117,8 @@ internal sealed partial class ComponentMapper
             return;
         }
 
-        // The remaining commands are actions (no state to wait for).
+        // The remaining commands are actions (no state to wait for). One that takes free text is left out: the vendor
+        // expects an exact format nobody can guess (washerDelayEnd's endTime), so the app offers no field for it.
         foreach (var command in definition.Commands.Where(c => !c.Sensitive && !usedCommands.Contains(c.Name)).OrderBy(c => c.Name, StringComparer.Ordinal))
         {
             var arguments = new List<ArgumentDefinition>();
@@ -126,7 +127,7 @@ internal sealed partial class ComponentMapper
             var usable = true;
             foreach (var argument in command.Arguments)
             {
-                if (ArgumentSchemaFor(argument.Schema, UnitConversion.None) is not { } schema)
+                if (ArgumentSchemaFor(argument.Schema, UnitConversion.None) is not { } schema || schema is StringSchema)
                 {
                     usable = false;
                     break;
