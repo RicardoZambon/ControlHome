@@ -20,8 +20,8 @@ description: >-
   The setup code the wizard asks for is this app's password, shown by Umbrel. Household accounts have the roles Admin,
   Member and Viewer. Available in English and Portuguese (Brazil).
 releaseNotes: >-
-  SmartThings is easier to connect: ControlHome can now create your SmartThings app from a token, with no command line.
-  Setup instructions show one step per line. Accessibility fixes in menus, floor plans and searchable lists.
+  Samsung appliances read better: a fridge or washer is one device with named sections (freezer, fridge, ice maker),
+  technical values move to the device info, settings and values are translated, and the fridge shows its own icon.
 developer: Ricardo Zambon
 website: https://github.com/RicardoZambon/ControlHome
 dependencies: []
