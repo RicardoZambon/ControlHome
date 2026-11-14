@@ -115,6 +115,15 @@ export function currentLocale(): AppLocale {
   return isAppLocale(locale) ? locale : detectLocale()
 }
 
+/**
+ * A translation for code outside components that may also run without the app (pure helpers in unit tests):
+ * `undefined` when the key is missing or no instance exists yet.
+ */
+export function translateIfPresent(key: string): string | undefined {
+  const global = active?.global
+  return global?.te(key) ? global.t(key) : undefined
+}
+
 /** The active instance, for code outside components (router hooks, API error handlers). */
 export function appI18n(): AppI18n {
   if (!active) throw new Error('createAppI18n() has not been called.')

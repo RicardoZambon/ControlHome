@@ -4,6 +4,17 @@ import { resolveControl } from './capabilities'
 /** Controls that take the endpoint's power switch into their card's header (by registry order, the first wins). */
 const POWER_HOSTS = new Set(['level', 'thermostat', 'color'])
 
+/** A `generic` capability with nothing to read or do on a control card: diagnostic attributes and no commands. */
+function onlyDiagnostics(capability: EndpointCapabilityDto): boolean {
+  const definition = capability.genericDefinition
+  return (
+    capability.capabilityId === 'generic' &&
+    !!definition &&
+    definition.commands.length === 0 &&
+    definition.attributes.every((attribute) => attribute.category === 'diagnostic')
+  )
+}
+
 export interface ControlEntry {
   capability: EndpointCapabilityDto
   /** Takes both columns of the control grid. */
@@ -23,11 +34,12 @@ export interface EndpointLayout {
  * An endpoint's controls (cards, in the registry's order) and readings (sensor cards sized to their content), shared by
  * the device page and the floor plan's quick panel. Power folds into the main adjustment's header; a reading the main
  * control already shows (an AC's room temperature on its dial) is left out; a lone half-width control gets the readings
- * beside it, or else takes the whole row. Retired capabilities are left out.
+ * beside it, or else takes the whole row. Retired capabilities are left out, and so is a vendor's `generic` capability
+ * with only diagnostics (the device's info lists them).
  */
 export function layoutOf(endpoint: Pick<EndpointDto, 'capabilities'>): EndpointLayout {
   const resolved = endpoint.capabilities
-    .filter((capability) => !capability.retired)
+    .filter((capability) => !capability.retired && !onlyDiagnostics(capability))
     .map((capability) => ({ capability, control: resolveControl(capability.capabilityId) }))
     .sort((a, b) => a.control.options.order - b.control.options.order)
   const has = (id: string) => resolved.some((entry) => entry.capability.capabilityId === id)

@@ -220,7 +220,7 @@ const rooms = computed(() =>
 const multipleFloors = computed(() => new Set(rooms.value.map((entry) => entry.room.floorId)).size > 1)
 
 const favorites = computed(() => {
-  const byEndpoint = new Map(devices.entries.map((entry) => [entry.endpoint.id, entry]))
+  const byEndpoint = new Map(devices.endpointEntries.map((entry) => [entry.endpoint.id, entry]))
   return (dashboard.value?.favoriteEndpointIds ?? []).flatMap((id) => byEndpoint.get(id) ?? [])
 })
 const roomName = (roomId: number | null) =>

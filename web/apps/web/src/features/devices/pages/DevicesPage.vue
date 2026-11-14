@@ -106,8 +106,8 @@ function activeCount(entries: readonly EndpointEntry[]): number {
 const capabilityOptions = computed(() => {
   const ids = new Set<string>()
   for (const entry of devices.entries)
-    for (const capability of entry.endpoint.capabilities)
-      if (!capability.retired) ids.add(capability.capabilityId)
+    for (const part of entry.parts ?? [entry.endpoint])
+      for (const capability of part.capabilities) if (!capability.retired) ids.add(capability.capabilityId)
   return [...ids]
     .map((value) => ({ value, label: capabilityLabel(value, t, te) }))
     .sort((a, b) => a.label.localeCompare(b.label, locale.value))

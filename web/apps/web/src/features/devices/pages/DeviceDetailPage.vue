@@ -55,7 +55,7 @@ import { usePageTrail } from '../../../composables/usePageTrail'
 import { useProblem } from '../../../composables/useProblem'
 import { formatDateTime } from '../../../lib/format'
 import { errorCodeOf, unwrap } from '../../../lib/problem'
-import { endpointName, toSummary, useDevicesStore } from '../../../stores/devices'
+import { endpointName, liveEndpoints, toSummary, useDevicesStore } from '../../../stores/devices'
 import { useRealtimeStore } from '../../../stores/realtime'
 import { useSessionStore } from '../../../stores/session'
 import AttributesTable from '../components/AttributesTable.vue'
@@ -141,10 +141,12 @@ const room = computed(() => {
   return roomId === null ? undefined : devices.roomsById.get(roomId)
 })
 const canFavorite = computed(() => session.hasRole('Admin', 'Member'))
-const multiple = computed(() => (device.value?.endpoints.length ?? 0) > 1)
+/** The endpoints still reported: one its integration dropped (all capabilities retired) only stays in the history. */
+const shownEndpoints = computed(() => liveEndpoints(device.value?.endpoints ?? []))
+const multiple = computed(() => shownEndpoints.value.length > 1)
 
 const endpointViews = computed(() =>
-  (device.value?.endpoints ?? []).map((endpoint) => ({ endpoint, layout: layoutOf(endpoint) })),
+  shownEndpoints.value.map((endpoint) => ({ endpoint, layout: layoutOf(endpoint) })),
 )
 
 /** The state of the first endpoint, for the header's icon: its tone, and whether it stands open (a lock, a door). */
@@ -358,24 +360,24 @@ const info = computed(() => {
             >
               {{ device.name }}
             </h1>
-            <TooltipProvider v-if="canFavorite && !multiple && device.endpoints[0]" :delay-duration="300">
+            <TooltipProvider v-if="canFavorite && !multiple && shownEndpoints[0]" :delay-duration="300">
               <Tooltip>
                 <TooltipTrigger as-child>
                   <Button
                     variant="ghost"
                     size="icon"
                     class="shrink-0 rounded-full"
-                    :aria-pressed="device.endpoints[0].favorite"
+                    :aria-pressed="shownEndpoints[0].favorite"
                     :aria-label="t('devices.favorite.label')"
-                    :loading="favoriteBusy === device.endpoints[0].id"
+                    :loading="favoriteBusy === shownEndpoints[0].id"
                     data-slot="favorite-toggle"
-                    @click="toggleFavorite(device.endpoints[0])"
+                    @click="toggleFavorite(shownEndpoints[0])"
                   >
                     <Star
                       :class="
                         cn(
                           'size-5',
-                          device.endpoints[0].favorite
+                          shownEndpoints[0].favorite
                             ? 'fill-state-energy text-state-energy'
                             : 'text-muted-foreground',
                         )
@@ -385,9 +387,7 @@ const info = computed(() => {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {{
-                    device.endpoints[0].favorite ? t('devices.favorite.remove') : t('devices.favorite.add')
-                  }}
+                  {{ shownEndpoints[0].favorite ? t('devices.favorite.remove') : t('devices.favorite.add') }}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

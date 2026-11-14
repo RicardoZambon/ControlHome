@@ -43,6 +43,8 @@ const props = defineProps<{
   constraint?: ValueConstraint
   /** Labels of enum values, flags and events (default: the value, humanized). */
   optionLabel?: (value: string) => string
+  /** Label of a read-only text value (default: the text as it is). */
+  textLabel?: (value: string) => string
   /** Keep the label for screen readers only. */
   hideLabel?: boolean
   class?: HTMLAttributes['class']
@@ -75,16 +77,29 @@ const bounds = computed(() =>
 const sliderRange = computed(() => {
   const value = bounds.value
   if (!value || value.min === undefined || value.max === undefined || value.max <= value.min) return undefined
-  const step = value.step ?? (value.integer ? 1 : (value.max - value.min) / 100)
+  // Without a step: about a hundredth of the range, rounded down to a power of ten (0.01 for 7.2), so slid values stay
+  // short.
+  const step = value.step ?? (value.integer ? 1 : 10 ** Math.floor(Math.log10((value.max - value.min) / 100)))
   return (value.max - value.min) / step <= 1000 ? { min: value.min, max: value.max, step } : undefined
 })
-const numberFormat = computed(() => new Intl.NumberFormat(locale.value, { maximumFractionDigits: 3 }))
+/** Temperatures read to a tenth ("-17,8 °C" for a freezer at 0 °F); other numbers to at most three decimals. */
+const fractionDigits = computed(() => (bounds.value?.unit === '°C' ? 1 : 3))
+const numberFormat = computed(
+  () => new Intl.NumberFormat(locale.value, { maximumFractionDigits: fractionDigits.value }),
+)
+/** The editable text of a number: the locale's decimal mark, no grouping (so it parses back). */
+function editableNumber(value: number): string {
+  return new Intl.NumberFormat(locale.value, {
+    maximumFractionDigits: fractionDigits.value,
+    useGrouping: false,
+  }).format(value)
+}
 const numberText = ref('')
 watch(
   () => props.modelValue,
   (value) => {
     if (typeof value === 'number' && Number.isFinite(value)) {
-      if (parseDecimal(numberText.value) !== value) numberText.value = String(value)
+      if (parseDecimal(numberText.value) !== value) numberText.value = editableNumber(value)
     } else if (value === null || value === undefined) {
       numberText.value = ''
     }
@@ -112,7 +127,7 @@ function onSlide(values: number[] | undefined, commit: boolean): void {
   const value = values?.[0]
   if (value === undefined || !bounds.value) return
   const snapped = snapNumber(value, bounds.value)
-  numberText.value = String(snapped)
+  numberText.value = editableNumber(snapped)
   change(snapped, commit)
 }
 
@@ -151,7 +166,7 @@ const readText = computed(() => {
     case 'flags':
       return flags.value.length > 0 ? flags.value.map(optionText).join(', ') : t('schema.noFlags')
     default:
-      return typeof value === 'string' ? value : JSON.stringify(value)
+      return typeof value === 'string' ? (props.textLabel?.(value) ?? value) : JSON.stringify(value)
   }
 })
 const jsonText = computed(() =>

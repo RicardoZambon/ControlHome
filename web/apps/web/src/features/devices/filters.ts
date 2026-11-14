@@ -34,10 +34,13 @@ export function filterEntries(
       if (filters.room === NO_ROOM ? entry.roomId !== null : String(entry.roomId) !== filters.room)
         return false
     }
+    const parts = entry.parts ?? [entry.endpoint]
     if (
       filters.capability &&
-      !entry.endpoint.capabilities.some(
-        (capability) => capability.capabilityId === filters.capability && !capability.retired,
+      !parts.some((part) =>
+        part.capabilities.some(
+          (capability) => capability.capabilityId === filters.capability && !capability.retired,
+        ),
       )
     )
       return false
@@ -45,7 +48,7 @@ export function filterEntries(
     if (words.length > 0) {
       const room = entry.roomId === null ? '' : (options.roomName(entry.roomId) ?? '')
       const haystack = normalizeText(
-        `${endpointName(entry.device, entry.endpoint)} ${entry.device.name} ${room}`,
+        `${parts.map((part) => endpointName(entry.device, part)).join(' ')} ${entry.device.name} ${room}`,
       )
       if (!words.every((word) => haystack.includes(word))) return false
     }
