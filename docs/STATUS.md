@@ -21,6 +21,9 @@ Resume point for whoever (human or agent) continues the work. Updated after ever
 
 ## In progress (2026-11-07)
 - Phase 2 is done and tagged **v0.2.0**. Next: owner review and testing of v0.2.0, then Phase 3 (automation).
+- Owner feedback (2026-11-14): signing in again with an app goes straight to the SmartThings sign-in (no token);
+  the wizard says the creator token's 24-hour limit does not apply to the connection, and the personal access token
+  step lists its steps. Floor size help shows the real limit (1000 m a side) and where to change it.
 - Owner feedback (2026-11-13): Samsung appliances show as one device with translated sections; hca.* copies hidden;
   vendor metadata moved to device info; generic settings and values translated (en, pt-BR); a fake SmartThings cloud
   (scripts/fake-smartthings) reproduces it locally without an account.

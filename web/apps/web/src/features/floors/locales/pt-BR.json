@@ -36,14 +36,14 @@
   },
   "form": {
     "createTitle": "Adicionar um andar",
-    "createDescription": "Dê um nome e um tamanho. Você pode mudar os dois depois.",
+    "createDescription": "Dê um nome e um tamanho. Você pode mudar os dois depois, na aba Andar do editor.",
     "name": "Nome",
     "namePlaceholder": "Térreo",
     "level": "Nível",
     "levelHelp": "0 é o térreo, 1 o andar de cima, -1 um subsolo.",
     "width": "Largura (m)",
     "height": "Profundidade (m)",
-    "sizeHelp": "O tamanho externo do andar; os cômodos são desenhados dentro dele.",
+    "sizeHelp": "O tamanho externo do andar, até {max} m de cada lado. Os cômodos são desenhados dentro dele.",
     "create": "Criar e desenhar",
     "creating": "Criando…"
   },

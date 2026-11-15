@@ -5,7 +5,9 @@
 //   node scripts/fake-smartthings/server.mjs [port]        (default 18090)
 //
 // Then run the API in Development with Development__SmartThingsApiUrl=http://localhost:18090/ and add a SmartThings
-// integration in "Personal access token" mode with any token (e.g. "fake-token").
+// integration with any token (e.g. "fake-token"): in "Personal access token" mode, or with "Let ControlHome create your
+// app" (the fake creates an app; open the sign-in link's address only to copy its state, then paste
+// https://httpbin.org/get?code=fake&state=<that state> back into the wizard).
 import { createServer } from 'node:http'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -48,7 +50,29 @@ createServer((req, res) => {
   const path = url.pathname.replace(/^\/v1/, '')
   console.log(req.method, url.pathname + url.search)
 
+  // OAuth code exchange and refresh (HTTP Basic client authentication): any client and code are accepted.
+  if (req.method === 'POST' && path === '/oauth/token') {
+    if (!req.headers.authorization?.startsWith('Basic ')) return json(res, 401, { error: 'invalid_client' })
+    const stamp = Date.now()
+    return json(res, 200, {
+      access_token: `fake-access-${stamp}`,
+      token_type: 'bearer',
+      refresh_token: `fake-refresh-${stamp}`,
+      expires_in: 86399,
+      scope: 'r:locations:* r:devices:* x:devices:*',
+    })
+  }
+
   if (!req.headers.authorization?.startsWith('Bearer ')) return json(res, 401, { error: { code: 'Unauthorized' } })
+  // "Let ControlHome create your app": creates an API_ONLY app and returns its OAuth client.
+  if (req.method === 'POST' && (path === '/apps' || path === '/smartapps')) {
+    return json(res, 200, {
+      app: { appId: '00000000-0000-4000-8000-00000000fa4e', appName: 'controlhome-fake' },
+      oauthClientId: '00000000-0000-4000-8000-00000000c11e',
+      oauthClientSecret: 'fake-client-secret',
+    })
+  }
+
   if (req.method === 'GET' && path === '/locations') return json(res, 200, locations)
   if (req.method === 'GET' && /^\/locations\/[^/]+\/rooms$/.test(path)) return json(res, 200, rooms)
   if (req.method === 'GET' && path === '/devices') return json(res, 200, { items: devices.map((d) => d.device), _links: {} })

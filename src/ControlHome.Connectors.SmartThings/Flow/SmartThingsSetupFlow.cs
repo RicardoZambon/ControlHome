@@ -37,6 +37,9 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     /// <summary>The first step's choice "ControlHome creates the app" (an OAuth sign-in with an app made from a token).</summary>
     public const string CreateAppChoice = "createApp";
 
+    /// <summary>The first step's choice when signing in again: the integration's own app (stored client id and secret).</summary>
+    public const string ReauthorizeChoice = "reauthorize";
+
     /// <summary>The short-lived personal access token ControlHome creates the app with (used once, never stored).</summary>
     public const string CreatorTokenField = "creatorToken";
 
@@ -64,7 +67,45 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     {
         ArgumentNullException.ThrowIfNull(context);
         _context = context;
-        return Task.FromResult<FlowStep>(ModeChoice(context.Existing is not null));
+        return Task.FromResult<FlowStep>(ModeChoice(context.Existing is not null, StoredApp(context) is not null));
+    }
+
+    /// <summary>The OAuth app of the integration being re-authorized (client id, redirect URI, URLs), or <c>null</c>.</summary>
+    private (string ClientId, string RedirectUri, string Preset, string? AuthorizeUrl, string? TokenUrl, OAuthEndpoints Endpoints)? StoredApp(FlowContext context)
+    {
+        if (context.Existing?.Config is not { ValueKind: JsonValueKind.Object } config
+            || config.Str(SmartThingsSettings.ModeField) != SmartThingsSettings.OAuthMode
+            || config.Str(SmartThingsSettings.ClientIdField) is not { } clientId
+            || config.Str(SmartThingsSettings.RedirectUriField) is not { } redirect
+            || !SmartThingsSettings.IsRedirectUri(redirect))
+        {
+            return null;
+        }
+
+        var preset = config.Str(SmartThingsSettings.EndpointsField) ?? SmartThingsSettings.DocumentedPreset;
+        var authorizeUrl = config.Str(SmartThingsSettings.AuthorizeUrlField);
+        var tokenUrl = config.Str(SmartThingsSettings.TokenUrlField);
+        return SmartThingsSettings.ResolveEndpoints(preset, authorizeUrl, tokenUrl, options, out _) is { } endpoints
+            ? (clientId, redirect, preset, authorizeUrl, tokenUrl, endpoints)
+            : null;
+    }
+
+    /// <summary>Signing in again with the integration's own app: straight to the SmartThings sign-in page.</summary>
+    private async Task<FlowStep> ReauthorizeAsync(FlowContext context, CancellationToken cancellationToken)
+    {
+        if (StoredApp(context) is not { } stored
+            || await context.Existing!.Secrets.GetAsync(SecretKeys.ClientSecret, cancellationToken).ConfigureAwait(false) is not { Length: > 0 } secret)
+        {
+            // Nothing usable stored: the form, prefilled, asks for the app again.
+            return AppForm(AppDefaults(context), new Dictionary<string, LocalizedText>());
+        }
+
+        _app = new OAuthApp(stored.ClientId, secret, stored.Endpoints);
+        _redirectUri = stored.RedirectUri;
+        _preset = stored.Preset;
+        _customAuthorizeUrl = stored.Preset == SmartThingsSettings.CustomPreset ? stored.AuthorizeUrl : null;
+        _customTokenUrl = stored.Preset == SmartThingsSettings.CustomPreset ? stored.TokenUrl : null;
+        return NewSignIn(null);
     }
 
     public async Task<FlowStep> ContinueAsync(string stepId, JsonElement input, CancellationToken cancellationToken)
@@ -77,6 +118,9 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 Reset();
                 switch (input.Str("choice"))
                 {
+                    case ReauthorizeChoice when StoredApp(context) is not null:
+                        _mode = SmartThingsAuthMode.OAuth;
+                        return await ReauthorizeAsync(context, cancellationToken).ConfigureAwait(false);
                     case CreateAppChoice:
                         _mode = SmartThingsAuthMode.OAuth;
                         return CreateApp(null);
@@ -137,7 +181,7 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
 
     // ---- steps --------------------------------------------------------------------------------------------------------
 
-    private static ChooseStep ModeChoice(bool existing) => new(
+    private static ChooseStep ModeChoice(bool existing, bool storedApp) => new(
         ModeStep,
         new LocalizedText("Connect SmartThings", "Conectar a SmartThings"),
         existing
@@ -148,12 +192,22 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 "ControlHome reads and controls the devices of one SmartThings location through Samsung's cloud.",
                 "O ControlHome lê e controla os dispositivos de um local da SmartThings pela nuvem da Samsung."),
         [
+            .. storedApp
+                ? (FlowChoice[])[new FlowChoice(
+                    ReauthorizeChoice,
+                    new LocalizedText("Sign in with your SmartThings app (recommended)", "Entrar com o seu app SmartThings (recomendado)"),
+                    new LocalizedText(
+                        "Uses the app this integration already has. Only the Samsung sign-in is needed.",
+                        "Usa o app que esta integração já tem. Só falta entrar na conta Samsung."))]
+                : [],
             new FlowChoice(
                 CreateAppChoice,
-                new LocalizedText("Let ControlHome create your app (recommended)", "Deixe o ControlHome criar o seu app (recomendado)"),
+                storedApp
+                    ? new LocalizedText("Let ControlHome create a new app", "Deixe o ControlHome criar um app novo")
+                    : new LocalizedText("Let ControlHome create your app (recommended)", "Deixe o ControlHome criar o seu app (recomendado)"),
                 new LocalizedText(
-                    "Paste a SmartThings token once. ControlHome creates your own app with it, then keeps the sign-in fresh by itself.",
-                    "Cole um token da SmartThings uma vez. O ControlHome cria o seu próprio app com ele e depois mantém o acesso válido sozinho.")),
+                    "You paste a SmartThings token once, only so ControlHome can create your app. The connection then renews itself and does not expire after 24 hours.",
+                    "Você cola um token da SmartThings uma vez, só para o ControlHome criar o seu app. Depois a conexão se renova sozinha e não expira em 24 horas.")),
             new FlowChoice(
                 SmartThingsSettings.OAuthMode,
                 new LocalizedText("I already have a SmartThings app", "Já tenho um app SmartThings"),
@@ -162,10 +216,10 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                     "Use o client id e o secret de um app que você criou com a CLI da SmartThings.")),
             new FlowChoice(
                 SmartThingsSettings.PatMode,
-                new LocalizedText("Personal access token (development only)", "Token de acesso pessoal (só para desenvolvimento)"),
+                new LocalizedText("Personal access token (testing only)", "Token de acesso pessoal (só para testes)"),
                 new LocalizedText(
-                    "Expires 24 hours after you created it; then the integration asks you to sign in again.",
-                    "Expira 24 horas depois de criado; então a integração pede para entrar novamente.")),
+                    "Not for everyday use: the connection stops 24 hours after the token was created, and you have to paste a new one.",
+                    "Não serve para o dia a dia: a conexão para 24 horas depois de o token ser criado, e você precisa colar outro.")),
         ]);
 
     /// <summary>The tokens page and the field for the token ControlHome creates the app with.</summary>
@@ -184,8 +238,8 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 Required: true,
                 Secret: true,
                 new LocalizedText(
-                    "Used once to create the app; never stored. It expires by itself after 24 hours.",
-                    "Usado uma vez para criar o app; nunca é guardado. Ele expira sozinho depois de 24 horas.")));
+                    "Used only to create the app, then discarded. Its 24-hour limit does not affect the connection.",
+                    "Usado só para criar o app e depois descartado. O limite de 24 horas dele não afeta a conexão.")));
     }
 
     private async Task<FlowStep> SubmitCreateAppAsync(FlowContext context, JsonElement input, CancellationToken cancellationToken)
@@ -505,10 +559,16 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
 
     private FormStep TokenForm(IReadOnlyDictionary<string, LocalizedText> errors) => new(
         TokenStep,
-        new LocalizedText("Personal access token (development only)", "Token de acesso pessoal (só para desenvolvimento)"),
+        new LocalizedText("Personal access token (testing only)", "Token de acesso pessoal (só para testes)"),
         new LocalizedText(
-            "Create a token at account.smartthings.com/tokens with the scopes r:locations:*, r:devices:* and x:devices:*. Tokens created since 30 Dec 2024 expire 24 hours after they were created: the integration then stops and asks you to sign in again. Use your own SmartThings app for everyday use.",
-            "Crie um token em account.smartthings.com/tokens com os escopos r:locations:*, r:devices:* e x:devices:*. Tokens criados desde 30/12/2024 expiram 24 horas depois de criados: a integração então para e pede para entrar novamente. Para o dia a dia, use o seu próprio app SmartThings."),
+            "Attention: this connection stops 24 hours after the token was created. For everyday use, go back and choose \"Let ControlHome create your app\".\n\n"
+                + "1. Open account.smartthings.com/tokens and sign in with your Samsung account.\n"
+                + "2. Generate a new token with the permissions to see locations, see devices and control devices (scopes r:locations:*, r:devices:* and x:devices:*).\n"
+                + "3. Copy the token and paste it below.",
+            "Atenção: esta conexão para 24 horas depois de o token ser criado. Para o dia a dia, volte e escolha \"Deixe o ControlHome criar o seu app\".\n\n"
+                + "1. Abra account.smartthings.com/tokens e entre com a sua conta Samsung.\n"
+                + "2. Gere um token novo com as permissões de ver locais, ver dispositivos e controlar dispositivos (escopos r:locations:*, r:devices:* e x:devices:*).\n"
+                + "3. Copie o token e cole abaixo."),
         [
             new FieldSchema(
                 SmartThingsSettings.PersonalAccessTokenField,

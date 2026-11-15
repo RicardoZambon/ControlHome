@@ -145,7 +145,7 @@ const onSubmit = handleSubmit(async (values) => {
             </FormItem>
           </FormField>
         </div>
-        <p class="text-sm text-muted-foreground">{{ t('floors.form.sizeHelp') }}</p>
+        <p class="text-sm text-muted-foreground">{{ t('floors.form.sizeHelp', { max: FLOOR_LIMITS.maxSizeCm / 100 }) }}</p>
       </div>
     </div>
 
