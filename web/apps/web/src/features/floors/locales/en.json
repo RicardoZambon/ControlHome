@@ -36,14 +36,14 @@
   },
   "form": {
     "createTitle": "Add a floor",
-    "createDescription": "Name it and give it a size. You can change both later.",
+    "createDescription": "Name it and give it a size. You can change both later in the editor's Floor tab.",
     "name": "Name",
     "namePlaceholder": "Ground floor",
     "level": "Level",
     "levelHelp": "0 is the ground floor, 1 the floor above it, -1 a basement.",
     "width": "Width (m)",
     "height": "Depth (m)",
-    "sizeHelp": "The outside size of the floor; rooms are drawn inside it.",
+    "sizeHelp": "The outside size of the floor, up to {max} m on each side. Rooms are drawn inside it.",
     "create": "Create and draw",
     "creating": "Creating…"
   },

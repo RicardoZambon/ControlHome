@@ -36,6 +36,7 @@ In the wizard, choose **Let ControlHome create your app**.
 
 ControlHome uses the token once. It creates an app called *ControlHome* with the scopes and redirect URI listed below,
 then continues straight to the SmartThings sign-in. The token is never stored, and it expires by itself after 24 hours.
+That limit does not apply to the connection: it uses the app's own sign-in, which ControlHome renews by itself.
 The redirect URI is always `https://httpbin.org/get` on this path; to use your own page, create the app with the CLI.
 
 This is the same request the CLI sends (`POST /apps`, falling back to `/smartapps`). It has not been tried against a
@@ -105,12 +106,15 @@ ControlHome's `state`) in the address. You then copy that address back into Cont
    anyway, only the first one to start runs; the other shows an error.)
 
 To sign in again (expired or revoked authorization, a new client secret): open the integration and choose *Sign in
-again*. Devices, rooms and automations are kept. A blank client secret keeps the stored one while the client id stays
-the same. Signing in to a different location is refused (add it as a new integration instead).
+again*. Devices, rooms and automations are kept. When the integration already has an app, the first choice, *Sign in
+with your SmartThings app*, reuses it and goes straight to the SmartThings sign-in (no token needed). With *I already
+have a SmartThings app*, a blank client secret keeps the stored one while the client id stays the same. Signing in to a
+different location is refused (add it as a new integration instead). An integration in personal access token mode
+moves to an app by signing in again with *Let ControlHome create your app*.
 
 ## Development mode: personal access token
 
-For trying things out only: choose *Personal access token* and paste a token from
+For trying things out only: choose *Personal access token (testing only)* and paste a token from
 [account.smartthings.com/tokens](https://account.smartthings.com/tokens) with the scopes `r:locations:*`,
 `r:devices:*` and `x:devices:*`. **Tokens created since 30 Dec 2024 expire 24 hours after they were created**; the
 integration then shows *Needs re-authorization*. While it runs, its status says so ("Development mode: … expires …").

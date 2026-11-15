@@ -3,7 +3,7 @@ import { Input, Label } from '@controlhome/ui'
 import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { parseDecimal } from '../../../lib/validation'
-import type { EditorMessage, FloorField } from './draft'
+import { FLOOR_LIMITS, type EditorMessage, type FloorField } from './draft'
 import { useEditor } from './useEditorState'
 
 /**
@@ -54,7 +54,7 @@ const fields = computed(() => [
     label: t('floors.form.height'),
     value: format(floor.value.heightCm / 100),
     scale: 100,
-    help: t('floors.form.sizeHelp'),
+    help: t('floors.form.sizeHelp', { max: FLOOR_LIMITS.maxSizeCm / 100 }),
     inputmode: 'decimal' as const,
   },
   {

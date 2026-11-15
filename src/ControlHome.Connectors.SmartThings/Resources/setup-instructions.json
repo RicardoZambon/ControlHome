@@ -38,13 +38,15 @@
         "Open the SmartThings tokens page and sign in with your Samsung account.",
         "Generate a new token with any name. Under Apps, tick every permission.",
         "Copy the token and paste it below.",
-        "ControlHome uses the token once to create your own app \"ControlHome\" with the redirect URI {redirect}, then forgets it."
+        "ControlHome uses the token once to create your own app \"ControlHome\" with the redirect URI {redirect}, then forgets it.",
+        "Next you sign in to SmartThings with that app. This connection renews itself: the token's 24-hour limit does not apply to it."
       ],
       "ptBr": [
         "Abra a página de tokens da SmartThings e entre com a sua conta Samsung.",
         "Gere um token novo com qualquer nome. Em Apps, marque todas as permissões.",
         "Copie o token e cole abaixo.",
-        "O ControlHome usa o token uma única vez para criar o seu próprio app \"ControlHome\" com a redirect URI {redirect} e depois o descarta."
+        "O ControlHome usa o token uma única vez para criar o seu próprio app \"ControlHome\" com a redirect URI {redirect} e depois o descarta.",
+        "Em seguida você entra na SmartThings com esse app. Essa conexão se renova sozinha: o limite de 24 horas do token não vale para ela."
       ]
     }
   }

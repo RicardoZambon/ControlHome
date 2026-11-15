@@ -355,8 +355,10 @@ public sealed class SetupFlowTests : IDisposable
         await flow.StartAsync(Context(), Ct);
 
         var form = (FormStep)await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("pat"), Ct);
-        form.Description!.En.ShouldContain("expire 24 hours after they were created");
-        form.Description.PtBr.ShouldContain("expiram 24 horas depois de criados");
+        form.Description!.En.ShouldStartWith("Attention: this connection stops 24 hours after the token was created.");
+        form.Description.PtBr.ShouldContain("para 24 horas depois de o token ser criado");
+        form.Description.PtBr.ShouldContain("\n1. ");
+        form.Description.PtBr.ShouldContain("\n3. ");
         form.Fields.ShouldHaveSingleItem().Secret.ShouldBeTrue();
 
         var done = (DoneStep)await flow.ContinueAsync(SmartThingsSetupFlow.TokenStep, Json(new JsonObject { ["personalAccessToken"] = "pat-0001" }), Ct);
@@ -418,6 +420,54 @@ public sealed class SetupFlowTests : IDisposable
         done.Config.GetProperty("locationId").GetString().ShouldBe(Location1); // no choice: its own location
         done.Config.GetProperty("pollIntervalSeconds").GetInt32().ShouldBe(45);
         done.Secrets[SecretKeys.ClientSecret].ShouldBe("stored-secret-0001");
+    }
+
+    [Fact]
+    public async Task Reauthorizing_with_the_stored_app_goes_straight_to_the_sign_in()
+    {
+        TokenEndpoint();
+        Locations(Location1);
+        var existing = Existing(new MemorySecretStore(new Dictionary<string, string> { [SecretKeys.ClientSecret] = "stored-secret-0001" }));
+        await using var flow = Flow();
+
+        var mode = (ChooseStep)await flow.StartAsync(Context(existing), Ct);
+        mode.Choices.Select(c => c.Key).ShouldBe(["reauthorize", "createApp", "oauth", "pat"]);
+        mode.Choices[0].Label.PtBr.ShouldContain("recomendado");
+        mode.Choices[1].Label.PtBr.ShouldNotContain("recomendado");
+
+        var signIn = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("reauthorize"), Ct);
+        signIn.StepId.ShouldBe(SmartThingsSetupFlow.AuthorizeStep);
+        signIn.Url.Query.ShouldContain($"client_id={FakeSmartThings.ClientId}");
+        var done = (DoneStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=code-0001&state={flow.State}"), Ct);
+
+        _fake.Requests("/oauth/token").ShouldHaveSingleItem().RequestMessage!.Headers!["Authorization"].ShouldHaveSingleItem()
+            .ShouldBe("Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{FakeSmartThings.ClientId}:stored-secret-0001")));
+        done.Config.GetProperty("locationId").GetString().ShouldBe(Location1);
+        done.Secrets[SecretKeys.ClientSecret].ShouldBe("stored-secret-0001");
+    }
+
+    [Fact]
+    public async Task Reauthorizing_without_a_stored_secret_asks_for_the_app_again()
+    {
+        var existing = Existing(EmptySecretStore.Instance);
+        await using var flow = Flow();
+        await flow.StartAsync(Context(existing), Ct);
+
+        var app = (FormStep)await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("reauthorize"), Ct);
+
+        app.StepId.ShouldBe(SmartThingsSetupFlow.AppStep);
+        app.Values!.Value.GetProperty("clientId").GetString().ShouldBe(FakeSmartThings.ClientId);
+    }
+
+    [Fact]
+    public async Task The_stored_app_choice_is_only_offered_when_signing_in_again_with_an_app()
+    {
+        await using var flow = Flow();
+        await flow.StartAsync(Context(), Ct);
+
+        var abort = (AbortStep)await flow.ContinueAsync(SmartThingsSetupFlow.ModeStep, Choice("reauthorize"), Ct);
+
+        abort.Reason.ShouldBe("unknown_choice");
     }
 
     [Fact]
