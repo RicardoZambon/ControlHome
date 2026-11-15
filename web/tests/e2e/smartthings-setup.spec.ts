@@ -38,8 +38,9 @@ test('the SmartThings wizard offers to create the app and lists every step on it
     'https://account.smartthings.com/tokens',
   )
   const createSteps = await description(page).innerText()
-  expect(createSteps.trim().split('\n')).toHaveLength(4)
+  expect(createSteps.trim().split('\n')).toHaveLength(5)
   expect(createSteps.trim()).toMatch(/^1\. Open the SmartThings tokens page/)
+  expect(createSteps).toContain("the token's 24-hour limit does not apply to it")
   await expect(page.getByLabel('SmartThings token')).toHaveAttribute('type', 'password')
   await gates.check('smartthings, create the app')
   await page.screenshot({ path: testInfo.outputPath('2-create-app.png'), fullPage: true })
