@@ -12,7 +12,7 @@
 # ---------------------------------------------------------------------------------------------------------------------
 # web: npm workspace -> web/apps/web/dist
 # ---------------------------------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM node:24.22.0-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS web
+FROM --platform=$BUILDPLATFORM node:24.22.2-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS web
 WORKDIR /src/web
 ENV CI=true \
     NPM_CONFIG_AUDIT=false \
@@ -33,7 +33,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------------------------------------------------
 # build: dotnet publish for the target architecture -> /out
 # ---------------------------------------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.403-noble@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.404-noble@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb AS build
 ARG TARGETARCH
 WORKDIR /src
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
