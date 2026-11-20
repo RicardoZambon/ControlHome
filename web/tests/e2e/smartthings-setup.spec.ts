@@ -2,8 +2,9 @@ import type { Page } from '@playwright/test'
 import { completeSetup, expect, resetApp, test } from './fixtures'
 
 // The SmartThings setup wizard up to the step that needs a real Samsung account: the three ways to sign in, the
-// "ControlHome creates your app" step (the tokens page and the token field) and the CLI instructions, each a numbered
-// list with one step per line. Nothing here talks to SmartThings: no token is ever submitted.
+// "ControlHome creates your app" steps (the ControlHome address, then the Samsung sign-in as the SmartThings CLI) and
+// the CLI instructions, each a numbered list with one step per line. Nothing here talks to SmartThings: no sign-in is
+// ever submitted.
 
 const wizardAt = (page: Page, type: string) => page.locator(`[data-slot="flow-wizard"][data-step="${type}"]`)
 
@@ -29,19 +30,24 @@ test('the SmartThings wizard offers to create the app and lists every step on it
   await gates.check('smartthings, sign-in choice')
   await page.screenshot({ path: testInfo.outputPath('1-choice.png'), fullPage: true })
 
-  // ControlHome creates the app: the tokens page, the steps one per line, the token field (a secret).
+  // ControlHome creates the app: the optional ControlHome address, then the Samsung sign-in as the SmartThings CLI
+  // (its link, the steps one per line, the field for the address of the page that does not open).
   await page.getByText('Let ControlHome create your app (recommended)').click()
   await page.locator('[data-slot="flow-continue"]').click()
+  await expect(wizardAt(page, 'form')).toBeVisible()
+  const addressSteps = await description(page).innerText()
+  expect(addressSteps.trim().split('\n')).toHaveLength(3)
+  await expect(page.getByLabel('ControlHome address (optional)')).toBeVisible()
+  await page.locator('[data-slot="flow-continue"]').click()
+
   await expect(wizardAt(page, 'externalUrl')).toBeVisible()
-  await expect(page.getByRole('link', { name: /account\.smartthings\.com/ })).toHaveAttribute(
-    'href',
-    'https://account.smartthings.com/tokens',
-  )
+  const signIn = page.getByRole('link', { name: /oauthin-regional\.api\.smartthings\.com/ })
+  await expect(signIn).toHaveAttribute('href', /client_id=d18cf96e-c626-4433-bf51-ddbb10c5d1ed/)
+  await expect(signIn).toHaveAttribute('href', /code_challenge_method=S256/)
   const createSteps = await description(page).innerText()
-  expect(createSteps.trim().split('\n')).toHaveLength(5)
-  expect(createSteps.trim()).toMatch(/^1\. Open the SmartThings tokens page/)
-  expect(createSteps).toContain("the token's 24-hour limit does not apply to it")
-  await expect(page.getByLabel('SmartThings token')).toHaveAttribute('type', 'password')
+  expect(createSteps.trim().split('\n')).toHaveLength(3)
+  expect(createSteps).toContain('http://localhost:61973/finish')
+  await expect(page.getByLabel('Address of the page that did not open')).toHaveAttribute('type', 'password')
   await gates.check('smartthings, create the app')
   await page.screenshot({ path: testInfo.outputPath('2-create-app.png'), fullPage: true })
 

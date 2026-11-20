@@ -192,6 +192,11 @@ internal sealed class FakeSmartThings : IDisposable
         ApiBaseUrl = new Uri(Url + "/v1/"),
         DocumentedEndpoints = new OAuthEndpoints(new Uri("https://auth.example.test/oauth/authorize"), new Uri(Url + "/oauth/token")),
         HomeAssistantEndpoints = new OAuthEndpoints(new Uri("https://auth.example.test/ha/authorize"), new Uri(Url + "/oauth/ha-token")),
+        CliLogin = SmartThingsOptions.Default.CliLogin with
+        {
+            AuthorizeUrl = new Uri("https://auth.example.test/cli/authorize"),
+            TokenUrl = new Uri(Url + "/oauth/cli-token"),
+        },
         Jitter = 0,
         Random = new Random(7),
         GetRetryDelay = TimeSpan.FromMilliseconds(10),

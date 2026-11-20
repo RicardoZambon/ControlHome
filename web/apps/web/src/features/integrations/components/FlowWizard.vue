@@ -3,7 +3,7 @@ import type { ConnectorDto, FlowStepDto } from '@controlhome/api-client'
 import { Button, Label, Progress, RadioGroup, RadioGroupItem, cn } from '@controlhome/ui'
 import { CircleCheck, ExternalLink, OctagonAlert, RefreshCw } from '@lucide/vue'
 import { useNow } from '@vueuse/core'
-import { computed, onMounted, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
 import SchemaField from '../../../components/schema/SchemaField.vue'
@@ -22,6 +22,7 @@ import {
   stepType,
   useIntegrationFlow,
 } from '../flow'
+import { listenForCallback } from '../oauthCallback'
 
 /**
  * One setup or re-authorization flow, step by step: a form (the shared schema form, with the server's field errors), an
@@ -103,6 +104,26 @@ const pasteField = computed<SchemaFieldDefinition | null>(() => {
   }
 })
 
+// The callback page in another tab hands over the address SmartThings sent the browser to: answer with it, as if pasted.
+let stopListening = () => {}
+watch(
+  () =>
+    type.value === 'externalUrl' && pasteField.value ? `${step.value?.flowId}/${step.value?.stepId}` : null,
+  (waiting) => {
+    stopListening()
+    stopListening = () => {}
+    if (!waiting) return
+    stopListening = listenForCallback((url) => {
+      if (flow.busy.value || !step.value) return false
+      pasted.value = url
+      void flow.answer(pasteBackInput(step.value, url))
+      return true
+    })
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => stopListening())
+
 // --- Progress ----------------------------------------------------------------------------------------------------------
 const left = computed(() => secondsLeft(flow.progressEndsAt.value, now.value.getTime()))
 const total = ref<number | null>(null)
@@ -179,7 +200,10 @@ const abortMessage = computed(
         <h2 class="font-serif text-2xl leading-tight font-medium tracking-tight text-balance sm:text-3xl">
           {{ title || connectorName }}
         </h2>
-        <p v-if="description" class="max-w-prose text-pretty whitespace-pre-line text-muted-foreground">
+        <p
+          v-if="description"
+          class="max-w-prose text-pretty whitespace-pre-line wrap-anywhere text-muted-foreground"
+        >
           {{ description }}
         </p>
       </header>
@@ -227,7 +251,11 @@ const abortMessage = computed(
           <p class="text-sm text-muted-foreground">
             {{ t('integrations.flow.external', { host: externalHost }) }}
           </p>
-          <Button v-if="externalUrl" as-child class="justify-self-start">
+          <Button
+            v-if="externalUrl"
+            as-child
+            class="h-auto max-w-full justify-self-start py-2 text-left whitespace-normal wrap-anywhere"
+          >
             <a :href="externalUrl" target="_blank" rel="noopener noreferrer">
               <ExternalLink />
               {{ t('integrations.flow.openPage', { host: externalHost }) }}

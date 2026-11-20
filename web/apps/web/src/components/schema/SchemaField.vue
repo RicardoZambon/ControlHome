@@ -328,7 +328,7 @@ const jsonText = computed(() =>
       </div>
     </template>
 
-    <p v-if="help" :id="helpId" class="text-sm text-muted-foreground">{{ help }}</p>
+    <p v-if="help" :id="helpId" class="text-sm wrap-anywhere text-muted-foreground">{{ help }}</p>
     <p v-if="error" :id="errorId" class="text-sm text-destructive" role="alert">{{ error }}</p>
   </div>
 </template>

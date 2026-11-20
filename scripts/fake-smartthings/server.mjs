@@ -5,9 +5,10 @@
 //   node scripts/fake-smartthings/server.mjs [port]        (default 18090)
 //
 // Then run the API in Development with Development__SmartThingsApiUrl=http://localhost:18090/ and add a SmartThings
-// integration with any token (e.g. "fake-token"): in "Personal access token" mode, or with "Let ControlHome create your
-// app" (the fake creates an app; open the sign-in link's address only to copy its state, then paste
-// https://httpbin.org/get?code=fake&state=<that state> back into the wizard).
+// integration: in "Personal access token" mode with any token (e.g. "fake-token"), or with "Let ControlHome create your
+// app". There, copy the state from each sign-in link's address (nothing to sign in to) and paste
+// http://localhost:61973/finish?code=fake&state=<that state> (the CLI sign-in; the fake then creates an app), then
+// https://httpbin.org/get?code=fake&state=<the next state> (or <ControlHome address>/oauth/callback?… with an address).
 import { createServer } from 'node:http'
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -50,17 +51,25 @@ createServer((req, res) => {
   const path = url.pathname.replace(/^\/v1/, '')
   console.log(req.method, url.pathname + url.search)
 
-  // OAuth code exchange and refresh (HTTP Basic client authentication): any client and code are accepted.
+  // OAuth code exchange and refresh: the household's app (HTTP Basic client authentication) or the SmartThings CLI's
+  // sign-in (a public client sending a PKCE code_verifier). Any client and code are accepted.
   if (req.method === 'POST' && path === '/oauth/token') {
-    if (!req.headers.authorization?.startsWith('Basic ')) return json(res, 401, { error: 'invalid_client' })
-    const stamp = Date.now()
-    return json(res, 200, {
-      access_token: `fake-access-${stamp}`,
-      token_type: 'bearer',
-      refresh_token: `fake-refresh-${stamp}`,
-      expires_in: 86399,
-      scope: 'r:locations:* r:devices:* x:devices:*',
+    let body = ''
+    req.on('data', (chunk) => (body += chunk))
+    req.on('end', () => {
+      const form = new URLSearchParams(body)
+      const basic = req.headers.authorization?.startsWith('Basic ')
+      if (!basic && !form.get('code_verifier')) return json(res, 401, { error: 'invalid_client' })
+      const stamp = Date.now()
+      json(res, 200, {
+        access_token: `fake-${basic ? 'access' : 'cli'}-${stamp}`,
+        token_type: 'bearer',
+        refresh_token: `fake-refresh-${stamp}`,
+        expires_in: 86399,
+        scope: basic ? 'r:locations:* r:devices:* x:devices:*' : 'controller:stCli',
+      })
     })
+    return
   }
 
   if (!req.headers.authorization?.startsWith('Bearer ')) return json(res, 401, { error: { code: 'Unauthorized' } })

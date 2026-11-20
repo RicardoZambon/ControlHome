@@ -26,7 +26,6 @@
     ]
   },
   "create": {
-    "tokensUrl": "https://account.smartthings.com/tokens",
     "appDisplayName": "ControlHome",
     "appDescription": "Self-hosted home control",
     "title": {
@@ -35,18 +34,26 @@
     },
     "steps": {
       "en": [
-        "Open the SmartThings tokens page and sign in with your Samsung account.",
-        "Generate a new token with any name. Under Apps, tick every permission.",
-        "Copy the token and paste it below.",
-        "ControlHome uses the token once to create your own app \"ControlHome\" with the redirect URI {redirect}, then forgets it.",
-        "Next you sign in to SmartThings with that app. This connection renews itself: the token's 24-hour limit does not apply to it."
+        "Optional: enter the https:// address you open ControlHome at. SmartThings then sends you straight back here after you sign in. Without it, you paste that address yourself ({redirect}).",
+        "Next you sign in to Samsung the way the SmartThings CLI does. ControlHome then creates your own app \"ControlHome\" with the scopes {scopes}.",
+        "Then you sign in once more, with that app. This connection renews itself."
       ],
       "ptBr": [
-        "Abra a página de tokens da SmartThings e entre com a sua conta Samsung.",
-        "Gere um token novo com qualquer nome. Em Apps, marque todas as permissões.",
-        "Copie o token e cole abaixo.",
-        "O ControlHome usa o token uma única vez para criar o seu próprio app \"ControlHome\" com a redirect URI {redirect} e depois o descarta.",
-        "Em seguida você entra na SmartThings com esse app. Essa conexão se renova sozinha: o limite de 24 horas do token não vale para ela."
+        "Opcional: informe o endereço https:// em que você abre o ControlHome. Assim a SmartThings te manda direto de volta para cá depois que você entrar. Sem ele, você cola esse endereço você mesmo ({redirect}).",
+        "Em seguida você entra na Samsung do mesmo jeito que a CLI da SmartThings faz. O ControlHome então cria o seu próprio app \"ControlHome\" com os escopos {scopes}.",
+        "Depois você entra mais uma vez, com esse app. Essa conexão se renova sozinha."
+      ]
+    },
+    "cliSteps": {
+      "en": [
+        "Open the Samsung page and sign in with your Samsung account. Allow access if asked.",
+        "Your browser then tries to open http://localhost:61973/finish and shows an error such as \"This site can't be reached\". That is expected.",
+        "Copy the whole address from the address bar of that page and paste it below."
+      ],
+      "ptBr": [
+        "Abra a página da Samsung e entre com a sua conta Samsung. Permita o acesso, se for pedido.",
+        "O navegador então tenta abrir http://localhost:61973/finish e mostra um erro como \"Não é possível acessar esse site\". Isso é esperado.",
+        "Copie o endereço inteiro da barra de endereços dessa página e cole abaixo."
       ]
     }
   }

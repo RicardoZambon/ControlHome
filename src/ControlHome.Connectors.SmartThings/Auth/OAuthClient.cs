@@ -18,8 +18,41 @@ internal sealed record OAuthApp(string ClientId, string ClientSecret, OAuthEndpo
 }
 
 /// <summary>
+/// The SmartThings CLI's sign-in: a public client (no secret, PKCE) whose only allowed redirect is a localhost page.
+/// </summary>
+internal sealed record CliLogin(string ClientId, Uri AuthorizeUrl, Uri TokenUrl, string RedirectUri, string Scope)
+{
+    /// <summary>The CLI's sign-in page for this <paramref name="challenge"/> and <paramref name="state"/>.</summary>
+    public Uri BuildUrl(string challenge, string state)
+    {
+        var query = string.Join('&', new (string Key, string Value)[]
+        {
+            ("response_type", "code"),
+            ("client_id", ClientId),
+            ("scope", Scope),
+            ("redirect_uri", RedirectUri),
+            ("code_challenge", challenge),
+            ("code_challenge_method", "S256"),
+            ("client_type", "USER_LEVEL"),
+            ("state", state),
+        }.Select(p => Uri.EscapeDataString(p.Key) + "=" + Uri.EscapeDataString(p.Value)));
+        return new UriBuilder(AuthorizeUrl) { Query = query }.Uri;
+    }
+}
+
+/// <summary>PKCE (RFC 7636): a random verifier and its S256 challenge.</summary>
+internal static class Pkce
+{
+    public static string NewVerifier() => Base64Url(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+    public static string Challenge(string verifier) => Base64Url(System.Security.Cryptography.SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+
+    private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+}
+
+/// <summary>
 /// The OAuth token endpoint: the authorization-code exchange and the refresh, both with HTTP Basic client
-/// authentication. Each call is sent exactly once (never retried: a refresh token is single-use, and a lost answer to
+/// authentication (the CLI's sign-in: a public client with PKCE instead). Each call is sent exactly once (never retried: a refresh token is single-use, and a lost answer to
 /// a refresh cannot be replayed).
 /// </summary>
 internal sealed class OAuthClient(HttpClient http, TimeProvider time, TimeSpan timeout)
@@ -48,6 +81,28 @@ internal sealed class OAuthClient(HttpClient http, TimeProvider time, TimeSpan t
             previousRefreshToken: null,
             cancellationToken);
 
+    /// <summary>
+    /// The CLI sign-in's code for an access token (used once, to create the household's app; never stored). No client
+    /// secret: the PKCE <paramref name="verifier"/> proves this is the sign-in that asked for the code.
+    /// </summary>
+    public async Task<string> ExchangeCliCodeAsync(CliLogin cli, string code, string verifier, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(cli);
+        var tokens = await PostAsync(
+            cli.TokenUrl,
+            basic: null,
+            [
+                new("grant_type", "authorization_code"),
+                new("client_id", cli.ClientId),
+                new("code_verifier", verifier),
+                new("code", code),
+                new("redirect_uri", cli.RedirectUri),
+            ],
+            previousRefreshToken: string.Empty,
+            cancellationToken).ConfigureAwait(false);
+        return tokens.AccessToken;
+    }
+
     public Task<TokenSet> RefreshAsync(OAuthApp app, string refreshToken, CancellationToken cancellationToken) =>
         PostAsync(
             app,
@@ -59,19 +114,32 @@ internal sealed class OAuthClient(HttpClient http, TimeProvider time, TimeSpan t
             refreshToken,
             cancellationToken);
 
-    private async Task<TokenSet> PostAsync(
+    private Task<TokenSet> PostAsync(
         OAuthApp app,
+        IEnumerable<KeyValuePair<string, string>> form,
+        string? previousRefreshToken,
+        CancellationToken cancellationToken) =>
+        PostAsync(app.Endpoints.TokenUrl, app, form, previousRefreshToken, cancellationToken);
+
+    /// <param name="basic">The app for HTTP Basic client authentication; <c>null</c> for a public client.</param>
+    private async Task<TokenSet> PostAsync(
+        Uri tokenUrl,
+        OAuthApp? basic,
         IEnumerable<KeyValuePair<string, string>> form,
         string? previousRefreshToken,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, app.Endpoints.TokenUrl)
+        using var request = new HttpRequestMessage(HttpMethod.Post, tokenUrl)
         {
             Content = new FormUrlEncodedContent(form),
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue(
-            "Basic",
-            Convert.ToBase64String(Encoding.UTF8.GetBytes($"{app.ClientId}:{app.ClientSecret}")));
+        if (basic is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue(
+                "Basic",
+                Convert.ToBase64String(Encoding.UTF8.GetBytes($"{basic.ClientId}:{basic.ClientSecret}")));
+        }
+
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         using var timeoutSource = new CancellationTokenSource(timeout, time);
