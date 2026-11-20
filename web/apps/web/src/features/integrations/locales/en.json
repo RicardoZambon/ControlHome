@@ -124,5 +124,14 @@
     "enabledToast": "{name} is on.",
     "disabledToast": "{name} is off.",
     "remove": "Remove integration"
+  },
+  "oauthCallback": {
+    "title": "Back from the sign-in",
+    "sending": "Handing the sign-in to ControlHome…",
+    "done": "Done. ControlHome finishes the sign-in in its other tab. You can close this tab.",
+    "manual": "Could not find the ControlHome setup in another tab of this browser. Copy this address and paste it in the setup step.",
+    "address": "Address of this page",
+    "copy": "Copy address",
+    "copied": "Copied"
   }
 }

@@ -3,7 +3,7 @@ import type { ConnectorDto, FlowStepDto } from '@controlhome/api-client'
 import { Button, Label, Progress, RadioGroup, RadioGroupItem, cn } from '@controlhome/ui'
 import { CircleCheck, ExternalLink, OctagonAlert, RefreshCw } from '@lucide/vue'
 import { useNow } from '@vueuse/core'
-import { computed, onMounted, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FormAlert from '../../../components/FormAlert.vue'
 import SchemaField from '../../../components/schema/SchemaField.vue'
@@ -22,6 +22,7 @@ import {
   stepType,
   useIntegrationFlow,
 } from '../flow'
+import { listenForCallback } from '../oauthCallback'
 
 /**
  * One setup or re-authorization flow, step by step: a form (the shared schema form, with the server's field errors), an
@@ -102,6 +103,26 @@ const pasteField = computed<SchemaFieldDefinition | null>(() => {
     help: field.help ? localized(field.help, locale.value) : undefined,
   }
 })
+
+// The callback page in another tab hands over the address SmartThings sent the browser to: answer with it, as if pasted.
+let stopListening = () => {}
+watch(
+  () =>
+    type.value === 'externalUrl' && pasteField.value ? `${step.value?.flowId}/${step.value?.stepId}` : null,
+  (waiting) => {
+    stopListening()
+    stopListening = () => {}
+    if (!waiting) return
+    stopListening = listenForCallback((url) => {
+      if (flow.busy.value || !step.value) return false
+      pasted.value = url
+      void flow.answer(pasteBackInput(step.value, url))
+      return true
+    })
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => stopListening())
 
 // --- Progress ----------------------------------------------------------------------------------------------------------
 const left = computed(() => secondsLeft(flow.progressEndsAt.value, now.value.getTime()))

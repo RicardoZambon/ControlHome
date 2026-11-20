@@ -26,6 +26,14 @@ export const routes: RouteRecordRaw[] = [
     meta: { roles: ['Admin'], titleKey: 'integrations.detail.title' },
   },
   {
+    // An app created with the ControlHome address redirects here after the vendor sign-in (see oauthCallback.ts).
+    // Public: it only hands the address to the wizard open in another tab, which checks it.
+    path: '/oauth/callback',
+    name: 'oauth-callback',
+    component: () => import('./pages/OAuthCallbackPage.vue'),
+    meta: { public: true, layout: 'bare', titleKey: 'integrations.oauthCallback.title' },
+  },
+  {
     path: '/integrations/:id/reauth',
     name: 'integration-reauth',
     component: () => import('./pages/IntegrationSetupPage.vue'),

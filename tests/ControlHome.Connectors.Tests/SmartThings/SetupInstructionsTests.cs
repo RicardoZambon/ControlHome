@@ -18,7 +18,8 @@ public sealed class SetupInstructionsTests
         instructions.Description.En.ShouldContain("\n2. ");
         instructions.CreateDescription.En.ShouldStartWith("1. ");
         instructions.CreateDescription.PtBr.ShouldNotContain("{");
-        instructions.Create.TokensUrl.Scheme.ShouldBe("https");
+        instructions.CliSignInDescription.En.ShouldContain("http://localhost:61973/finish");
+        instructions.CliSignInDescription.PtBr.ShouldStartWith("1. ");
         instructions.Title.PtBr.ShouldNotBe(instructions.Title.En);
     }
 

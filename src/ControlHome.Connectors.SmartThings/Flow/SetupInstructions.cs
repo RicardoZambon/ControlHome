@@ -6,7 +6,7 @@ namespace ControlHome.Connectors.SmartThings.Flow;
 /// <summary>
 /// The wizard's instructions for the household's OAuth-In app — data (the embedded
 /// <c>Resources/setup-instructions.json</c>, kept in step with <c>docs/connectors/smartthings.md</c>), because Samsung keeps
-/// changing that path. Two ways: ControlHome creates the app with a short-lived token (<see cref="Create"/>), or the
+/// changing that path. Two ways: ControlHome signs in as the SmartThings CLI and creates the app (<see cref="Create"/>), or the
 /// household creates it with the SmartThings CLI and types in its client id and secret.
 /// </summary>
 internal sealed record SetupInstructions(
@@ -35,8 +35,11 @@ internal sealed record SetupInstructions(
     /// <summary>The CLI steps as a numbered list, one per line ("1. …"), with the placeholders filled in.</summary>
     public LocalizedText Description => new(Join(StepsEn), Join(StepsPtBr));
 
-    /// <summary>The steps for letting ControlHome create the app, as a numbered list.</summary>
+    /// <summary>The steps for letting ControlHome create the app (the address step), as a numbered list.</summary>
     public LocalizedText CreateDescription => new(Join(Create.StepsEn), Join(Create.StepsPtBr));
+
+    /// <summary>The steps of the Samsung sign-in as the SmartThings CLI (the address of the page that does not open).</summary>
+    public LocalizedText CliSignInDescription => new(Join(Create.CliStepsEn), Join(Create.CliStepsPtBr));
 
     /// <exception cref="InvalidOperationException">The data is incomplete.</exception>
     public static SetupInstructions Parse(JsonElement root)
@@ -47,6 +50,7 @@ internal sealed record SetupInstructions(
         var create = root.Get("create");
         var createTitle = create.Get("title");
         var (createEn, createPtBr) = Steps(create.Get("steps"), "create.steps");
+        var (cliEn, cliPtBr) = Steps(create.Get("cliSteps"), "create.cliSteps");
 
         return new SetupInstructions(
             docs,
@@ -58,14 +62,15 @@ internal sealed record SetupInstructions(
             en,
             ptBr,
             new AppCreation(
-                HttpsUrl(create.Str("tokensUrl"), "create.tokensUrl"),
                 create.Str("appDisplayName") ?? "ControlHome",
                 create.Str("appDescription") ?? "Self-hosted home control",
                 new LocalizedText(
                     createTitle.Str("en") ?? "Let ControlHome create your app",
                     createTitle.Str("ptBr") ?? "Deixe o ControlHome criar o seu app"),
                 createEn,
-                createPtBr));
+                createPtBr,
+                cliEn,
+                cliPtBr));
     }
 
     private static Uri HttpsUrl(string? value, string name) =>
@@ -92,11 +97,12 @@ internal sealed record SetupInstructions(
         .Replace("{redirect}", DefaultRedirectUri, StringComparison.Ordinal);
 }
 
-/// <summary>Letting ControlHome create the app with a short-lived personal access token: the tokens page and the app it makes.</summary>
+/// <summary>Letting ControlHome create the app: signed in as the SmartThings CLI, it makes this app.</summary>
 internal sealed record AppCreation(
-    Uri TokensUrl,
     string AppDisplayName,
     string AppDescription,
     LocalizedText Title,
     IReadOnlyList<string> StepsEn,
-    IReadOnlyList<string> StepsPtBr);
+    IReadOnlyList<string> StepsPtBr,
+    IReadOnlyList<string> CliStepsEn,
+    IReadOnlyList<string> CliStepsPtBr);

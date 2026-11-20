@@ -29,19 +29,22 @@ Every household uses its own app. There are two ways to make it.
 
 In the wizard, choose **Let ControlHome create your app**.
 
-1. Open [account.smartthings.com/tokens](https://account.smartthings.com/tokens) and sign in with your Samsung account
-   (the one your SmartThings devices are in).
-2. Generate a new token with any name. Under **Apps**, tick every permission.
-3. Paste the token into ControlHome.
+1. Optional: enter the `https://` address you open ControlHome at (for example `https://controlhome.example.com`). It
+   only has to open in your browser; it does not have to be on the internet.
+2. Sign in to Samsung with the account your SmartThings devices are in. ControlHome signs in the way the SmartThings
+   CLI does (the CLI's public client, with PKCE). Afterwards the browser tries to open `http://localhost:61973/finish`
+   and shows an error. That is expected: copy the whole address and paste it into ControlHome.
+3. ControlHome creates an app called *ControlHome* with the scopes listed below and goes on to the sign-in with that
+   app. The CLI sign-in's token is used once and never stored.
 
-ControlHome uses the token once. It creates an app called *ControlHome* with the scopes and redirect URI listed below,
-then continues straight to the SmartThings sign-in. The token is never stored, and it expires by itself after 24 hours.
-That limit does not apply to the connection: it uses the app's own sign-in, which ControlHome renews by itself.
-The redirect URI is always `https://httpbin.org/get` on this path; to use your own page, create the app with the CLI.
+The app's redirect URI is `<your address>/oauth/callback` when you entered an address. SmartThings then sends the browser
+back to ControlHome after the second sign-in, and the wizard finishes on its own. Without an address the redirect URI is
+`https://httpbin.org/get`, and you paste the address of that page.
 
-This is the same request the CLI sends (`POST /apps`, falling back to `/smartapps`). It has not been tried against a
-real account yet. If SmartThings refuses (a missing permission, or the paid plan described above), the wizard says so;
-use the CLI instead.
+Why not a token: SmartThings refuses to create apps with a personal access token (`403 Access forbidden to this app`,
+also reported on the SmartThings Community). The CLI's own sign-in may create them. The CLI's client only allows the
+`localhost` redirect, so that one address is always pasted. Samsung may restrict that client in the future; the CLI path
+below then still works.
 
 ### With the SmartThings CLI
 
@@ -83,7 +86,8 @@ ControlHome's `state`) in the address. You then copy that address back into Cont
 
 *Integrations → Add → Samsung SmartThings*, then:
 
-1. **Let ControlHome create your app (recommended)**: paste the token as described above, then go on with step 3.
+1. **Let ControlHome create your app (recommended)**: the address and the Samsung sign-in described above, then go on
+   with step 3.
    Or **I already have a SmartThings app**: the CLI instructions are shown with a link to this page.
 2. With your own CLI app, fill in the form:
 
@@ -249,8 +253,10 @@ holding a URL with user info or a token/key/signature/password parameter (it rea
 
 Tick each item with a real account (record the date and firmware where relevant):
 
-1. [ ] *Let ControlHome create your app* with a fresh token works: note which token permissions it needed, and the
-   status and body if SmartThings refused. Then `npx @smartthings/cli smartapps:create` creates an API Access app with
+1. [ ] *Let ControlHome create your app* works: the CLI sign-in's code is accepted and `POST /apps` with its token
+   creates the app (note the status and body if SmartThings refused). With an address, the second sign-in comes back to
+   `/oauth/callback` and the wizard finishes on its own. (Creating an app with a personal access token was refused
+   with 403 on 2026-11-19.) Then `npx @smartthings/cli smartapps:create` creates an API Access app with
    the three scopes and `https://httpbin.org/get` as redirect URI; the client id/secret are printed.
 2. [ ] Sign-in with the `documented` preset works (else: which preset works — `homeAssistant` or a custom
    `account.smartthings.com` authorize URL); the pasted httpbin address (address bar and JSON text) is accepted.

@@ -124,5 +124,14 @@
     "enabledToast": "{name} está ligada.",
     "disabledToast": "{name} está desligada.",
     "remove": "Remover integração"
+  },
+  "oauthCallback": {
+    "title": "De volta do login",
+    "sending": "Passando o login para o ControlHome…",
+    "done": "Pronto. O ControlHome conclui o login na outra aba. Você pode fechar esta aba.",
+    "manual": "Não encontrei a configuração do ControlHome em outra aba deste navegador. Copie este endereço e cole na etapa da configuração.",
+    "address": "Endereço desta página",
+    "copy": "Copiar endereço",
+    "copied": "Copiado"
   }
 }

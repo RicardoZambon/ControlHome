@@ -21,6 +21,17 @@ internal sealed record SmartThingsOptions
         new Uri("https://auth-global.api.smartthings.com/oauth/token"));
 
     /// <summary>
+    /// The SmartThings CLI's own sign-in (a public client with PKCE): ControlHome signs in like the CLI does, only to
+    /// create the household's app. Values from the CLI's source (<c>src/lib/login-authenticator.ts</c>).
+    /// </summary>
+    public CliLogin CliLogin { get; init; } = new(
+        "d18cf96e-c626-4433-bf51-ddbb10c5d1ed",
+        new Uri("https://oauthin-regional.api.smartthings.com/oauth/authorize"),
+        new Uri("https://oauthin-regional.api.smartthings.com/oauth/token"),
+        "http://localhost:61973/finish",
+        "controller:stCli");
+
+    /// <summary>
     /// Which custom OAuth URLs are accepted: HTTPS on <c>smartthings.com</c> or one of its subdomains (the client secret
     /// and the authorization code go there, so no other host).
     /// </summary>

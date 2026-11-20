@@ -34,14 +34,19 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     public const string CreateAppStep = "createApp";
     public const string RedirectedUrlField = "redirectedUrl";
 
-    /// <summary>The first step's choice "ControlHome creates the app" (an OAuth sign-in with an app made from a token).</summary>
+    /// <summary>The first step's choice "ControlHome creates the app" (signed in as the SmartThings CLI, then with the new app).</summary>
     public const string CreateAppChoice = "createApp";
 
     /// <summary>The first step's choice when signing in again: the integration's own app (stored client id and secret).</summary>
     public const string ReauthorizeChoice = "reauthorize";
 
-    /// <summary>The short-lived personal access token ControlHome creates the app with (used once, never stored).</summary>
-    public const string CreatorTokenField = "creatorToken";
+    /// <summary>The optional address the household opens ControlHome at (https): the new app redirects to its callback page.</summary>
+    public const string PublicUrlField = "publicUrl";
+
+    /// <summary>The SPA page an app made with a ControlHome address redirects to (it hands the address to the open wizard).</summary>
+    public const string CallbackPath = "/oauth/callback";
+
+    public const string AddressStep = "address";
 
     /// <summary>Pasted URLs whose state does not match before the flow gives up.</summary>
     public const int MaxStateMismatches = 5;
@@ -58,6 +63,8 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     private SmartThingsAuthMode _mode;
     private TokenSet? _tokens;
     private string? _pat;
+    private string? _callbackUri;
+    private string? _cliVerifier;
     private IReadOnlyList<SmartThingsLocation> _locations = [];
 
     /// <summary>The <c>state</c> of the current sign-in (tests).</summary>
@@ -123,7 +130,7 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                         return await ReauthorizeAsync(context, cancellationToken).ConfigureAwait(false);
                     case CreateAppChoice:
                         _mode = SmartThingsAuthMode.OAuth;
-                        return CreateApp(null);
+                        return AddressForm(AddressDefaults(context), new Dictionary<string, LocalizedText>());
                     case SmartThingsSettings.OAuthMode:
                         _mode = SmartThingsAuthMode.OAuth;
                         return new ExternalUrlStep(InstructionsStep, instructions.Title, instructions.Description, instructions.DocsUrl, null);
@@ -134,7 +141,9 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                         return new AbortStep("unknown_choice", new LocalizedText("Unknown choice.", "Opção desconhecida."));
                 }
 
-            case CreateAppStep when _mode == SmartThingsAuthMode.OAuth:
+            case AddressStep when _mode == SmartThingsAuthMode.OAuth:
+                return SubmitAddress(input);
+            case CreateAppStep when _mode == SmartThingsAuthMode.OAuth && _cliVerifier is not null && _state is not null:
                 return await SubmitCreateAppAsync(context, input, cancellationToken).ConfigureAwait(false);
             case InstructionsStep when _mode == SmartThingsAuthMode.OAuth:
                 return AppForm(AppDefaults(context), new Dictionary<string, LocalizedText>());
@@ -176,6 +185,8 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
         _mismatches = 0;
         _tokens = null;
         _pat = null;
+        _callbackUri = null;
+        _cliVerifier = null;
         _locations = [];
     }
 
@@ -206,8 +217,8 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                     ? new LocalizedText("Let ControlHome create a new app", "Deixe o ControlHome criar um app novo")
                     : new LocalizedText("Let ControlHome create your app (recommended)", "Deixe o ControlHome criar o seu app (recomendado)"),
                 new LocalizedText(
-                    "You paste a SmartThings token once, only so ControlHome can create your app. The connection then renews itself and does not expire after 24 hours.",
-                    "Você cola um token da SmartThings uma vez, só para o ControlHome criar o seu app. Depois a conexão se renova sozinha e não expira em 24 horas.")),
+                    "Sign in to Samsung and ControlHome creates your own app, like the SmartThings CLI does. Nothing to install, no token. The connection renews itself.",
+                    "Entre na Samsung e o ControlHome cria o seu próprio app, como a CLI da SmartThings faz. Nada para instalar, nenhum token. A conexão se renova sozinha.")),
             new FlowChoice(
                 SmartThingsSettings.OAuthMode,
                 new LocalizedText("I already have a SmartThings app", "Já tenho um app SmartThings"),
@@ -222,80 +233,170 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                     "Não serve para o dia a dia: a conexão para 24 horas depois de o token ser criado, e você precisa colar outro.")),
         ]);
 
-    /// <summary>The tokens page and the field for the token ControlHome creates the app with.</summary>
-    private ExternalUrlStep CreateApp(LocalizedText? problem) =>
-        new ExternalUrlStep(
-            CreateAppStep,
-            instructions.Create.Title,
-            instructions.CreateDescription,
-            instructions.Create.TokensUrl,
-            new FieldSchema(
-                CreatorTokenField,
-                new LocalizedText("SmartThings token", "Token da SmartThings"),
-                new StringSchema(256),
-                Required: true,
-                Secret: true,
-                new LocalizedText(
-                    "Used only to create the app, then discarded. Its 24-hour limit does not affect the connection.",
-                    "Usado só para criar o app e depois descartado. O limite de 24 horas dele não afeta a conexão.")))
-        {
-            Errors = Problem(CreatorTokenField, problem),
-        };
-
     /// <summary>A rejected answer's message under the field it is about (none when there is no problem).</summary>
     private static Dictionary<string, LocalizedText> Problem(string field, LocalizedText? problem) =>
         problem is null ? new(StringComparer.Ordinal) : new(StringComparer.Ordinal) { [field] = problem };
 
-    private async Task<FlowStep> SubmitCreateAppAsync(FlowContext context, JsonElement input, CancellationToken cancellationToken)
+    /// <summary>
+    /// The address the household opens ControlHome at, if it has an HTTPS one: the new app sends the browser straight
+    /// back to <c>{address}/oauth/callback</c>. Empty: the redirected address is pasted back (httpbin.org).
+    /// </summary>
+    private FormStep AddressForm(JsonElement values, IReadOnlyDictionary<string, LocalizedText> errors) => new(
+        AddressStep,
+        instructions.Create.Title,
+        instructions.CreateDescription,
+        [
+            new FieldSchema(
+                PublicUrlField,
+                new LocalizedText("ControlHome address (optional)", "Endereço do ControlHome (opcional)"),
+                new StringSchema(2048),
+                Required: false,
+                Secret: false,
+                new LocalizedText(
+                    "An https:// address you open ControlHome at, for example https://controlhome.example.com. It only has to open in your browser, not on the internet. Leave empty to paste the address yourself.",
+                    "Um endereço https:// em que você abre o ControlHome, por exemplo https://controlhome.exemplo.com.br. Basta abrir no seu navegador; não precisa estar na internet. Deixe vazio para colar o endereço você mesmo.")),
+        ])
     {
-        var token = input.Str(CreatorTokenField)?.Trim();
-        if (string.IsNullOrEmpty(token) || token.Length > 256 || token.Any(char.IsWhiteSpace))
+        Values = values,
+        Errors = errors,
+    };
+
+    private JsonElement AddressDefaults(FlowContext context)
+    {
+        var values = new JsonObject();
+        if (context.Existing?.Config is { ValueKind: JsonValueKind.Object } config
+            && config.Str(SmartThingsSettings.RedirectUriField) is { } redirect
+            && redirect.EndsWith(CallbackPath, StringComparison.Ordinal))
         {
-            return CreateApp(new LocalizedText("Paste the token.", "Cole o token."));
+            values[PublicUrlField] = redirect[..^CallbackPath.Length];
         }
 
+        return JsonSerializer.SerializeToElement(values);
+    }
+
+    private FlowStep SubmitAddress(JsonElement input)
+    {
+        var typed = input.Str(PublicUrlField)?.Trim().TrimEnd('/');
+        if (string.IsNullOrEmpty(typed))
+        {
+            _callbackUri = null;
+            return CliSignIn(null);
+        }
+
+        if (!Uri.TryCreate(typed, UriKind.Absolute, out var url)
+            || url.Scheme != Uri.UriSchemeHttps
+            || !string.IsNullOrEmpty(url.UserInfo)
+            || !string.IsNullOrEmpty(url.Query)
+            || !string.IsNullOrEmpty(url.Fragment)
+            || !SmartThingsSettings.IsRedirectUri(typed + CallbackPath))
+        {
+            return AddressForm(
+                JsonSerializer.SerializeToElement(new JsonObject { [PublicUrlField] = typed }),
+                Problem(PublicUrlField, new LocalizedText(
+                    "Enter an https:// address without ?query or #fragment (SmartThings only accepts HTTPS).",
+                    "Informe um endereço https:// sem ?consulta nem #fragmento (a SmartThings só aceita HTTPS).")));
+        }
+
+        _callbackUri = typed + CallbackPath;
+        return CliSignIn(null);
+    }
+
+    /// <summary>The Samsung sign-in as the SmartThings CLI (fresh PKCE verifier and state each time).</summary>
+    private ExternalUrlStep CliSignIn(LocalizedText? problem)
+    {
+        _cliVerifier = Pkce.NewVerifier();
+        _state = AuthorizationRequest.NewState();
+        return new ExternalUrlStep(
+            CreateAppStep,
+            new LocalizedText("Sign in to Samsung to create your app", "Entre na Samsung para criar o seu app"),
+            instructions.CliSignInDescription,
+            options.CliLogin.BuildUrl(Pkce.Challenge(_cliVerifier), _state),
+            new FieldSchema(
+                RedirectedUrlField,
+                new LocalizedText("Address of the page that did not open", "Endereço da página que não abriu"),
+                new StringSchema(8192),
+                Required: true,
+                Secret: true,
+                new LocalizedText("It starts with http://localhost:61973/finish?code=…", "Ele começa com http://localhost:61973/finish?code=…")))
+        {
+            Errors = Problem(RedirectedUrlField, problem),
+        };
+    }
+
+    private async Task<FlowStep> SubmitCreateAppAsync(FlowContext context, JsonElement input, CancellationToken cancellationToken)
+    {
+        var pasted = AuthorizationRequest.Parse(input.Str(RedirectedUrlField));
+        if (pasted is null)
+        {
+            return CliSignIn(new LocalizedText(
+                "That address has no sign-in code: copy the whole address of the page that did not open.",
+                "Esse endereço não tem código de acesso: copie o endereço inteiro da página que não abriu."));
+        }
+
+        // CSRF protection: SmartThings echoes the state; when it does, it must be this sign-in's (PKCE guards the rest).
+        if (pasted.State is not null && !AuthorizationRequest.StateMatches(_state!, pasted.State))
+        {
+            LogStateMismatch(context.Logger, false);
+            return CliSignIn(new LocalizedText(
+                "That address does not belong to this sign-in. Use the button above and paste the address you are sent to afterwards.",
+                "Esse endereço não pertence a este acesso. Use o botão acima e cole o endereço para onde você for enviado depois."));
+        }
+
+        if (pasted.Error is { } error)
+        {
+            return CliSignIn(new LocalizedText(
+                $"Samsung did not grant access ({SmartThingsErrors.Sanitize(error)}).",
+                $"A Samsung não concedeu o acesso ({SmartThingsErrors.Sanitize(error)})."));
+        }
+
+        var redirect = _callbackUri ?? instructions.DefaultRedirectUri;
         CreatedApp created;
         try
         {
+            var oauth = new OAuthClient(Http(), context.Time, options.RequestTimeout);
+            var token = await oauth.ExchangeCliCodeAsync(options.CliLogin, pasted.Code!, _cliVerifier!, cancellationToken).ConfigureAwait(false);
             var api = new SmartThingsApi(Http(), options with { GetRetries = 0 }, new PersonalAccessToken(token), context.Time, new RateLimitTracker());
             created = await api.CreateOAuthAppAsync(
                 instructions.Create.AppDisplayName,
                 instructions.Create.AppDescription,
                 instructions.Scopes,
-                instructions.DefaultRedirectUri,
+                redirect,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (SmartThingsApiException exception)
         {
             LogCreateAppFailed(context.Logger, exception.Kind, exception.Status is { } status ? (int)status : null);
             var manual = new LocalizedText(
-                " If it keeps failing, go back and choose \"I already have a SmartThings app\" to create it with the CLI.",
-                " Se continuar falhando, volte e escolha \"Já tenho um app SmartThings\" para criá-lo com a CLI.");
+                " If it keeps failing, go back and choose \"I already have a SmartThings app\".",
+                " Se continuar falhando, volte e escolha \"Já tenho um app SmartThings\".");
             var message = exception switch
             {
                 { Kind: ConnectorErrorKind.Unauthorized } => new LocalizedText(
-                    "SmartThings rejected this token (expired, revoked or mistyped).",
-                    "A SmartThings recusou este token (expirado, revogado ou digitado errado)."),
+                    "That sign-in can no longer be used (the code expires after a few minutes and works once). Sign in again.",
+                    "Esse acesso não pode mais ser usado (o código expira em poucos minutos e vale uma vez). Entre novamente."),
                 { Kind: ConnectorErrorKind.PlanRequired } or { Status: System.Net.HttpStatusCode.Forbidden } => new LocalizedText(
-                    "SmartThings did not allow creating the app. Check that the token has every Apps permission. SmartThings may also require its paid Personal Plan to create apps." + manual.En,
-                    "A SmartThings não permitiu criar o app. Confira se o token tem todas as permissões de Apps. A SmartThings também pode exigir o Personal Plan pago para criar apps." + manual.PtBr),
+                    "SmartThings did not allow creating the app with this account." + manual.En,
+                    "A SmartThings não permitiu criar o app com esta conta." + manual.PtBr),
                 { Kind: ConnectorErrorKind.Transient or ConnectorErrorKind.RateLimited } => new LocalizedText(
-                    "SmartThings could not be reached. Try again in a moment.",
-                    "Não foi possível falar com a SmartThings. Tente de novo daqui a pouco."),
+                    "SmartThings could not be reached. Sign in again in a moment.",
+                    "Não foi possível falar com a SmartThings. Entre novamente daqui a pouco."),
                 _ => new LocalizedText(
                     $"SmartThings refused to create the app{(exception.VendorCode is { } code ? $" ({SmartThingsErrors.Sanitize(code)})" : "")}." + manual.En,
                     $"A SmartThings recusou criar o app{(exception.VendorCode is { } code2 ? $" ({SmartThingsErrors.Sanitize(code2)})" : "")}." + manual.PtBr),
             };
-            return CreateApp(message);
+
+            // The code is spent either way: a fresh sign-in.
+            return CliSignIn(message);
         }
 
         LogAppCreated(context.Logger, created.AppId);
 
-        // The new app, with the defaults its redirect URI was registered with; the token is not kept.
+        // The new app; the CLI sign-in's token is not kept.
+        _cliVerifier = null;
         _tokens = null;
         _locations = [];
         _app = new OAuthApp(created.ClientId, created.ClientSecret, options.DocumentedEndpoints);
-        _redirectUri = instructions.DefaultRedirectUri;
+        _redirectUri = redirect;
         _preset = SmartThingsSettings.DocumentedPreset;
         _customAuthorizeUrl = null;
         _customTokenUrl = null;
@@ -473,7 +574,11 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     private ExternalUrlStep SignIn(LocalizedText? problem, LocalizedText? note = null)
     {
         var url = AuthorizationRequest.BuildUrl(_app!.Endpoints, _app.ClientId, _redirectUri!, instructions.Scopes, _state!);
-        var text = new LocalizedText(
+        var text = _redirectUri!.EndsWith(CallbackPath, StringComparison.Ordinal)
+            ? new LocalizedText(
+                "Open the SmartThings page, sign in with your Samsung account, choose the location for this integration and allow access. SmartThings then sends you back to ControlHome, which finishes on its own. If it does not, copy the whole address of that page and paste it below.",
+                "Abra a página da SmartThings, entre com a sua conta Samsung, escolha o local desta integração e permita o acesso. A SmartThings então te manda de volta ao ControlHome, que conclui sozinho. Se não concluir, copie o endereço inteiro dessa página e cole abaixo.")
+            : new LocalizedText(
             $"Open the SmartThings page, sign in with your Samsung account, choose the location for this integration and allow access. Your browser then opens {_redirectUri}: copy the whole address from the address bar (on httpbin.org you can also copy the page's text) and paste it below.",
             $"Abra a página da SmartThings, entre com a sua conta Samsung, escolha o local desta integração e permita o acesso. O navegador então abre {_redirectUri}: copie o endereço inteiro da barra de endereços (no httpbin.org você também pode copiar o texto da página) e cole abaixo.");
         return new ExternalUrlStep(
