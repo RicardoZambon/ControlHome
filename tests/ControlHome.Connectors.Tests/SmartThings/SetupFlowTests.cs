@@ -130,9 +130,9 @@ public sealed class SetupFlowTests : IDisposable
         var again = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.CreateAppStep, CreatorToken("creator-token-0001"), Ct);
 
         again.StepId.ShouldBe(SmartThingsSetupFlow.CreateAppStep);
-        again.Description!.En.ShouldContain(message);
-        again.Description.En.ShouldContain("\n\n1. ");
-        again.Description.PtBr.ShouldNotBe(again.Description.En);
+        again.Errors[SmartThingsSetupFlow.CreatorTokenField].En.ShouldContain(message);
+        again.Description!.En.ShouldStartWith("1. ");
+        again.Errors[SmartThingsSetupFlow.CreatorTokenField].PtBr.ShouldNotBe(again.Errors[SmartThingsSetupFlow.CreatorTokenField].En);
         _fake.Requests("/v1/smartapps").ShouldBeEmpty();
         _fake.Requests("/oauth/token").ShouldBeEmpty();
     }
@@ -222,8 +222,8 @@ public sealed class SetupFlowTests : IDisposable
         var again = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste("https://httpbin.org/get?code=stolen&state=attacker-state"), Ct);
 
         again.StepId.ShouldBe(SmartThingsSetupFlow.AuthorizeStep);
-        again.Description!.En.ShouldContain("does not belong to this sign-in");
-        again.Description.PtBr.ShouldContain("não pertence a este acesso");
+        again.Errors[SmartThingsSetupFlow.RedirectedUrlField].En.ShouldContain("does not belong to this sign-in");
+        again.Errors[SmartThingsSetupFlow.RedirectedUrlField].PtBr.ShouldContain("não pertence a este acesso");
         flow.State.ShouldBe(state);
         _fake.Requests("/oauth/token").ShouldBeEmpty();
 
@@ -309,7 +309,7 @@ public sealed class SetupFlowTests : IDisposable
         var firstState = flow.State;
 
         var retry = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=old&state={firstState}"), Ct);
-        retry.Description!.En.ShouldContain("can no longer be used");
+        retry.Errors[SmartThingsSetupFlow.RedirectedUrlField].En.ShouldContain("can no longer be used");
         flow.State.ShouldNotBe(firstState); // a fresh sign-in, a fresh state
 
         var form = (FormStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"code=new&state={flow.State}"), Ct);
@@ -503,7 +503,7 @@ public sealed class SetupFlowTests : IDisposable
 
         var again = (ExternalUrlStep)await flow.ContinueAsync(SmartThingsSetupFlow.AuthorizeStep, Paste($"https://httpbin.org/get?error=access_denied&state={state}"), Ct);
 
-        again.Description!.En.ShouldContain("did not grant access (access_denied)");
+        again.Errors[SmartThingsSetupFlow.RedirectedUrlField].En.ShouldContain("did not grant access (access_denied)");
         flow.State.ShouldNotBe(state);
         again.Url.Query.ShouldContain("state=" + flow.State);
         _fake.Requests("/oauth/token").ShouldBeEmpty();

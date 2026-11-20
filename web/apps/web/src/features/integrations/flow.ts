@@ -71,9 +71,13 @@ export function formErrors(step: Pick<FlowStepDto, 'errors'>, locale: string): R
   return errors
 }
 
-/** Messages for keys that are not a field of the form (shown above it). */
-export function orphanErrors(step: Pick<FlowStepDto, 'errors' | 'fields'>, locale: string): string[] {
+/** Messages for keys that are not a field of the step, nor its paste-back field (shown above them). */
+export function orphanErrors(
+  step: Pick<FlowStepDto, 'errors' | 'fields'> & Partial<Pick<FlowStepDto, 'pasteBack'>>,
+  locale: string,
+): string[] {
   const keys = new Set(step.fields.map((field) => field.key))
+  if (step.pasteBack) keys.add(step.pasteBack.key)
   return Object.entries(step.errors ?? {})
     .filter(([key]) => !keys.has(key))
     .map(([, text]) => localized(text, locale))

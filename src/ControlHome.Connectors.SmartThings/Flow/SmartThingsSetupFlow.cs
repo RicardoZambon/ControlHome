@@ -223,13 +223,11 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
         ]);
 
     /// <summary>The tokens page and the field for the token ControlHome creates the app with.</summary>
-    private ExternalUrlStep CreateApp(LocalizedText? problem)
-    {
-        var text = instructions.CreateDescription;
-        return new ExternalUrlStep(
+    private ExternalUrlStep CreateApp(LocalizedText? problem) =>
+        new ExternalUrlStep(
             CreateAppStep,
             instructions.Create.Title,
-            problem is null ? text : new LocalizedText(problem.En + "\n\n" + text.En, problem.PtBr + "\n\n" + text.PtBr),
+            instructions.CreateDescription,
             instructions.Create.TokensUrl,
             new FieldSchema(
                 CreatorTokenField,
@@ -239,8 +237,14 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 Secret: true,
                 new LocalizedText(
                     "Used only to create the app, then discarded. Its 24-hour limit does not affect the connection.",
-                    "Usado só para criar o app e depois descartado. O limite de 24 horas dele não afeta a conexão.")));
-    }
+                    "Usado só para criar o app e depois descartado. O limite de 24 horas dele não afeta a conexão.")))
+        {
+            Errors = Problem(CreatorTokenField, problem),
+        };
+
+    /// <summary>A rejected answer's message under the field it is about (none when there is no problem).</summary>
+    private static Dictionary<string, LocalizedText> Problem(string field, LocalizedText? problem) =>
+        problem is null ? new(StringComparer.Ordinal) : new(StringComparer.Ordinal) { [field] = problem };
 
     private async Task<FlowStep> SubmitCreateAppAsync(FlowContext context, JsonElement input, CancellationToken cancellationToken)
     {
@@ -295,7 +299,7 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
         _preset = SmartThingsSettings.DocumentedPreset;
         _customAuthorizeUrl = null;
         _customTokenUrl = null;
-        return NewSignIn(new LocalizedText(
+        return NewSignIn(null, new LocalizedText(
             $"Your SmartThings app \"{instructions.Create.AppDisplayName}\" was created.",
             $"O seu app SmartThings \"{instructions.Create.AppDisplayName}\" foi criado."));
     }
@@ -457,14 +461,16 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
     }
 
     /// <summary>The sign-in page with a fresh state (a new state each time: a pasted URL from an older attempt is refused).</summary>
-    private ExternalUrlStep NewSignIn(LocalizedText? problem)
+    private ExternalUrlStep NewSignIn(LocalizedText? problem, LocalizedText? note = null)
     {
         _state = AuthorizationRequest.NewState();
         _mismatches = 0;
-        return SignIn(problem);
+        return SignIn(problem, note);
     }
 
-    private ExternalUrlStep SignIn(LocalizedText? problem)
+    /// <param name="problem">Why the last answer was refused: shown under the field.</param>
+    /// <param name="note">Good news shown above the instructions (e.g. the app was created).</param>
+    private ExternalUrlStep SignIn(LocalizedText? problem, LocalizedText? note = null)
     {
         var url = AuthorizationRequest.BuildUrl(_app!.Endpoints, _app.ClientId, _redirectUri!, instructions.Scopes, _state!);
         var text = new LocalizedText(
@@ -473,7 +479,7 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
         return new ExternalUrlStep(
             AuthorizeStep,
             new LocalizedText("Sign in to SmartThings", "Entre na SmartThings"),
-            problem is null ? text : new LocalizedText(problem.En + "\n\n" + text.En, problem.PtBr + "\n\n" + text.PtBr),
+            note is null ? text : new LocalizedText(note.En + "\n\n" + text.En, note.PtBr + "\n\n" + text.PtBr),
             url,
             new FieldSchema(
                 RedirectedUrlField,
@@ -481,7 +487,10 @@ internal sealed partial class SmartThingsSetupFlow(Func<HttpClient> http, SmartT
                 new StringSchema(8192),
                 Required: true,
                 Secret: true,
-                new LocalizedText("It contains code=… and state=…", "Ele contém code=… e state=…")));
+                new LocalizedText("It contains code=… and state=…", "Ele contém code=… e state=…")))
+        {
+            Errors = Problem(RedirectedUrlField, problem),
+        };
     }
 
     private async Task<FlowStep> SubmitRedirectAsync(FlowContext context, JsonElement input, CancellationToken cancellationToken)

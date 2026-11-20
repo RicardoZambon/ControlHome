@@ -71,9 +71,10 @@ watch(
   () => step.value,
   (next, previous) => {
     if (!next) return
-    if (next.flowId !== previous?.flowId || next.stepId !== previous?.stepId || stepType(next) === 'form')
-      values.value = formValues(next)
-    pasted.value = ''
+    const sameStep = next.flowId === previous?.flowId && next.stepId === previous?.stepId
+    if (!sameStep || stepType(next) === 'form') values.value = formValues(next)
+    // A refused paste stays in its field next to the reason, so the user sees what was refused.
+    if (!sameStep || Object.keys(next.errors ?? {}).length === 0) pasted.value = ''
     choice.value = next.choices[0]?.key ?? ''
     if (stepType(next) === 'done' && next.integrationId) emit('done', next.integrationId)
   },
@@ -234,6 +235,7 @@ const abortMessage = computed(
           </Button>
           <p v-else class="text-sm text-destructive">{{ t('integrations.flow.unsafeUrl') }}</p>
         </div>
+        <FormAlert v-for="message in otherErrors" :key="message" :message="message" />
         <SchemaField
           v-if="pasteField"
           v-model="pasted"
@@ -242,6 +244,7 @@ const abortMessage = computed(
           :help="pasteField.help"
           :required="pasteField.required"
           :secret="pasteField.secret"
+          :error="errors[pasteField.key]"
           :disabled="flow.busy.value"
         />
         <div class="flex flex-wrap justify-end gap-2">
