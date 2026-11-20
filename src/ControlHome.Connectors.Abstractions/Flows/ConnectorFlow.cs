@@ -70,7 +70,14 @@ public sealed record ExternalUrlStep(
     LocalizedText Title,
     LocalizedText? Description,
     Uri Url,
-    FieldSchema? PasteBack) : FlowStep;
+    FieldSchema? PasteBack) : FlowStep
+{
+    /// <summary>
+    /// Messages after a rejected answer (e.g. "the vendor refused this token"), by field key: the paste-back key puts
+    /// the message under that field; any other key is shown above it.
+    /// </summary>
+    public IReadOnlyDictionary<string, LocalizedText> Errors { get; init; } = new Dictionary<string, LocalizedText>();
+}
 
 /// <summary>
 /// Waits for something to happen on the device (press the pairing button, join the network). The client polls with an

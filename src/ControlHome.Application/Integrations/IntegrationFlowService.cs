@@ -367,7 +367,7 @@ public sealed partial class IntegrationFlowService(
                 T(external.Description),
                 [],
                 null,
-                none,
+                external.Errors.ToDictionary(e => e.Key, e => T(e.Value)!, StringComparer.Ordinal),
                 external.Url.AbsoluteUri,
                 external.PasteBack is null ? null : ConnectorCatalog.ToDto(external.PasteBack),
                 null,
