@@ -20,8 +20,9 @@ description: >-
   The setup code the wizard asks for is this app's password, shown by Umbrel. Household accounts have the roles Admin,
   Member and Viewer. Available in English and Portuguese (Brazil).
 releaseNotes: >-
-  Integration setup: when a vendor refuses a pasted token or address (for example SmartThings refusing to create the
-  app), the reason is now shown in red under the field and the pasted value stays in it.
+  SmartThings: "Let ControlHome create your app" no longer needs a token (SmartThings refused that). You sign in to
+  Samsung the way the SmartThings CLI does and ControlHome creates the app. Optionally enter the https:// address you
+  open ControlHome at: the Samsung sign-in then comes straight back and finishes on its own.
 developer: Ricardo Zambon
 website: https://github.com/RicardoZambon/ControlHome
 dependencies: []
