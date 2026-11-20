@@ -200,7 +200,10 @@ const abortMessage = computed(
         <h2 class="font-serif text-2xl leading-tight font-medium tracking-tight text-balance sm:text-3xl">
           {{ title || connectorName }}
         </h2>
-        <p v-if="description" class="max-w-prose text-pretty whitespace-pre-line text-muted-foreground">
+        <p
+          v-if="description"
+          class="max-w-prose text-pretty whitespace-pre-line wrap-anywhere text-muted-foreground"
+        >
           {{ description }}
         </p>
       </header>
@@ -248,7 +251,11 @@ const abortMessage = computed(
           <p class="text-sm text-muted-foreground">
             {{ t('integrations.flow.external', { host: externalHost }) }}
           </p>
-          <Button v-if="externalUrl" as-child class="justify-self-start">
+          <Button
+            v-if="externalUrl"
+            as-child
+            class="h-auto max-w-full justify-self-start py-2 text-left whitespace-normal wrap-anywhere"
+          >
             <a :href="externalUrl" target="_blank" rel="noopener noreferrer">
               <ExternalLink />
               {{ t('integrations.flow.openPage', { host: externalHost }) }}
